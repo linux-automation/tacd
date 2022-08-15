@@ -17,3 +17,22 @@ code {
     rgba(0, 7, 22, 0.12) 0px 1px 8px 2px;
   margin-top: 0.5em;
 }
+
+.api_picker_outer {
+  border-bottom: 2px solid #0000;
+}
+
+.api_picker_outer_active {
+  border-bottom: 2px solid #8c8c8c;
+}
+
+.api_picker_outer_active:hover {
+  border-bottom: 2px solid black;
+  background-color: #0000002b;
+  cursor: pointer;
+  border-radius: 0.1em;
+}
+
+.api_picker_inner_active {
+  opacity: 0.3;
+}
