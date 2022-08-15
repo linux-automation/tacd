@@ -40,6 +40,9 @@ pub(super) fn register(server: &mut tide::Server<()>, topics: Arc<Vec<Arc<dyn An
         if topic.web_writable() {
             let topic_clone = topic.clone();
             route.put(move |req| put_handler(topic_clone.clone(), req));
+
+            let topic_clone = topic.clone();
+            route.post(move |req| put_handler(topic_clone.clone(), req));
         }
     }
 }
