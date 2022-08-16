@@ -8,7 +8,7 @@ mod dut_power;
 mod iobus;
 mod temperatures;
 mod ui;
-mod usb_power;
+mod usb_hub;
 mod watchdog;
 mod web;
 
@@ -20,7 +20,7 @@ use dut_power::DutPwrThread;
 use iobus::IoBus;
 use temperatures::Temperatures;
 use ui::{Ui, UiRessources};
-use usb_power::UsbPower;
+use usb_hub::UsbHub;
 use watchdog::Watchdog;
 use web::serve;
 
@@ -40,7 +40,7 @@ async fn main() -> Result<(), std::io::Error> {
         dut_pwr,
         iobus: IoBus::new(&mut bb),
         temperatures: Temperatures::new(&mut bb),
-        usb_power: UsbPower::new(&mut bb),
+        usb_hub: UsbHub::new(&mut bb),
     };
 
     let mut server = tide::new();

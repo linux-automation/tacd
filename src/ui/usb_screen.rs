@@ -47,21 +47,21 @@ impl MountableScreen for UsbScreen {
                 0,
                 "Port 1",
                 28,
-                &ui.res.usb_power.port1,
+                &ui.res.usb_hub.port1.powered,
                 &ui.res.adc.usb_host1_curr.topic,
             ),
             (
                 1,
                 "Port 2",
                 41,
-                &ui.res.usb_power.port2,
+                &ui.res.usb_hub.port2.powered,
                 &ui.res.adc.usb_host2_curr.topic,
             ),
             (
                 2,
                 "Port 3",
                 54,
-                &ui.res.usb_power.port3,
+                &ui.res.usb_hub.port3.powered,
                 &ui.res.adc.usb_host3_curr.topic,
             ),
         ];
@@ -111,9 +111,9 @@ impl MountableScreen for UsbScreen {
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
         let port_enables = [
-            ui.res.usb_power.port1.clone(),
-            ui.res.usb_power.port2.clone(),
-            ui.res.usb_power.port3.clone(),
+            ui.res.usb_hub.port1.powered.clone(),
+            ui.res.usb_hub.port2.powered.clone(),
+            ui.res.usb_hub.port3.powered.clone(),
         ];
         let port_highlight = self.highlighted.clone();
         let screen = ui.screen.clone();

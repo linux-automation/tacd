@@ -35,6 +35,13 @@ type Measurement = {
   value: number;
 };
 
+type UsbDevice = {
+  id_product: string;
+  id_vendor: string;
+  manufacturer: string;
+  product: string;
+} | null;
+
 export default function DashboardDut() {
   return (
     <SpaceBetween size="m">
@@ -308,6 +315,17 @@ export default function DashboardDut() {
                   <MqttToggle topic={`/v1/usb/host/port${port}/powered`}>
                     Port {port} power supply
                   </MqttToggle>
+                  <Box variant="awsui-key-label">Connected Device</Box>
+                  <MqttBox
+                    topic={`/v1/usb/host/port${port}/device`}
+                    format={(msg: UsbDevice) => {
+                      if (msg !== null) {
+                        return `${msg.id_vendor}:${msg.id_product} ${msg.manufacturer} ${msg.product}`;
+                      } else {
+                        return "-";
+                      }
+                    }}
+                  />
                 </SpaceBetween>
                 <SpaceBetween size="l">
                   <MqttBarMeter
