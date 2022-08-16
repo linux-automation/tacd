@@ -1,3 +1,4 @@
+use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
 use zbus::dbus_proxy;
@@ -5,7 +6,9 @@ use zbus::dbus_proxy;
 use crate::broker::{BrokerBuilder, Topic};
 
 mod networkmanager;
+mod systemd;
 
+use self::systemd::Systemd;
 pub use networkmanager::{IpStream, LinkInfo, LinkStream};
 
 #[dbus_proxy(
@@ -23,6 +26,8 @@ pub struct DbusClient {
     pub bridge_interface: Arc<Topic<Vec<String>>>,
     pub dut_interface: Arc<Topic<LinkInfo>>,
     pub uplink_interface: Arc<Topic<LinkInfo>>,
+    pub restart_service: Arc<Topic<String>>,
+    pub reboot: Arc<Topic<bool>>,
 }
 
 impl DbusClient {
@@ -68,6 +73,7 @@ impl DbusClient {
         }
 
         {
+            let conn = conn.clone();
             let mut nm_interface = IpStream::new(conn.clone(), "tac-bridge").await.unwrap();
             bridge_interface
                 .set(nm_interface.now(&conn).await.unwrap())
@@ -81,11 +87,42 @@ impl DbusClient {
             });
         }
 
+        let sd = Systemd::new(conn);
+        let reboot = bb.topic_rw("/v1/tac/reboot");
+
+        {
+            let sd = sd.clone();
+            let (mut reboot_reqs, _) = reboot.clone().subscribe_unbounded().await;
+
+            spawn(async move {
+                while let Some(req) = reboot_reqs.next().await {
+                    if *req {
+                        let _ = sd.reboot().await;
+                    }
+                }
+            });
+        }
+
+        let restart_service = bb.topic_rw::<String>("/v1/tac/restart_service");
+
+        {
+            let sd = sd.clone();
+            let (mut restart_reqs, _) = restart_service.clone().subscribe_unbounded().await;
+
+            spawn(async move {
+                while let Some(name) = restart_reqs.next().await {
+                    let _ = sd.restart_service(name.as_str());
+                }
+            });
+        }
+
         Self {
             hostname,
             bridge_interface,
             dut_interface,
             uplink_interface,
+            reboot,
+            restart_service,
         }
     }
 }
