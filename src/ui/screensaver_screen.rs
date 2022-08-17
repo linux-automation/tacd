@@ -64,7 +64,15 @@ impl ScreenSaverScreen {
                 };
 
                 if activate_screensaver {
-                    screen_task.set(Screen::ScreenSaver).await;
+                    screen_task
+                        .modify(|screen| {
+                            if screen.use_screensaver() {
+                                Arc::new(Screen::ScreenSaver)
+                            } else {
+                                screen
+                            }
+                        })
+                        .await;
                 }
             }
         });

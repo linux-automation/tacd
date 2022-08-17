@@ -52,7 +52,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::text(
-                ui.res.dbus.uplink_interface.clone(),
+                ui.res.dbus.network.uplink_interface.clone(),
                 ui.draw_target.clone(),
                 Point::new(0, 36),
                 Box::new(|info: &LinkInfo| match info.carrier {
@@ -65,7 +65,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::text(
-                ui.res.dbus.dut_interface.clone(),
+                ui.res.dbus.network.dut_interface.clone(),
                 ui.draw_target.clone(),
                 Point::new(0, 46),
                 Box::new(|info: &LinkInfo| match info.carrier {
@@ -78,7 +78,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::text(
-                ui.res.dbus.bridge_interface.clone(),
+                ui.res.dbus.network.bridge_interface.clone(),
                 ui.draw_target.clone(),
                 Point::new(0, 56),
                 Box::new(|ips: &Vec<String>| {

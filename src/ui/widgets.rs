@@ -7,7 +7,7 @@ use embedded_graphics::{
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
-    text::Text,
+    text::{Alignment, Text},
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -159,11 +159,12 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         .await
     }
 
-    pub async fn text(
+    pub async fn text_aligned(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
+        alignment: Alignment,
     ) -> Self {
         Self::new(
             topic,
@@ -176,7 +177,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
                 if !text.is_empty() {
-                    let text = Text::new(&text, anchor, ui_text_style);
+                    let text = Text::with_alignment(&text, anchor, ui_text_style, alignment);
                     text.draw(target).unwrap();
                     Some(text.bounding_box())
                 } else {
@@ -185,6 +186,24 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
             }),
         )
         .await
+    }
+
+    pub async fn text(
+        topic: Arc<Topic<T>>,
+        target: Arc<Mutex<FramebufferDrawTarget>>,
+        anchor: Point,
+        format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
+    ) -> Self {
+        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Left).await
+    }
+
+    pub async fn text_center(
+        topic: Arc<Topic<T>>,
+        target: Arc<Mutex<FramebufferDrawTarget>>,
+        anchor: Point,
+        format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
+    ) -> Self {
+        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Center).await
     }
 
     pub async fn unmount(&mut self) {

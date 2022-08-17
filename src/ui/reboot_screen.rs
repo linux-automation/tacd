@@ -67,7 +67,7 @@ impl MountableScreen for RebootConfirmScreen {
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
         let screen = ui.screen.clone();
-        let reboot = ui.res.dbus.reboot.clone();
+        let reboot = ui.res.dbus.system.reboot.clone();
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {

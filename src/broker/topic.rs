@@ -68,10 +68,9 @@ impl<E: Send + Sync> AnySubscriptionHandle for SubscriptionHandle<E, Encoded> {
 }
 
 impl<E: Serialize + DeserializeOwned> Topic<E> {
-    pub async fn set_arc(&self, msg: Arc<E>) {
+    async fn set_arc_with_retain_lock(&self, msg: Arc<E>, retained: &mut Option<Arc<E>>) {
         let mut senders = self.senders.lock().await;
         let mut senders_serialized = self.senders_serialized.lock().await;
-        let mut retained = self.retained.lock().await;
         let mut retained_serialized = self.retained_serialized.lock().await;
 
         *retained_serialized = None;
@@ -106,12 +105,30 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
         *retained = Some(msg);
     }
 
+    pub async fn set_arc(&self, msg: Arc<E>) {
+        let mut retained = self.retained.lock().await;
+
+        self.set_arc_with_retain_lock(msg, &mut *retained).await
+    }
+
     pub async fn set(&self, msg: E) {
         self.set_arc(Arc::new(msg)).await
     }
 
     pub async fn get(&self) -> Option<Arc<E>> {
         self.retained.lock().await.as_ref().cloned()
+    }
+
+    pub async fn modify<F>(&self, cb: F)
+    where
+        F: FnOnce(Arc<E>) -> Arc<E>,
+    {
+        let mut retained = self.retained.lock().await;
+
+        if let Some(prev) = retained.as_ref().cloned() {
+            self.set_arc_with_retain_lock(cb(prev), &mut *retained)
+                .await;
+        }
     }
 
     pub async fn subscribe(

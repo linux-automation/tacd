@@ -6,10 +6,12 @@ use zbus::dbus_proxy;
 use crate::broker::{BrokerBuilder, Topic};
 
 mod networkmanager;
+mod rauc;
 mod systemd;
 
 use self::systemd::Systemd;
 pub use networkmanager::{IpStream, LinkInfo, LinkStream};
+pub use rauc::{Progress, Rauc};
 
 #[dbus_proxy(
     default_service = "org.freedesktop.hostname1",
@@ -21,13 +23,22 @@ trait Hostname {
     fn hostname(&self) -> zbus::Result<String>;
 }
 
-pub struct DbusClient {
+pub struct Network {
     pub hostname: Arc<Topic<String>>,
     pub bridge_interface: Arc<Topic<Vec<String>>>,
     pub dut_interface: Arc<Topic<LinkInfo>>,
     pub uplink_interface: Arc<Topic<LinkInfo>>,
+}
+
+pub struct System {
     pub restart_service: Arc<Topic<String>>,
     pub reboot: Arc<Topic<bool>>,
+}
+
+pub struct DbusClient {
+    pub network: Network,
+    pub system: System,
+    pub rauc: Rauc,
 }
 
 impl DbusClient {
@@ -87,7 +98,7 @@ impl DbusClient {
             });
         }
 
-        let sd = Systemd::new(conn);
+        let sd = Systemd::new(conn.clone());
         let reboot = bb.topic_rw("/v1/tac/reboot");
 
         {
@@ -116,13 +127,20 @@ impl DbusClient {
             });
         }
 
+        let rauc = Rauc::new(bb, conn).await;
+
         Self {
-            hostname,
-            bridge_interface,
-            dut_interface,
-            uplink_interface,
-            reboot,
-            restart_service,
+            network: Network {
+                hostname,
+                bridge_interface,
+                dut_interface,
+                uplink_interface,
+            },
+            system: System {
+                reboot,
+                restart_service,
+            },
+            rauc,
         }
     }
 }

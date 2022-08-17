@@ -27,6 +27,7 @@ mod dig_out_screen;
 mod draw_fb;
 mod iobus_screen;
 mod power_screen;
+mod rauc_screen;
 mod reboot_screen;
 mod screensaver_screen;
 mod system_screen;
@@ -39,6 +40,7 @@ use dig_out_screen::DigOutScreen;
 use draw_fb::FramebufferDrawTarget;
 use iobus_screen::IoBusScreen;
 use power_screen::PowerScreen;
+use rauc_screen::RaucScreen;
 use reboot_screen::RebootConfirmScreen;
 use screensaver_screen::ScreenSaverScreen;
 use system_screen::SystemScreen;
@@ -59,6 +61,7 @@ pub enum Screen {
     ScreenSaver,
     Breakout,
     RebootConfirm,
+    Rauc,
 }
 
 impl Screen {
@@ -73,6 +76,14 @@ impl Screen {
             Self::ScreenSaver => Self::DutPower,
             Self::Breakout => Self::ScreenSaver,
             Self::RebootConfirm => Self::System,
+            Self::Rauc => Self::ScreenSaver,
+        }
+    }
+
+    fn use_screensaver(&self) -> bool {
+        match self {
+            Self::Rauc => false,
+            _ => true,
         }
     }
 }
@@ -207,12 +218,13 @@ impl Ui {
             s.push(Box::new(DigOutScreen::new(bb)));
             s.push(Box::new(IoBusScreen::new()));
             s.push(Box::new(PowerScreen::new()));
+            s.push(Box::new(RaucScreen::new(&screen, &res.dbus.rauc.operation)));
             s.push(Box::new(RebootConfirmScreen::new()));
             s.push(Box::new(ScreenSaverScreen::new(
                 bb,
                 &buttons,
                 &screen,
-                &res.dbus.hostname,
+                &res.dbus.network.hostname,
             )));
             s.push(Box::new(SystemScreen::new()));
             s.push(Box::new(UartScreen::new(bb)));
