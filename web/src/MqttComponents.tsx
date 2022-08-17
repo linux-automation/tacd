@@ -27,7 +27,7 @@ export function ApiPickerButton() {
 
   return (
     <Button
-      onClick={(ev) => api_pickers.forEach((v) => v(!active))}
+      onClick={(_) => api_pickers.forEach((v) => v(!active))}
       formAction="none"
       iconName="search"
     >
@@ -86,14 +86,16 @@ interface MqttBoxProps<T> {
 export function MqttBox<T>(props: MqttBoxProps<T>) {
   const payload = useMqttSubscription<T>(props.topic, props.initial);
 
+  let box = null;
+
   if (payload === undefined) {
-    var box = (
+    box = (
       <Box variant={props.variant}>
         <Spinner />
       </Box>
     );
   } else {
-    var box = <Box variant={props.variant}>{props.format(payload)}</Box>;
+    box = <Box variant={props.variant}>{props.format(payload)}</Box>;
   }
 
   return ApiPicker({ topic: props.topic, children: box });
@@ -144,6 +146,7 @@ interface MqttButtonProps<T> {
 }
 
 export function MqttButton<T>(props: MqttButtonProps<T>) {
+  // eslint-disable-next-line
   const [_settled, _payload, setPayload] = useMqttState<T>(props.topic);
 
   return (
