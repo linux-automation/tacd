@@ -21,6 +21,14 @@ type LinkStatus = {
   carrier: boolean;
 };
 
+type Uname = {
+  sysname: string;
+  nodename: string;
+  release: string;
+  version: string;
+  machine: string;
+};
+
 export default function DashboardTac() {
   const [counter, setCounter] = useState(0);
 
@@ -60,6 +68,13 @@ export default function DashboardTac() {
               format={(msg: Measurement) => {
                 return `${msg.value.toFixed(0)}°C`;
               }}
+            />
+          </Box>
+          <Box>
+            <Box variant="awsui-key-label">Kernel Version</Box>
+            <MqttBox
+              topic="/v1/tac/uname"
+              format={(msg: Uname) => msg.release}
             />
           </Box>
           <Box>

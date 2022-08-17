@@ -6,6 +6,7 @@ mod dbus;
 mod digital_io;
 mod dut_power;
 mod iobus;
+mod system;
 mod temperatures;
 mod ui;
 mod usb_hub;
@@ -18,6 +19,7 @@ use dbus::DbusClient;
 use digital_io::DigitalIo;
 use dut_power::DutPwrThread;
 use iobus::IoBus;
+use system::System;
 use temperatures::Temperatures;
 use ui::{Ui, UiRessources};
 use usb_hub::UsbHub;
@@ -39,6 +41,7 @@ async fn main() -> Result<(), std::io::Error> {
         dig_io: DigitalIo::new(&mut bb).await,
         dut_pwr,
         iobus: IoBus::new(&mut bb),
+        system: System::new(&mut bb).await,
         temperatures: Temperatures::new(&mut bb),
         usb_hub: UsbHub::new(&mut bb),
     };

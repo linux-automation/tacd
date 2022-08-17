@@ -144,6 +144,7 @@ pub struct UiRessources {
     pub dig_io: crate::digital_io::DigitalIo,
     pub dut_pwr: crate::dut_power::DutPwrThread,
     pub iobus: crate::iobus::IoBus,
+    pub system: crate::system::System,
     pub temperatures: crate::temperatures::Temperatures,
     pub usb_hub: crate::usb_hub::UsbHub,
 }
