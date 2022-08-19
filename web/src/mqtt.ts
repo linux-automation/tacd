@@ -10,6 +10,10 @@ let subscriptions: {
   [topic: string]: Array<(message: Message | undefined) => void>;
 } = {};
 
+let retained: {
+  [topic: string]: Message;
+} = {};
+
 session.onConnectionLost = function (responseObject) {
   if (responseObject.errorCode !== 0) {
     console.log("onConnectionLost:" + responseObject.errorMessage);
@@ -19,6 +23,8 @@ session.onConnectionLost = function (responseObject) {
         handler(undefined);
       }
     }
+
+    retained = {};
   }
 };
 
@@ -27,6 +33,8 @@ session.onMessageArrived = function (message) {
     for (let handler of subscriptions[message.destinationName]) {
       handler(message);
     }
+
+    retained[message.destinationName] = message;
   }
 };
 
@@ -63,6 +71,7 @@ export function useMqttState<T>(topic: string, initial?: T) {
     }
 
     subscriptions[topic].push(handleMessage);
+    handleMessage(retained[topic]);
 
     return function cleanup() {
       const index = subscriptions[topic].indexOf(handleMessage, 0);
@@ -73,6 +82,7 @@ export function useMqttState<T>(topic: string, initial?: T) {
 
       if (subscriptions[topic].length === 0) {
         delete subscriptions[topic];
+        delete retained[topic];
 
         if (session.isConnected()) {
           session.unsubscribe(topic);
