@@ -42,7 +42,9 @@ function Navigation() {
           },
         ]}
       />
-      <ApiPickerButton />
+      <div className="nav_footer">
+        <ApiPickerButton />
+      </div>
     </>
   );
 }
