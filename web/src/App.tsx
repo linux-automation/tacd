@@ -2,11 +2,13 @@ import React from "react";
 import AppLayout from "@cloudscape-design/components/app-layout";
 import SideNavigation from "@cloudscape-design/components/side-navigation";
 
+import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 
 import "@cloudscape-design/global-styles/index.css";
 
 import "./App.css";
+import { useMqttSubscription } from "./mqtt";
 import { ApiPickerButton } from "./MqttComponents";
 
 function Navigation() {
@@ -50,6 +52,13 @@ function Navigation() {
 }
 
 export default function App() {
+  const hostname = useMqttSubscription("/v1/tac/network/hostname");
+
+  useEffect(() => {
+    document.title =
+      hostname === undefined ? "LXA TAC" : `LXA TAC (${hostname})`;
+  }, [hostname]);
+
   return (
     <AppLayout
       navigation={<Navigation />}

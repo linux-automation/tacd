@@ -3,13 +3,7 @@ import Header from "@cloudscape-design/components/header";
 import Link from "@cloudscape-design/components/link";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 
-import { useEffect } from "react";
-
 export default function LandingPage() {
-  useEffect(() => {
-    document.title = "LXA TAC";
-  }, []);
-
   return (
     <SpaceBetween size="m">
       <Header variant="h1" description="Control the LXA TAC">
