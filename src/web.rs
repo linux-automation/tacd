@@ -1,7 +1,8 @@
+use std::fs::write;
 use std::net::TcpListener;
 
 use systemd::daemon::{listen_fds, tcp_listener};
-use tide::Server;
+use tide::{Request, Response, Server};
 
 mod static_files;
 
@@ -34,6 +35,23 @@ impl WebInterface {
         static_files::register(&mut this.server);
 
         this
+    }
+
+    pub fn expose_file_rw(&mut self, fs_path: &str, web_path: &str) {
+        self.server.at(web_path).serve_file(fs_path).unwrap();
+
+        let fs_path = fs_path.to_string();
+
+        self.server.at(web_path).put(move |mut req: Request<()>| {
+            let fs_path = fs_path.clone();
+
+            async move {
+                let content = req.body_bytes().await?;
+                write(&fs_path, &content)?;
+
+                Ok(Response::new(204))
+            }
+        });
     }
 
     pub async fn serve(self) -> Result<(), std::io::Error> {

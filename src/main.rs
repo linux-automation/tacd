@@ -50,5 +50,12 @@ async fn main() -> Result<(), std::io::Error> {
     let ui = Ui::new(&mut bb, ressources, &mut web_interface.server);
     bb.build(&mut web_interface.server);
 
+    web_interface.expose_file_rw(
+        "/etc/labgrid/configuration.yaml",
+        "/v1/labgrid/configuration",
+    );
+    web_interface.expose_file_rw("/etc/labgrid/environment", "/v1/labgrid/environment");
+    web_interface.expose_file_rw("/etc/labgrid/userconfig.yaml", "/v1/labgrid/userconfig");
+
     race(race(ui.run(), web_interface.serve()), watchdog.keep_fed()).await
 }

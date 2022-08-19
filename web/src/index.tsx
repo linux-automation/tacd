@@ -9,6 +9,7 @@ import App from "./App";
 import DashboardDut from "./DashboardDut";
 import LandingPage from "./LandingPage";
 import DashboardTac from "./DashboardTac";
+import SettingsLabgrid from "./SettingsLabgrid";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
@@ -21,6 +22,7 @@ root.render(
           <Route path="" element={<LandingPage />} />
           <Route path="/dashboard/dut" element={<DashboardDut />} />
           <Route path="/dashboard/tac" element={<DashboardTac />} />
+          <Route path="/settings/labgrid" element={<SettingsLabgrid />} />
         </Route>
       </Routes>
     </HashRouter>
