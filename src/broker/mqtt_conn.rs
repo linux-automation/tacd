@@ -207,9 +207,8 @@ async fn handle_connection(
 }
 
 pub(super) fn register(server: &mut tide::Server<()>, topics: Arc<Vec<Arc<dyn AnyTopic>>>) {
-    server
-        .at("/v1/mqtt")
-        .get(WebSocket::new(move |_request, stream| {
-            handle_connection(topics.clone(), stream)
-        }));
+    server.at("/v1/mqtt").get(
+        WebSocket::new(move |_request, stream| handle_connection(topics.clone(), stream))
+            .with_protocols(&["mqttv3.1", "mqtt"]),
+    );
 }
