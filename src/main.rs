@@ -24,7 +24,7 @@ use temperatures::Temperatures;
 use ui::{Ui, UiRessources};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
-use web::serve;
+use web::WebInterface;
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
@@ -46,9 +46,9 @@ async fn main() -> Result<(), std::io::Error> {
         usb_hub: UsbHub::new(&mut bb),
     };
 
-    let mut server = tide::new();
-    let ui = Ui::new(&mut bb, ressources, &mut server);
-    bb.build(&mut server);
+    let mut web_interface = WebInterface::new();
+    let ui = Ui::new(&mut bb, ressources, &mut web_interface.server);
+    bb.build(&mut web_interface.server);
 
-    race(race(ui.run(), serve(server)), watchdog.keep_fed()).await
+    race(race(ui.run(), web_interface.serve()), watchdog.keep_fed()).await
 }
