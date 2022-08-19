@@ -1,4 +1,5 @@
 import Box from "@cloudscape-design/components/box";
+import Form from "@cloudscape-design/components/form";
 import Header from "@cloudscape-design/components/header";
 import Container from "@cloudscape-design/components/container";
 import SpaceBetween from "@cloudscape-design/components/space-between";
@@ -27,6 +28,14 @@ type Uname = {
   release: string;
   version: string;
   machine: string;
+};
+
+type Bootloader = {
+  version: string;
+  baseboard_release: string;
+  powerboard_release: string;
+  baseboard_timestamp: number;
+  powerboard_timestamp: number;
 };
 
 export default function DashboardTac() {
@@ -78,12 +87,56 @@ export default function DashboardTac() {
             />
           </Box>
           <Box>
-            <Box variant="awsui-key-label">Reboot</Box>
+            <Box variant="awsui-key-label">Bootloader Version</Box>
+            <MqttBox
+              topic="/v1/tac/bootloader"
+              format={(msg: Bootloader) => msg.version}
+            />
+          </Box>
+          <Box>
+            <Box variant="awsui-key-label">Mainboard Release</Box>
+            <MqttBox
+              topic="/v1/tac/bootloader"
+              format={(msg: Bootloader) => msg.baseboard_release}
+            />
+          </Box>
+
+          <Box>
+            <Box variant="awsui-key-label">Mainboard Bringup Date</Box>
+            <MqttBox
+              topic="/v1/tac/bootloader"
+              format={(msg: Bootloader) => {
+                let date = new Date(msg.baseboard_timestamp * 1000);
+                return date.toLocaleString();
+              }}
+            />
+          </Box>
+          <Box>
+            <Box variant="awsui-key-label">Powerboard Release</Box>
+            <MqttBox
+              topic="/v1/tac/bootloader"
+              format={(msg: Bootloader) => msg.powerboard_release}
+            />
+          </Box>
+          <Box>
+            <Box variant="awsui-key-label">Powerboard Bringup Date</Box>
+            <MqttBox
+              topic="/v1/tac/bootloader"
+              format={(msg: Bootloader) => {
+                let date = new Date(msg.powerboard_timestamp * 1000);
+                return date.toLocaleString();
+              }}
+            />
+          </Box>
+        </ColumnLayout>
+
+        <Form
+          actions={
             <MqttButton iconName="refresh" topic="/v1/tac/reboot" send={true}>
               Reboot
             </MqttButton>
-          </Box>
-        </ColumnLayout>
+          }
+        />
       </Container>
 
       <RaucContainer />
