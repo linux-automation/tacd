@@ -33,6 +33,8 @@ pub struct Rauc {
     pub operation: Arc<Topic<String>>,
     pub progress: Arc<Topic<Progress>>,
     pub slot_status: Arc<Topic<SlotStatus>>,
+    pub last_error: Arc<Topic<String>>,
+    pub install: Arc<Topic<String>>,
 }
 
 impl Rauc {
@@ -41,6 +43,8 @@ impl Rauc {
             operation: bb.topic_ro("/v1/tac/update/operation"),
             progress: bb.topic_ro("/v1/tac/update/progress"),
             slot_status: bb.topic_ro("/v1/tac/update/slots"),
+            last_error: bb.topic_ro("/v1/tac/update/last_error"),
+            install: bb.topic_wo("/v1/tac/update/install"),
         };
 
         let conn_task = conn.clone();
@@ -119,6 +123,42 @@ impl Rauc {
             while let Some(v) = stream.next().await {
                 if let Ok(p) = v.get().await {
                     progress.set(p.into()).await;
+                }
+            }
+        });
+
+        let conn_task = conn.clone();
+        let last_error = inst.last_error.clone();
+
+        spawn(async move {
+            let proxy = installer::InstallerProxy::new(&conn_task).await.unwrap();
+
+            let mut stream = proxy.receive_last_error_changed().await;
+
+            if let Ok(e) = proxy.last_error().await {
+                last_error.set(e).await;
+            }
+
+            while let Some(v) = stream.next().await {
+                if let Ok(e) = v.get().await {
+                    last_error.set(e).await;
+                }
+            }
+        });
+
+        let conn_task = conn.clone();
+        let install = inst.install.clone();
+
+        spawn(async move {
+            let proxy = installer::InstallerProxy::new(&conn_task).await.unwrap();
+            let (mut stream, _) = install.subscribe_unbounded().await;
+
+            while let Some(url) = stream.next().await {
+                // Poor-mans validation. It feels wrong to let someone point to any
+                // file on the TAC from the web interface.
+                if url.starts_with("http://") || url.starts_with("https://") {
+                    // TODO: some kind of error handling
+                    let _ = proxy.install(&url).await;
                 }
             }
         });
