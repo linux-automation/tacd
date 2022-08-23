@@ -31,7 +31,7 @@ async fn main() -> Result<(), std::io::Error> {
     let mut bb = BrokerBuilder::new();
 
     let adc = Adc::new(&mut bb);
-    let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_curr.clone(), adc.pwr_volt.clone());
+    let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone());
     let watchdog = Watchdog::new(dut_pwr.tick());
 
     let ressources = UiRessources {
