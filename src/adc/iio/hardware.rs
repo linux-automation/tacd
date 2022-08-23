@@ -340,9 +340,3 @@ impl IioThread {
             })
     }
 }
-
-impl Drop for IioThread {
-    fn drop(&mut self) {
-        self.join.get_mut().unwrap().take().unwrap().join().unwrap()
-    }
-}

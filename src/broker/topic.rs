@@ -158,6 +158,18 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
         self.set_arc(Arc::new(msg)).await
     }
 
+    /// Get the current value
+    ///
+    /// Or nothing if none is set yet or we could not get a lock
+    #[allow(dead_code)]
+    pub fn try_get(&self) -> Option<Arc<E>> {
+        if let Some(retained) = self.retained.try_lock() {
+            retained.as_ref().map(|v| v.native())
+        } else {
+            None
+        }
+    }
+
     // Get the value of this topic
     //
     // Waits for a value if none was set yet
@@ -300,5 +312,149 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + 'static> AnyTopic for Topic
     /// Returns None if no value was set yet.
     async fn try_get_as_bytes(&self) -> Option<Arc<[u8]>> {
         self.retained.lock().await.as_mut().map(|v| v.serialized())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AnyTopic, RetainedValue, Topic, TopicName};
+    use async_std::channel::{unbounded, Receiver};
+    use async_std::sync::{Arc, Mutex};
+    use async_std::task::block_on;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct SerTestType {
+        a: bool,
+        b: u32,
+        c: String,
+    }
+
+    fn new_topic<E>() -> Arc<Topic<E>> {
+        let topic = Topic {
+            path: TopicName::new("/").unwrap(),
+            web_readable: true,
+            web_writable: true,
+            retained: Mutex::new(None),
+            senders: Mutex::new(Vec::new()),
+            senders_serialized: Mutex::new(Vec::new()),
+        };
+
+        Arc::new(topic)
+    }
+
+    fn collect_native<E: Clone>(recv: Receiver<Arc<E>>) -> Vec<E> {
+        std::iter::from_fn(|| recv.try_recv().ok().map(|v| v.as_ref().clone())).collect()
+    }
+
+    fn collect_serialized(recv: Receiver<(TopicName, Arc<[u8]>)>) -> Vec<Vec<u8>> {
+        std::iter::from_fn(|| recv.try_recv().ok().map(|(_, v)| v.to_vec())).collect()
+    }
+
+    #[test]
+    fn retained_is_cached() {
+        let mut retained = RetainedValue::new(Arc::new(1u32));
+
+        assert!(Arc::ptr_eq(&retained.native(), &retained.native()));
+        assert!(Arc::ptr_eq(&retained.serialized(), &retained.serialized()));
+
+        assert_eq!(&*retained.serialized(), &b"1"[..]);
+    }
+
+    #[test]
+    fn unsubscribe_works() {
+        block_on(async {
+            let topic = new_topic::<u32>();
+
+            let (native_1, native_handle_1) = topic.clone().subscribe_unbounded().await;
+            let (native_2, native_handle_2) = topic.clone().subscribe_unbounded().await;
+            let (native_3, native_handle_3) = topic.clone().subscribe_unbounded().await;
+
+            let (ser_1, ser_handle_1) = {
+                let (tx, rx) = unbounded();
+                (rx, topic.clone().subscribe_as_bytes(tx).await)
+            };
+
+            let (ser_2, ser_handle_2) = {
+                let (tx, rx) = unbounded();
+                (rx, topic.clone().subscribe_as_bytes(tx).await)
+            };
+
+            let (ser_3, ser_handle_3) = {
+                let (tx, rx) = unbounded();
+                (rx, topic.clone().subscribe_as_bytes(tx).await)
+            };
+
+            assert_eq!(topic.senders.lock().await.len(), 3);
+            assert_eq!(topic.senders_serialized.lock().await.len(), 3);
+
+            topic.set(2).await;
+            native_handle_2.unsubscribe().await;
+            ser_handle_2.unsubscribe().await;
+
+            assert_eq!(topic.senders.lock().await.len(), 2);
+            assert_eq!(topic.senders_serialized.lock().await.len(), 2);
+
+            topic.set(1).await;
+            native_handle_1.unsubscribe().await;
+            ser_handle_1.unsubscribe().await;
+
+            assert_eq!(topic.senders.lock().await.len(), 1);
+            assert_eq!(topic.senders_serialized.lock().await.len(), 1);
+
+            topic.set(3).await;
+            native_handle_3.unsubscribe().await;
+            ser_handle_3.unsubscribe().await;
+
+            assert_eq!(topic.senders.lock().await.len(), 0);
+            assert_eq!(topic.senders_serialized.lock().await.len(), 0);
+
+            topic.set(4).await;
+
+            let native_1 = collect_native(native_1);
+            let native_2 = collect_native(native_2);
+            let native_3 = collect_native(native_3);
+
+            let ser_1 = collect_serialized(ser_1);
+            let ser_2 = collect_serialized(ser_2);
+            let ser_3 = collect_serialized(ser_3);
+
+            assert_eq!(&native_1, &[2, 1]);
+            assert_eq!(&native_2, &[2]);
+            assert_eq!(&native_3, &[2, 1, 3]);
+
+            assert_eq!(&ser_1, &[b"2", b"1"]);
+            assert_eq!(&ser_2, &[b"2"]);
+            assert_eq!(&ser_3, &[b"2", b"1", b"3"]);
+        })
+    }
+
+    #[test]
+    fn serialize_roundtrip() {
+        block_on(async {
+            let topic = new_topic::<SerTestType>();
+
+            assert_eq!(topic.try_get(), None);
+            assert_eq!(topic.try_get_as_bytes().await, None);
+
+            topic
+                .set_from_bytes(br#"{"c": "test", "b": 1, "a": true}"#)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                topic.try_get(),
+                Some(Arc::new(SerTestType {
+                    a: true,
+                    b: 1,
+                    c: "test".to_string()
+                }))
+            );
+
+            let ser = topic.try_get_as_bytes().await.unwrap();
+            let ser_str = std::str::from_utf8(ser.as_ref()).unwrap();
+
+            assert_eq!(ser_str, r#"{"a":true,"b":1,"c":"test"}"#);
+        })
     }
 }

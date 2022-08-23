@@ -166,6 +166,7 @@ pub struct Ui {
 /// Spawn a thread that blockingly reads user input and pushes them into
 /// a broker framework topic.
 fn handle_button(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
+    #[cfg(not(feature = "stub_out_evdev"))]
     spawn_blocking(move || {
         let mut device = evdev::Device::open(path).unwrap();
 

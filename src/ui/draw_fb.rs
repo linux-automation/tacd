@@ -3,15 +3,28 @@ use std::io::Cursor;
 use embedded_graphics::{pixelcolor::BinaryColor, prelude::*};
 use png::{BitDepth, ColorType, Encoder};
 
+#[cfg(feature = "stub_out_display")]
+mod backend {
+    mod stub;
+    pub use stub::*;
+}
+
+#[cfg(not(feature = "stub_out_display"))]
+mod backend {
+    pub use framebuffer::*;
+}
+
+use backend::Framebuffer;
+
 pub struct FramebufferDrawTarget {
-    fb: framebuffer::Framebuffer,
+    fb: Framebuffer,
 }
 
 impl FramebufferDrawTarget {
     pub fn new() -> FramebufferDrawTarget {
-        let mut fb = framebuffer::Framebuffer::new("/dev/fb0").unwrap();
+        let mut fb = Framebuffer::new("/dev/fb0").unwrap();
         fb.var_screen_info.activate = 128; // FB_ACTIVATE_FORCE
-        framebuffer::Framebuffer::put_var_screeninfo(&fb.device, &fb.var_screen_info).unwrap();
+        Framebuffer::put_var_screeninfo(&fb.device, &fb.var_screen_info).unwrap();
 
         FramebufferDrawTarget { fb }
     }

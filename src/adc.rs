@@ -7,7 +7,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 
-mod iio;
+#[cfg(any(test, feature = "stub_out_adc"))]
+mod iio {
+    mod stub;
+    pub use stub::*;
+}
+
+#[cfg(not(any(test, feature = "stub_out_adc")))]
+mod iio {
+    mod hardware;
+    pub use hardware::*;
+}
 
 pub use iio::{CalibratedChannel, IioThread};
 
@@ -58,7 +68,6 @@ impl From<(Instant, f32)> for Measurement {
     }
 }
 
-#[derive(Clone)]
 /// A reference to an ADC channel.
 ///
 /// The channel can be used in two different ways:
@@ -67,6 +76,7 @@ impl From<(Instant, f32)> for Measurement {
 ///   time access to the most recent ADC value.
 /// * The `topic` way uses the tacd broker system and allow you to subscribe
 ///   to a stream of new values.
+#[derive(Clone)]
 pub struct AdcChannel {
     pub fast: CalibratedChannel,
     pub topic: Arc<Topic<Measurement>>,

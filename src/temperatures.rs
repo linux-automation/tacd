@@ -4,6 +4,8 @@ use std::time::{Duration, Instant};
 
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn_blocking};
+
+#[cfg(not(feature = "stub_out_hwmon"))]
 use sysfs_class::{HwMon, SysClass};
 
 use crate::adc::Measurement;
@@ -23,6 +25,8 @@ impl Temperatures {
 
         let run_thread = run.clone();
         let soc_temperature_thread = soc_temperature.clone();
+
+        #[cfg(not(feature = "stub_out_hwmon"))]
         spawn_blocking(move || {
             while run_thread.load(Ordering::Relaxed) {
                 let val = HwMon::new(&"hwmon0")

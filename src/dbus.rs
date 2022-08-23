@@ -45,20 +45,29 @@ pub struct DbusClient {
 
 impl DbusClient {
     pub async fn new(bb: &mut BrokerBuilder) -> Self {
+        #[cfg(not(feature = "stub_out_dbus"))]
         let conn = Arc::new(zbus::Connection::system().await.unwrap());
 
         let hostname = {
-            let topic = bb.topic_ro("/v1/tac/network/hostname", None);
-            let manager = HostnameProxy::new(&conn).await.unwrap();
-            let hostname = manager.hostname().await.unwrap();
-            topic.set(hostname).await;
-            topic
+            #[cfg(not(feature = "stub_out_dbus"))]
+            let hostname = HostnameProxy::new(&conn)
+                .await
+                .unwrap()
+                .hostname()
+                .await
+                .unwrap();
+
+            #[cfg(feature = "stub_out_dbus")]
+            let hostname = "lxatac".to_string();
+
+            bb.topic_ro("/v1/tac/network/hostname", Some(hostname))
         };
 
         let bridge_interface = bb.topic_ro("/v1/tac/network/tac-bridge", None);
         let dut_interface = bb.topic_ro("/v1/tac/network/dut", None);
         let uplink_interface = bb.topic_ro("/v1/tac/network/uplink", None);
 
+        #[cfg(not(feature = "stub_out_dbus"))]
         {
             let conn = conn.clone();
             let mut nm_interface = LinkStream::new(conn, "dut").await.unwrap();
@@ -72,6 +81,7 @@ impl DbusClient {
             });
         }
 
+        #[cfg(not(feature = "stub_out_dbus"))]
         {
             let conn = conn.clone();
             let mut nm_interface = LinkStream::new(conn, "uplink").await.unwrap();
@@ -85,6 +95,7 @@ impl DbusClient {
             });
         }
 
+        #[cfg(not(feature = "stub_out_dbus"))]
         {
             let conn = conn.clone();
             let mut nm_interface = IpStream::new(conn.clone(), "tac-bridge").await.unwrap();
@@ -100,9 +111,12 @@ impl DbusClient {
             });
         }
 
+        #[cfg(not(feature = "stub_out_dbus"))]
         let sd = Systemd::new(conn.clone());
+
         let reboot = bb.topic_rw("/v1/tac/reboot", Some(false));
 
+        #[cfg(not(feature = "stub_out_dbus"))]
         {
             let sd = sd.clone();
             let (mut reboot_reqs, _) = reboot.clone().subscribe_unbounded().await;
@@ -119,6 +133,7 @@ impl DbusClient {
         let restart_service =
             bb.topic_rw::<String>("/v1/tac/restart_service", Some("".to_string()));
 
+        #[cfg(not(feature = "stub_out_dbus"))]
         {
             let sd = sd.clone();
             let (mut restart_reqs, _) = restart_service.clone().subscribe_unbounded().await;
@@ -133,7 +148,11 @@ impl DbusClient {
         // TODO: this is arguably prettier than what is done above for network
         // and systemd. Maybe also push back the broker framework into those
         // modules.
+        #[cfg(not(feature = "stub_out_dbus"))]
         let rauc = Rauc::new(bb, conn).await;
+
+        #[cfg(feature = "stub_out_dbus")]
+        let rauc = Rauc::new(bb).await;
 
         Self {
             network: Network {

@@ -1,13 +1,40 @@
-use std::fs::read;
-use std::str::from_utf8;
-
 use async_std::sync::Arc;
 use nix::sys::utsname::uname;
 use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 
-const DT_CHOSEN: &str = "/sys/firmware/devicetree/base/chosen/";
+#[cfg(any(test, feature = "stub_out_barebox"))]
+mod read_dt_props {
+    pub fn read_dt_property(_: &str) -> String {
+        "stub".to_string()
+    }
+
+    pub fn read_dt_property_u32(_: &str) -> u32 {
+        0
+    }
+}
+
+#[cfg(not(any(test, feature = "stub_out_barebox")))]
+mod read_dt_props {
+    use std::fs::read;
+    use std::str::from_utf8;
+
+    const DT_CHOSEN: &str = "/sys/firmware/devicetree/base/chosen/";
+
+    pub fn read_dt_property(path: &str) -> String {
+        let bytes = read([DT_CHOSEN, path].join("/")).unwrap();
+        from_utf8(bytes.strip_suffix(&[0]).unwrap())
+            .unwrap()
+            .to_string()
+    }
+
+    pub fn read_dt_property_u32(path: &str) -> u32 {
+        u32::from_str_radix(&read_dt_property(path), 10).unwrap()
+    }
+}
+
+use read_dt_props::{read_dt_property, read_dt_property_u32};
 
 #[derive(Serialize, Deserialize)]
 pub struct Uname {
@@ -42,38 +69,27 @@ pub struct Barebox {
 }
 
 impl Barebox {
-    fn read_property(path: &str) -> String {
-        let bytes = read([DT_CHOSEN, path].join("/")).unwrap();
-        from_utf8(bytes.strip_suffix(&[0]).unwrap())
-            .unwrap()
-            .to_string()
-    }
-
     fn get() -> Self {
         // Get info from devicetree choosen
         Self {
-            version: Self::read_property("barebox-version"),
+            version: read_dt_property("barebox-version"),
             baseboard_release: {
-                let template = Self::read_property("baseboard-factory-data/pcba-hardware-release");
-                let changeset = Self::read_property("baseboard-factory-data/modification");
-                let changeset = u32::from_str_radix(&changeset, 10).unwrap();
+                let template = read_dt_property("baseboard-factory-data/pcba-hardware-release");
+                let changeset = read_dt_property_u32("baseboard-factory-data/modification");
 
                 template.replace("-C??", &format!("-C{changeset:02}"))
             },
             powerboard_release: {
-                let template = Self::read_property("powerboard-factory-data/pcba-hardware-release");
-                let changeset = Self::read_property("powerboard-factory-data/modification");
-                let changeset = u32::from_str_radix(&changeset, 10).unwrap();
+                let template = read_dt_property("powerboard-factory-data/pcba-hardware-release");
+                let changeset = read_dt_property_u32("powerboard-factory-data/modification");
 
                 template.replace("-C??", &format!("-C{changeset:02}"))
             },
             baseboard_timestamp: {
-                let ts = Self::read_property("baseboard-factory-data/factory-timestamp");
-                u32::from_str_radix(&ts, 10).unwrap()
+                read_dt_property_u32("baseboard-factory-data/factory-timestamp")
             },
             powerboard_timestamp: {
-                let ts = Self::read_property("powerboard-factory-data/factory-timestamp");
-                u32::from_str_radix(&ts, 10).unwrap()
+                read_dt_property_u32("powerboard-factory-data/factory-timestamp")
             },
         }
     }

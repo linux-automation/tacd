@@ -28,8 +28,14 @@ impl WebInterface {
         // Open [::]:80 outselves if systemd did not provide anything.
         // This, somewhat confusingly also listens on 0.0.0.0.
         if this.listeners.is_empty() {
+            #[cfg(not(feature = "stub_out_root"))]
             this.listeners.push(TcpListener::bind("[::]:80").expect(
                 "Could not bind web API to [::]:80, is there already another service running?",
+            ));
+
+            #[cfg(feature = "stub_out_root")]
+            this.listeners.push(TcpListener::bind("[::]:8080").expect(
+                "Could not bind web API to [::]:8080, is there already another service running?",
             ));
         }
 

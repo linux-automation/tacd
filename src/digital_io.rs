@@ -1,7 +1,20 @@
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn, spawn_blocking};
-use gpio_cdev::{chips, EventRequestFlags, EventType, Line, LineRequestFlags};
+
+#[cfg(any(test, feature = "stub_out_gpio"))]
+mod gpio {
+    mod stub;
+    pub use stub::*;
+}
+
+#[cfg(not(any(test, feature = "stub_out_gpio")))]
+mod gpio {
+    mod hardware;
+    pub use hardware::*;
+}
+
+pub use gpio::{find_line, EventRequestFlags, EventType, LineHandle, LineRequestFlags};
 
 use crate::broker::{BrokerBuilder, Topic};
 
@@ -12,13 +25,6 @@ pub struct DigitalIo {
     pub uart_tx_en: Arc<Topic<bool>>,
     pub iobus_pwr_en: Arc<Topic<bool>>,
     pub iobus_flt_fb: Arc<Topic<bool>>,
-}
-
-pub fn find_line(name: &str) -> Option<Line> {
-    chips()
-        .unwrap()
-        .flat_map(|c| c.unwrap().lines())
-        .find(|l| l.info().unwrap().name() == Some(name))
 }
 
 /// Handle a GPIO line whose state is completely defined by the broker framwork

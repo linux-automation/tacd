@@ -53,6 +53,27 @@ Then, you can use 'cargo build --target armv7-unknown-linux-gnueabihf'.
 The resulting binary is placed in 'target/armv7-unknown-linux-gnueabihf/release/tacd'
 and contains averything required to run the tacd.
 
+Unit tests
+----------
+
+While the test coverage is not great there are some unit tests.
+Run them in a shell where you _did not_ source the Yocto SDK using:
+
+  cargo test
+
+Running on a PC
+---------------
+
+The tacd heavily relies on a lot of hardware and files being present on the
+TAC, this means that the full tacd can not run on a non-TAC system.
+
+You can however run a stripped-down version by using:
+
+  cargo run --features=stub_out_everything
+
+Not that this should again be run in a shell where the Yocto SDK is not sourced.
+Also note that rust will complain very loudly about a lot of dead code.
+
 Contributing
 ------------
 

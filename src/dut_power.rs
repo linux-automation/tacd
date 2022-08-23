@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -6,13 +5,33 @@ use std::time::{Duration, Instant};
 use async_std::prelude::*;
 use async_std::sync::{Arc, Weak};
 use async_std::task;
-use gpio_cdev::{LineHandle, LineRequestFlags};
 use serde::{Deserialize, Serialize};
-use thread_priority::*;
 
 use crate::adc::AdcChannel;
 use crate::broker::{BrokerBuilder, Topic};
-use crate::digital_io::find_line;
+use crate::digital_io::{find_line, LineHandle, LineRequestFlags};
+
+#[cfg(any(test, feature = "stub_out_root"))]
+mod prio {
+    pub fn realtime_priority() {}
+}
+
+#[cfg(not(any(test, feature = "stub_out_root")))]
+mod prio {
+    use std::convert::TryFrom;
+    use thread_priority::*;
+
+    pub fn realtime_priority() {
+        set_thread_priority_and_policy(
+            thread_native_id(),
+            ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
+            ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
+        )
+        .unwrap();
+    }
+}
+
+use prio::realtime_priority;
 
 const MAX_AGE: Duration = Duration::from_millis(300);
 const THREAD_INTERVAL: Duration = Duration::from_millis(100);
@@ -20,6 +39,9 @@ const TASK_INTERVAL: Duration = Duration::from_millis(200);
 const MAX_CURRENT: f32 = 5.0;
 const MAX_VOLTAGE: f32 = 48.0;
 const MIN_VOLTAGE: f32 = -1.0;
+
+const PWR_LINE_ASSERTED: u8 = 0;
+const DISCHARGE_LINE_ASSERTED: u8 = 0;
 
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum OutputRequest {
@@ -51,7 +73,7 @@ impl From<u8> for OutputRequest {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum OutputState {
     On,
     Off,
@@ -100,7 +122,6 @@ pub struct DutPwrThread {
     pub request: Arc<Topic<OutputRequest>>,
     pub state: Arc<Topic<OutputState>>,
     tick: Arc<AtomicU32>,
-    join: Option<thread::JoinHandle<()>>,
 }
 
 /// Bring the outputs into a fail safe mode
@@ -110,8 +131,10 @@ fn fail(
     discharge_line: &LineHandle,
     fail_state: &AtomicU8,
 ) {
-    pwr_line.set_value(1).unwrap();
-    discharge_line.set_value(1).unwrap();
+    pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+    discharge_line
+        .set_value(1 - DISCHARGE_LINE_ASSERTED)
+        .unwrap();
     fail_state.store(reason as u8, Ordering::Relaxed);
 }
 
@@ -164,25 +187,24 @@ impl DutPwrThread {
 
         // Spawn a high priority thread that handles the power status
         // in a realtimey fashion.
-        let join = thread::Builder::new()
+        thread::Builder::new()
             .name("tacd power".into())
             .spawn(move || {
                 let pwr_line = find_line("IO0")
                     .unwrap()
-                    .request(LineRequestFlags::OUTPUT, 0, "tacd")
+                    .request(LineRequestFlags::OUTPUT, 1 - PWR_LINE_ASSERTED, "tacd")
                     .unwrap();
 
                 let discharge_line = find_line("IO1")
                     .unwrap()
-                    .request(LineRequestFlags::OUTPUT, 0, "tacd")
+                    .request(
+                        LineRequestFlags::OUTPUT,
+                        1 - DISCHARGE_LINE_ASSERTED,
+                        "tacd",
+                    )
                     .unwrap();
 
-                set_thread_priority_and_policy(
-                    thread_native_id(),
-                    ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
-                    ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
-                )
-                .unwrap();
+                realtime_priority();
 
                 let mut last_ts: Option<Instant> = None;
 
@@ -264,18 +286,22 @@ impl DutPwrThread {
                     {
                         OutputRequest::Idle => {}
                         OutputRequest::On => {
-                            discharge_line.set_value(1).unwrap();
-                            pwr_line.set_value(0).unwrap();
+                            discharge_line
+                                .set_value(1 - DISCHARGE_LINE_ASSERTED)
+                                .unwrap();
+                            pwr_line.set_value(PWR_LINE_ASSERTED).unwrap();
                             state.store(OutputState::On as u8, Ordering::Relaxed);
                         }
                         OutputRequest::Off => {
-                            discharge_line.set_value(1).unwrap();
-                            pwr_line.set_value(1).unwrap();
+                            discharge_line
+                                .set_value(1 - DISCHARGE_LINE_ASSERTED)
+                                .unwrap();
+                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
                             state.store(OutputState::Off as u8, Ordering::Relaxed);
                         }
                         OutputRequest::OffDischarge => {
-                            discharge_line.set_value(0).unwrap();
-                            pwr_line.set_value(1).unwrap();
+                            discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
+                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
                             state.store(OutputState::OffDischarge as u8, Ordering::Relaxed);
                         }
                     }
@@ -290,7 +316,6 @@ impl DutPwrThread {
             request: request_topic,
             state: state_topic,
             tick,
-            join: Some(join),
         }
     }
 
@@ -299,8 +324,136 @@ impl DutPwrThread {
     }
 }
 
-impl Drop for DutPwrThread {
-    fn drop(&mut self) {
-        self.join.take().unwrap().join().unwrap()
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use async_std::task::{block_on, sleep};
+
+    use crate::adc::Adc;
+    use crate::broker::BrokerBuilder;
+    use crate::digital_io::find_line;
+
+    use super::{
+        DutPwrThread, OutputRequest, OutputState, DISCHARGE_LINE_ASSERTED, MAX_CURRENT,
+        MAX_VOLTAGE, MIN_VOLTAGE, PWR_LINE_ASSERTED,
+    };
+
+    #[test]
+    fn failsafe() {
+        let pwr_line = find_line("IO0").unwrap();
+        let discharge_line = find_line("IO1").unwrap();
+
+        let (adc, dut_pwr) = {
+            let mut bb = BrokerBuilder::new();
+            let adc = Adc::new(&mut bb);
+
+            let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone());
+
+            (adc, dut_pwr)
+        };
+
+        println!("Test with acceptable voltage/current");
+
+        // Set acceptable voltage / current
+        adc.pwr_volt.fast.set(MAX_VOLTAGE * 0.99);
+        adc.pwr_curr.fast.set(MAX_CURRENT * 0.99);
+
+        block_on(sleep(Duration::from_millis(500)));
+
+        // Make sure that the DUT power is off by default
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::Off);
+
+        println!("Turn Off with discharge");
+        block_on(dut_pwr.request.set(OutputRequest::OffDischarge));
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OffDischarge);
+
+        println!("Turn on");
+        block_on(dut_pwr.request.set(OutputRequest::On));
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
+        println!("Trigger inverted polarity");
+        adc.pwr_volt.fast.set(MIN_VOLTAGE * 1.01);
+        block_on(sleep(Duration::from_millis(500)));
+        adc.pwr_volt.fast.set(MIN_VOLTAGE * 0.99);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(
+            *block_on(dut_pwr.state.get()),
+            OutputState::InvertedPolarity
+        );
+
+        println!("Turn on again");
+        block_on(dut_pwr.request.set(OutputRequest::On));
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
+        println!("Trigger overcurrent");
+        adc.pwr_curr.fast.set(MAX_CURRENT * 1.01);
+        block_on(sleep(Duration::from_millis(500)));
+        adc.pwr_curr.fast.set(MAX_CURRENT * 0.99);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OverCurrent);
+
+        println!("Turn on again");
+        block_on(dut_pwr.request.set(OutputRequest::On));
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
+        println!("Trigger overvoltage");
+        adc.pwr_volt.fast.set(MAX_VOLTAGE * 1.01);
+        block_on(sleep(Duration::from_millis(500)));
+        adc.pwr_volt.fast.set(MAX_VOLTAGE * 0.99);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OverVoltage);
+
+        println!("Turn on again");
+        block_on(dut_pwr.request.set(OutputRequest::On));
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
+        println!("Trigger realtime violation");
+        adc.pwr_volt.fast.stall(true);
+        block_on(sleep(Duration::from_millis(500)));
+        adc.pwr_volt.fast.stall(false);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(
+            *block_on(dut_pwr.state.get()),
+            OutputState::RealtimeViolation
+        );
+
+        println!("Turn on again");
+        block_on(dut_pwr.request.set(OutputRequest::On));
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
+        println!("Drop DutPwrThread");
+        std::mem::drop(dut_pwr);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
     }
 }

@@ -1,4 +1,3 @@
-use std::fs::{read_to_string, write};
 use std::path::Path;
 use std::time::Duration;
 
@@ -8,6 +7,34 @@ use async_std::task::{sleep, spawn};
 use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
+
+#[cfg(feature = "stub_out_usb_hub")]
+mod rw {
+    use std::convert::AsRef;
+    use std::io::{Error, ErrorKind, Result};
+    use std::path::Path;
+
+    pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
+        Err(Error::new(ErrorKind::NotFound, "eh"))
+    }
+
+    pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
+        let path: &Path = path.as_ref();
+        let contents: &[u8] = contents.as_ref();
+        let text = std::str::from_utf8(contents).unwrap_or("[Broken UTF-8]");
+
+        println!("USB: Would write {text} to {path:?} but don't feel like it");
+
+        Ok(())
+    }
+}
+
+#[cfg(not(feature = "stub_out_usb_hub"))]
+mod rw {
+    pub use std::fs::*;
+}
+
+use rw::{read_to_string, write};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
