@@ -330,9 +330,9 @@ dependencies = [
 
 [[package]]
 name = "async-tungstenite"
-version = "0.13.1"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07b30ef0ea5c20caaa54baea49514a206308989c68be7ecd86c7f956e4da6378"
+checksum = "742cc7dcb20b2f84a42f4691aa999070ec7e78f8e7e7438bf14be7017b44907e"
 dependencies = [
  "futures-io",
  "futures-util",
@@ -1239,15 +1239,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64e9829a50b42bb782c1df523f78d332fe371b10c661e78b7a3c34b0198e9fac"
 
 [[package]]
-name = "input_buffer"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f97967975f448f1a7ddb12b0bc41069d09ed6a1c161a92687e057325db35d413"
-dependencies = [
- "bytes",
-]
-
-[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2087,6 +2078,8 @@ dependencies = [
  "anyhow",
  "async-std",
  "async-trait",
+ "async-tungstenite",
+ "base64 0.13.0",
  "chrono",
  "embedded-graphics",
  "evdev",
@@ -2094,6 +2087,7 @@ dependencies = [
  "framebuffer",
  "futures",
  "futures-lite",
+ "futures-util",
  "gpio-cdev",
  "industrial-io",
  "log",
@@ -2104,12 +2098,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
+ "sha-1",
  "surf",
  "sysfs-class",
  "systemd",
  "thread-priority",
  "tide",
- "tide-websockets",
  "unique-token",
  "zbus",
  "zvariant",
@@ -2183,24 +2177,6 @@ dependencies = [
  "route-recognizer",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "tide-websockets"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3592c5cb5cb1b7a2ff3a0e5353170c1bb5b104b2f66dd06f73304169b52cc725"
-dependencies = [
- "async-dup",
- "async-std",
- "async-tungstenite",
- "base64 0.13.0",
- "futures-util",
- "pin-project",
- "serde",
- "serde_json",
- "sha-1",
- "tide",
 ]
 
 [[package]]
@@ -2286,16 +2262,15 @@ dependencies = [
 
 [[package]]
 name = "tungstenite"
-version = "0.13.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fe8dada8c1a3aeca77d6b51a4f1314e0f4b8e438b7b1b71e3ddaca8080e4093"
+checksum = "983d40747bce878d2fb67d910dcb8bd3eca2b2358540c3cc1b98c027407a3ae3"
 dependencies = [
  "base64 0.13.0",
  "byteorder",
  "bytes",
  "http",
  "httparse",
- "input_buffer",
  "log",
  "rand 0.8.4",
  "sha-1",
