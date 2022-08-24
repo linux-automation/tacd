@@ -1,14 +1,24 @@
 use std::collections::HashMap;
 use std::io::Cursor;
 
+use anyhow::{anyhow, Result};
+
 use async_std::channel::bounded;
 use async_std::sync::{Arc, Mutex};
 use async_std::task::spawn;
 
-use async_tungstenite::tungstenite::{protocol::Role, Message};
+use async_tungstenite::tungstenite::{
+    protocol::{
+        frame::{coding::CloseCode, CloseFrame},
+        Role,
+    },
+    Message,
+};
 use async_tungstenite::WebSocketStream;
 
-use futures_util::{SinkExt, StreamExt};
+use futures_lite::future::race;
+use futures_util::future::Either;
+use futures_util::{FutureExt, SinkExt, StreamExt};
 
 use mqtt::control::variable_header::{ConnectReturnCode, ProtocolLevel};
 use mqtt::packet::publish::QoSWithPacketIdentifier;
@@ -125,7 +135,16 @@ async fn handle_connection(
     }
 
     let (stream_tx, mut stream_rx) = stream.split();
-    let stream_tx = Arc::new(Mutex::new(stream_tx));
+
+    // Wrap the tx side of a stream in an Option so that we can later .take()
+    // it and have an owned reference of it.
+    // This way we can re-unite it with the rx side, get back the original
+    // WebSocket and call its close() function that allows us to send a closing
+    // reason to the peer.
+    // You will see some unwrap()s on this Option.
+    // They should be fine as the value is only .take()n once the connection
+    // is closed.
+    let stream_tx = Arc::new(Mutex::new(Some(stream_tx)));
 
     // Set up a task that takes messages from a queue, wraps them in a MQTT
     // packet and sends them out over the websocket.
@@ -133,52 +152,80 @@ async fn handle_connection(
     // make progress and the senders should close the queue if it is full.
     let (to_websocket, mut for_websocket) = bounded::<(TopicName, Arc<[u8]>)>(MAX_QUEUE_LENGTH);
     let stream_tx_task = stream_tx.clone();
-    spawn(async move {
+    let mut tx_done = spawn(async move {
         let mut pending_bytes = 0;
 
-        while let Some((topic, payload)) = for_websocket.next().await {
-            let pkg = PublishPacket::new(topic, QoSWithPacketIdentifier::Level0, payload.to_vec());
+        loop {
+            // Take the next message provided by the serialized topic
+            // subscription channel
+            let (topic, payload) = for_websocket
+                .next()
+                .await
+                .ok_or(anyhow!("subscription channel closed"))?;
 
-            let msg = match pkg.as_message() {
-                Ok(msg) => msg,
-                Err(_) => break,
-            };
+            // Wrap a MQTT publish header around it
+            let msg = PublishPacket::new(topic, QoSWithPacketIdentifier::Level0, payload.to_vec())
+                .as_message()?;
 
-            pending_bytes += msg.len();
+            // Get a strong reference to the TX-Side of the WebSocket
+            // (this may fail if this task has somehow become an orphan)
+            let mut stream_tx_lock = stream_tx_task.lock().await;
+
+            let stream_tx = stream_tx_lock
+                .as_mut()
+                .ok_or(anyhow!("WebSocket is gone"))?;
 
             // Enqueue the message for sending
-            if stream_tx_task.lock().await.send(msg).await.is_err() {
-                break;
-            }
+            pending_bytes += msg.len();
+            stream_tx.send(msg).await?;
 
             // Make sure that every now and then the messages are actually sent out
             if pending_bytes > MAX_PENDING_BYTES {
-                if stream_tx_task.lock().await.flush().await.is_err() {
-                    break;
-                }
+                stream_tx.flush().await?;
                 pending_bytes = 0;
             }
         }
-
-        // Something went wrong. Make sure that the client is informed about it.
-        stream_tx_task.lock().await.close().await
-    });
+    })
+    .into_stream();
 
     // Keep track of the currently subscribed topics to be able to handle
     // unsubscribe requests and clean up once the connection is closed.
     let mut subscription_handles: HashMap<TopicFilter, Vec<Box<dyn AnySubscriptionHandle>>> =
         HashMap::new();
 
-    // Handle packets sent by the client
-    'connection: while let Some(pkg) = stream_rx
-        .next()
-        .await
-        .transpose()
-        .ok()
-        .flatten()
-        .map(|msg| VariablePacket::from_message(msg).ok())
-        .flatten()
-    {
+    let mut res: Result<()> = Ok(());
+
+    // Handle two kinds of events:
+    // - packets sent by the client
+    // - the tx task exiting for some reason
+    'connection: loop {
+        let ev = race(
+            stream_rx.next().map(|m| Either::Left(m)),
+            tx_done.next().map(|d| Either::Right(d)),
+        )
+        .await;
+
+        let pkg = match ev {
+            Either::Left(Some(Ok(message))) => match VariablePacket::from_message(message) {
+                Ok(p) => p,
+                Err(e) => {
+                    res = Err(e.into());
+                    break;
+                }
+            },
+            Either::Left(Some(Err(e))) => {
+                res = Err(e.into());
+                break;
+            }
+            Either::Right(Some(r)) => {
+                res = r;
+                break;
+            }
+            Either::Left(None) | Either::Right(None) => {
+                break;
+            }
+        };
+
         match pkg {
             VariablePacket::SubscribePacket(sub_pkg) => {
                 let suback_pkg = SubackPacket::new(
@@ -195,7 +242,15 @@ async fn handle_connection(
                 // We should get the suback out before sending the retained
                 // values. So send it now even though we did not do the
                 // subscribing yet.
-                if stream_tx.lock().await.send(suback_pkg).await.is_err() {
+                if let Err(e) = stream_tx
+                    .lock()
+                    .await
+                    .as_mut()
+                    .unwrap()
+                    .send(suback_pkg)
+                    .await
+                {
+                    res = Err(e.into());
                     break 'connection;
                 }
 
@@ -218,8 +273,9 @@ async fn handle_connection(
                         // Do we have a retained value for this topic?
                         // If so: send it to the client
                         if let Some(retained) = topic.try_get_as_bytes().await {
-                            if let Err(_) = to_websocket.try_send((topic.path().clone(), retained))
+                            if let Err(e) = to_websocket.try_send((topic.path().clone(), retained))
                             {
+                                res = Err(e.into());
                                 break 'connection;
                             }
                         }
@@ -258,7 +314,15 @@ async fn handle_connection(
                     .as_message()
                     .unwrap();
 
-                if stream_tx.lock().await.send(unsuback_pkg).await.is_err() {
+                if let Err(e) = stream_tx
+                    .lock()
+                    .await
+                    .as_mut()
+                    .unwrap()
+                    .send(unsuback_pkg)
+                    .await
+                {
+                    res = Err(e.into());
                     break 'connection;
                 }
             }
@@ -267,6 +331,7 @@ async fn handle_connection(
                     || pub_pkg.dup() != false
                     || pub_pkg.retain() != true
                 {
+                    res = Err(anyhow!("QoS, DUP or Retain has non-allowed value"));
                     break 'connection;
                 }
 
@@ -276,7 +341,8 @@ async fn handle_connection(
                     .next();
 
                 if let Some(topic) = topic {
-                    if let Err(_) = topic.set_from_bytes(pub_pkg.payload()).await {
+                    if let Err(e) = topic.set_from_bytes(pub_pkg.payload()).await {
+                        res = Err(e.into());
                         break 'connection;
                     }
                 }
@@ -284,17 +350,56 @@ async fn handle_connection(
             VariablePacket::PingreqPacket(_) => {
                 let pingresp_pkg = PingrespPacket::new().as_message().unwrap();
 
-                if stream_tx.lock().await.send(pingresp_pkg).await.is_err() {
+                if let Err(e) = stream_tx
+                    .lock()
+                    .await
+                    .as_mut()
+                    .unwrap()
+                    .send(pingresp_pkg)
+                    .await
+                {
+                    res = Err(e.into());
                     break 'connection;
                 }
             }
-            _ => break 'connection,
+            _ => {
+                res = Err(anyhow!("Unknown packet type"));
+                break 'connection;
+            }
         }
     }
 
+    // Unsubscribe this connection from all topics
     for desub in subscription_handles.into_values().flatten() {
         desub.unsubscribe().await
     }
+
+    // We may be able to get a closing frame with some information about errors
+    // causing the connection to close through to the peer.
+    // This is a best effort action for a couple of reasons:
+    //
+    // - Clients don't care
+    // - The WebSocket may be closed by the peer and not by us
+    let stream_tx = stream_tx.lock().await.take().unwrap();
+    let mut ws = stream_tx.reunite(stream_rx).unwrap();
+
+    let code = if res.is_err() {
+        CloseCode::Error
+    } else {
+        CloseCode::Normal
+    };
+
+    let reason = match res {
+        Err(e) => e.to_string(),
+        Ok(_) => "".to_string(),
+    };
+
+    let close_frame = CloseFrame {
+        code,
+        reason: std::borrow::Cow::from(&reason),
+    };
+
+    let _ = ws.close(Some(close_frame)).await;
 }
 
 fn header_contains_ignore_case(req: &Request<()>, header_name: HeaderName, value: &str) -> bool {
