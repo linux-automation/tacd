@@ -72,4 +72,5 @@ stub_out_everything = [
 [profile.release]
 lto = true
 overflow-checks = true
-#panic = 'abort'
+opt-level = "z"
+codegen-units = 1
