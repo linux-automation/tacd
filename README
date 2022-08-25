@@ -59,7 +59,7 @@ Unit tests
 While the test coverage is not great there are some unit tests.
 Run them in a shell where you _did not_ source the Yocto SDK using:
 
-  cargo test
+  cargo test --no-default-features
 
 Running on a PC
 ---------------
@@ -69,7 +69,7 @@ TAC, this means that the full tacd can not run on a non-TAC system.
 
 You can however run a stripped-down version by using:
 
-  cargo run --features=stub_out_everything
+  cargo run --features=stub_out_everything --no-default-features
 
 Not that this should again be run in a shell where the Yocto SDK is not sourced.
 Also note that rust will complain very loudly about a lot of dead code.

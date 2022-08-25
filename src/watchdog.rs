@@ -6,7 +6,29 @@ use async_std::future::pending;
 use async_std::sync::Weak;
 use async_std::task::sleep;
 
-use systemd::daemon::{notify, watchdog_enabled, STATE_READY, STATE_WATCHDOG};
+#[cfg(any(test, feature = "stub_out_root"))]
+mod sd {
+    use std::io::Result;
+
+    pub const STATE_READY: () = ();
+    pub const STATE_WATCHDOG: () = ();
+
+    pub fn notify<I>(_: bool, _: I) -> Result<bool> {
+        println!("Watchdog tick");
+        Ok(true)
+    }
+
+    pub fn watchdog_enabled(_: bool) -> Result<u64> {
+        Ok(5_000_000)
+    }
+}
+
+#[cfg(not(any(test, feature = "stub_out_root")))]
+mod sd {
+    pub use systemd::daemon::*;
+}
+
+use sd::{notify, watchdog_enabled, STATE_READY, STATE_WATCHDOG};
 
 pub struct Watchdog {
     dut_power_tick: Weak<AtomicU32>,

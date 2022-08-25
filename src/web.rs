@@ -1,8 +1,32 @@
 use std::fs::write;
 use std::net::TcpListener;
 
-use systemd::daemon::{listen_fds, tcp_listener};
 use tide::{Request, Response, Server};
+
+#[cfg(any(test, feature = "stub_out_root"))]
+mod sd {
+    use std::io::Result;
+    use std::net::TcpListener;
+
+    pub const FALLBACK_PORT: &str = "[::]:8080";
+
+    pub fn listen_fds(_: bool) -> Result<[(); 0]> {
+        Ok([])
+    }
+
+    pub fn tcp_listener<E>(_: E) -> Result<TcpListener> {
+        unimplemented!()
+    }
+}
+
+#[cfg(not(any(test, feature = "stub_out_root")))]
+mod sd {
+    pub use systemd::daemon::*;
+
+    pub const FALLBACK_PORT: &str = "[::]:80";
+}
+
+use sd::{listen_fds, tcp_listener, FALLBACK_PORT};
 
 mod static_files;
 
@@ -25,17 +49,11 @@ impl WebInterface {
                 .extend(fds.iter().filter_map(|fd| tcp_listener(fd).ok()));
         }
 
-        // Open [::]:80 outselves if systemd did not provide anything.
+        // Open [::]:80 / [::]:8080 outselves if systemd did not provide anything.
         // This, somewhat confusingly also listens on 0.0.0.0.
         if this.listeners.is_empty() {
-            #[cfg(not(feature = "stub_out_root"))]
-            this.listeners.push(TcpListener::bind("[::]:80").expect(
-                "Could not bind web API to [::]:80, is there already another service running?",
-            ));
-
-            #[cfg(feature = "stub_out_root")]
-            this.listeners.push(TcpListener::bind("[::]:8080").expect(
-                "Could not bind web API to [::]:8080, is there already another service running?",
+            this.listeners.push(TcpListener::bind(FALLBACK_PORT).expect(
+                "Could not bind web API to port, is there already another service running?",
             ));
         }
 

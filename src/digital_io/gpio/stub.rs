@@ -4,6 +4,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use async_std::sync::{Arc, Mutex};
+use async_std::task::block_on;
 
 static LINES: Mutex<Vec<(String, Arc<AtomicU8>)>> = Mutex::new(Vec::new());
 
@@ -108,7 +109,7 @@ impl FindDecoy {
 
 pub fn find_line(name: &str) -> Option<FindDecoy> {
     let val = {
-        let mut lines = LINES.try_lock().unwrap();
+        let mut lines = block_on(LINES.lock());
 
         if let Some((_, v)) = lines.iter().find(|(n, _)| n == name) {
             v.clone()
