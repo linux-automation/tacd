@@ -219,7 +219,7 @@ impl Ui {
     pub fn new(bb: &mut BrokerBuilder, res: UiRessources, server: &mut Server<()>) -> Self {
         let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
-        let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", None);
+        let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));
         let buttons = bb.topic_rw("/v1/tac/display/buttons", None);
 
         // Initialize all the screens now so they can be mounted later
