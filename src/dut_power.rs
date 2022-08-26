@@ -118,6 +118,38 @@ impl From<u8> for OutputState {
     }
 }
 
+pub struct TickReader {
+    src: Weak<AtomicU32>,
+    val: u32,
+}
+
+impl TickReader {
+    pub fn new(src: &Arc<AtomicU32>) -> Self {
+        Self {
+            src: Arc::downgrade(src),
+            val: src.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Check if the corresponding power thread is still doing fine
+    ///
+    /// This function checks if at least some progress was made in the
+    /// power thread between the last call to is_stale() and the current
+    /// call.
+    /// Ensuring that is_stale() is not called too frequently is up to the
+    /// user.
+    pub fn is_stale(&mut self) -> bool {
+        if let Some(tick) = self.src.upgrade() {
+            let prev = self.val;
+            self.val = tick.load(Ordering::Relaxed);
+
+            prev == self.val
+        } else {
+            true
+        }
+    }
+}
+
 pub struct DutPwrThread {
     pub request: Arc<Topic<OutputRequest>>,
     pub state: Arc<Topic<OutputState>>,
@@ -319,8 +351,8 @@ impl DutPwrThread {
         }
     }
 
-    pub fn tick(&self) -> Weak<AtomicU32> {
-        Arc::downgrade(&self.tick)
+    pub fn tick(&self) -> TickReader {
+        TickReader::new(&self.tick)
     }
 }
 
