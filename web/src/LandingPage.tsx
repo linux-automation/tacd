@@ -45,6 +45,11 @@ export default function LandingPage() {
             href: "/#/settings/labgrid",
             description: "Modify the Labgrid exporter config",
           },
+          {
+            name: "Documentation / REST API",
+            href: "/#/docs/api",
+            description: "Find API definitions to automate you LXA TAC",
+          },
         ]}
       />
     </SpaceBetween>

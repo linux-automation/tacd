@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 
 import Box from "@cloudscape-design/components/box";
 import { BoxProps } from "@cloudscape-design/components/box";
@@ -9,6 +9,9 @@ import Button from "@cloudscape-design/components/button";
 import { IconProps } from "@cloudscape-design/components/icon";
 import LineChart from "@cloudscape-design/components/line-chart";
 import { MixedLineBarChartProps } from "@cloudscape-design/components/mixed-line-bar-chart";
+import Modal from "@cloudscape-design/components/modal";
+
+import { SwaggerView } from "./ApiDocs";
 
 import { useMqttSubscription, useMqttState } from "./mqtt";
 
@@ -31,7 +34,7 @@ export function ApiPickerButton() {
       formAction="none"
       iconName="search"
     >
-      API docs
+      Show an element's API
     </Button>
   );
 }
@@ -43,6 +46,24 @@ interface ApiPickerProps {
 
 export function ApiPicker(props: ApiPickerProps) {
   const [active, setActive] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+
+  const modal = useMemo(() => {
+    if (showModal) {
+      return (
+        <Modal
+          onDismiss={() => setShowModal(false)}
+          visible={true}
+          size="max"
+          closeAriaLabel="Close modal"
+        >
+          <SwaggerView filter={props.topic} />
+        </Modal>
+      );
+    } else {
+      return undefined;
+    }
+  }, [showModal, props.topic]);
 
   useEffect(() => {
     api_pickers.add(setActive);
@@ -54,10 +75,7 @@ export function ApiPicker(props: ApiPickerProps) {
 
   function click(ev: React.MouseEvent<HTMLElement>) {
     if (active) {
-      let tab = window.open(`/v1/api_doc/#${props.topic}`, "_blank");
-      if (tab !== null) {
-        tab.focus();
-      }
+      setShowModal(true);
 
       api_pickers.forEach((v) => v(false));
 
@@ -72,6 +90,7 @@ export function ApiPicker(props: ApiPickerProps) {
   return (
     <div className={outer_class} onClick={click}>
       <div className={inner_class}>{props.children}</div>
+      {modal}
     </div>
   );
 }

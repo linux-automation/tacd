@@ -5,6 +5,7 @@ import { HashRouter, Routes, Route } from "react-router-dom";
 
 import "./index.css";
 
+import ApiDocs from "./ApiDocs";
 import App from "./App";
 import DashboardDut from "./DashboardDut";
 import LandingPage from "./LandingPage";
@@ -23,6 +24,7 @@ root.render(
           <Route path="/dashboard/dut" element={<DashboardDut />} />
           <Route path="/dashboard/tac" element={<DashboardTac />} />
           <Route path="/settings/labgrid" element={<SettingsLabgrid />} />
+          <Route path="/docs/api" element={<ApiDocs />} />
         </Route>
       </Routes>
     </HashRouter>

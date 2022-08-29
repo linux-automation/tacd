@@ -1,6 +1,6 @@
 use std::collections::hash_map::DefaultHasher;
 use std::env::var_os;
-use std::fs::{create_dir, read_dir, remove_dir_all, write, File};
+use std::fs::{create_dir, read_dir, read_to_string, remove_dir_all, write, File};
 use std::hash::Hasher;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -22,6 +22,30 @@ const ENTRY_TEMPLATE: &str = r#"
     });
 "#;
 
+fn gzip(dst_dir: &Path, entry: &Path) -> (PathBuf, String) {
+    let file_name_src = entry.file_name().unwrap();
+    let file_name_dst = {
+        let mut name = file_name_src.to_os_string();
+        name.push(".gz");
+        PathBuf::from(name)
+    };
+    let path_dst = dst_dir.join(&file_name_dst);
+
+    let mut compressed = Vec::new();
+    GzEncoder::new(File::open(entry).unwrap(), Compression::best())
+        .read_to_end(&mut compressed)
+        .unwrap();
+    write(&path_dst, &compressed).unwrap();
+
+    let hash_str = {
+        let mut hash = DefaultHasher::new();
+        hash.write(&compressed);
+        format!("{:016x}", hash.finish())
+    };
+
+    (file_name_dst, hash_str)
+}
+
 fn walk_dir_and_compress(
     dst: &Path,
     base: &Path,
@@ -33,25 +57,7 @@ fn walk_dir_and_compress(
         if entry.is_dir() {
             walk_dir_and_compress(dst, base, entry, files)
         } else {
-            let file_name_src = entry.file_name().unwrap();
-            let file_name_dst = {
-                let mut name = file_name_src.to_os_string();
-                name.push(".gz");
-                PathBuf::from(name)
-            };
-            let path_dst = dst.join(&file_name_dst);
-
-            let mut compressed = Vec::new();
-            GzEncoder::new(File::open(entry).unwrap(), Compression::best())
-                .read_to_end(&mut compressed)
-                .unwrap();
-            write(&path_dst, &compressed).unwrap();
-
-            let hash_str = {
-                let mut hash = DefaultHasher::new();
-                hash.write(&compressed);
-                format!("{:016x}", hash.finish())
-            };
+            let (file_name_dst, hash_str) = gzip(dst, entry);
 
             files.push((
                 entry.strip_prefix(base).unwrap().to_path_buf(),
@@ -87,15 +93,27 @@ fn generate_web_includes() {
 
         let mut files = Vec::new();
         walk_dir_and_compress(&web_out_dir, &web_in_dir, &web_in_dir, &mut files);
+
+        if files.is_empty() {
+            eprintln!("Could not find any web interface files.");
+            eprintln!("Run npm install . && npm run build");
+            eprintln!("In the web directory, unpack a web interface archive there");
+            eprintln!("or set TACD_WEB_DIR");
+            exit(1);
+        }
+
+        // Convert the openapi.yaml to .json, then to .json.gz and then
+        // add it to the files to serve
+        println!("cargo:rerun-if-changed=openapi.yaml");
+        let openapi = read_to_string(cargo_dir.join("openapi.yaml")).unwrap();
+        let openapi: serde_json::Value = serde_yaml::from_str(&openapi).unwrap();
+        let openapi_json = web_out_dir.join("openapi.json");
+        write(&openapi_json, serde_json::to_vec(&openapi).unwrap()).unwrap();
+        let (openapi_gz, openapi_hash) = gzip(&web_out_dir, &openapi_json);
+        files.push(("/v1/openapi.json".into(), openapi_gz, openapi_hash));
+
         files
     };
-
-    if web_files.is_empty() {
-        eprintln!("Could not find any web interface files.");
-        eprintln!("Run npm install . && npm run build");
-        eprintln!("In the web directory or unpack a web interface archive");
-        exit(1);
-    }
 
     let mut dst_file = {
         let out_dir = var_os("OUT_DIR").unwrap();

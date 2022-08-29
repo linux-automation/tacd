@@ -42,6 +42,11 @@ function Navigation() {
               { type: "link", text: "Labgrid", href: "#/settings/labgrid" },
             ],
           },
+          {
+            type: "section",
+            text: "Documentation",
+            items: [{ type: "link", text: "API", href: "#/docs/api" }],
+          },
         ]}
       />
       <div className="nav_footer">

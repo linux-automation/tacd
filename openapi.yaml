@@ -1,0 +1,677 @@
+openapi: 3.0.3
+
+info:
+  title: LXA TAC HTTP API
+  description: Control and view inputs and outputs of you LXA TAC
+  version: 0.1.0
+
+paths:
+  /v1/tac/display/screen:
+    get:
+      summary: Get the name of the screen currently shown on the display
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Screen'
+    put:
+      summary: Set the screen to show on the display
+      tags: [User Interface]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Screen'
+      responses:
+        '204':
+          description: The screen was set sucessfully
+        '400':
+          description: The value could not be parsed into a screen name
+
+  /v1/tac/display/content:
+    get:
+      summary: The current screen content rendered into a PNG
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            image/png:
+
+  /v1/tac/display/locator:
+    get:
+      summary: Get the current locator status
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+    put:
+      summary: Set the current locator status
+      tags: [User Interface]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: The locator status was set sucessfully
+        '400':
+          description: The value could not be parsed into a boolean
+
+  /v1/dut/power/status:
+    get:
+      summary: Get the current Power Switch state
+      tags: [DUT Power]
+      responses:
+        '200':
+          description: The DUT power can either be "On" or in a couple of off states.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DutPwrStatus'
+    put:
+      summary: Try to set the power switch state
+      description: >
+        While the request will return immediately with a sucessful response, this does not mean
+        that the switch is actually on at this or a later point in time.
+        You will always have to check with e.g. a GET request if you really want to know, as an
+        error state could always take precedence.
+      tags: [DUT Power]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DutPwrRequest'
+      responses:
+        '204':
+          description: The request was set
+        '400':
+          description: The value could not be parsed into a a power switch request
+
+  /v1/usb/host/{port}/powered:
+    parameters:
+      - name: port
+        description: The name of the respective port on the hub
+        required: true
+        schema:
+          type: string
+          enum:
+            - port1
+            - port2
+            - port3
+    get:
+      summary: Get the power status for an USB host port
+      tags: [USB Host]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
+    put:
+      summary: Set the power status for an USB host port
+      tags: [USB Host]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: A power on/off was requested
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/usb/host/{port}/device:
+    parameters:
+      - name: port
+        description: The name of the respective port on the hub
+        required: true
+        schema:
+          type: string
+          enum:
+            - port1
+            - port2
+            - port3
+    get:
+      summary: Get the device connected to the respective USB port
+      tags: [USB Host]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsbDevice'
+
+  /v1/tac/temperatures/soc:
+    get:
+      summary: Get the current temperature inside the SoC
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+
+  /v1/tac/uname:
+    get:
+      summary: Get the information commonly accessed via "uname"
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Uname'
+
+  /v1/tac/bootloader:
+    get:
+      summary: Get the information passed through from the bootloader
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Barebox'
+
+  /v1/iobus/server/info:
+    get:
+      summary: Get (cached) info from the local IOBus server
+      tags: [IOBus]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IOBusServerInfo'
+
+  /v1/iobus/server/nodes:
+    get:
+      summary: Get the list of connected nodes
+      tags: [IOBus]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IOBusServerNodes'
+
+  /v1/output/{out_n}/asserted:
+    parameters:
+      - name: out_n
+        description: The name of the output to get or modify
+        required: true
+        schema:
+          type: string
+          enum:
+            - out_0
+            - out_1
+    get:
+      summary: Get the current asserted/deasserted status of the output
+      tags: [Input/Output] 
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
+    put:
+      summary: Set the asserted/deasserted status of the output
+      tags: [Input/Output]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: The output was set to asserted/deasserted state
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/dut/uart/{rx_tx}/enabled:
+    parameters:
+      - name: rx_tx
+        description: The direction to get status for/modify
+        required: true
+        schema:
+          type: string
+          enum:
+            - rx
+            - tx
+    get:
+      summary: Check if the selected direction is activated
+      tags: [Input/Output]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
+    put:
+      summary: Activate/Deactivate the direction
+      tags: [Input/Output]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: The direction was enabled/disabled
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/iobus/powered:
+    get:
+      summary: Check if the IOBus power supply is turned on
+      tags: [Input/Output, IOBus]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
+    put:
+      summary: Turn the IOBus supply on/off
+      tags: [Input/Output, IOBus]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: The IOBus supply was turned on/off
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/iobus/feedback/fault:
+    get:
+      summary: Check if the IOBus supply is in an error state
+      tags: [Input/Output, IOBus]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
+  /v1/usb/host/{port}/feedback/current:
+    parameters:
+      - name: port
+        description: The port to get measurements for
+        required: true
+        schema:
+          type: string
+          enum:
+            - total
+            - port1
+            - port2
+            - port3
+
+    get:
+      summary: Get the current consumed by devices on this port
+      tags: [Input/Output, USB Host]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+
+  /v1/output/{out_n}/feedback/voltage:
+    parameters:
+      - name: out_n
+        description: The output to get voltage feedback for
+        required: true
+        schema:
+          type: string
+          enum:
+            - out_0
+            - out_1
+
+    get:
+      summary: Get the voltage between the two OUT_N pins
+      tags: [Input/Output]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+
+  /v1/iobus/feedback/current:
+    get:
+      summary: Get the current consumed by devices on the IOBus
+      tags: [Input/Output, IOBus]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+
+  /v1/iobus/feedback/voltage:
+    get:
+      summary: Get the voltage of the IOBus power supply
+      description: A voltage dip indicates a fault on the bus
+      tags: [Input/Output, IOBus]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+
+  /v1/power/dut/feedback/current:
+    get:
+      summary: Get the current consumed by the DUT
+      tags: [Input/Output, DUT Power]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+
+  /v1/power/dut/feedback/voltage:
+    get:
+      summary: Get the voltage applied to the DUT
+      tags: [Input/Output, DUT Power]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Measurement'
+
+  /v1/tac/restart_service:
+    put:
+      summary: Restart a systemd service
+      tags: [System]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+      responses:
+        '204':
+          description: The service was asked to restart
+        '400':
+          description: The value could not be parsed as string
+
+  /v1/tac/reboot:
+    put:
+      summary: Reboot the TAC
+      tags: [System]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: If the body was true the TAC will soon reboot
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/tac/update/operation:
+    get:
+      summary: Get the currently running system update operation
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+
+  /v1/tac/update/progress:
+    get:
+      summary: Get the progress report of the running update operation
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RaucProgress'
+
+  /v1/tac/update/slots:
+    get:
+      summary: Get the progress report of the running update operation
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/tac/update/last_error:
+    get:
+      summary: Get the last error reported by the update system
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+
+  /v1/tac/update/install:
+    put:
+      summary: Request the installation of a RAUC bundle from an URL
+      tags: [Updating]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: string
+      responses:
+        '204':
+          description: The value was parsed as string and will be tried
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/tac/network/hostname:
+    get:
+      summary: Get the systems hostname
+      tags: [Network]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+
+  /v1/tac/network/tac-bridge:
+    get:
+      summary: Get the IPv4 addresses associated with the tac-bridge interface
+      tags: [Network]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /v1/tac/network/{if}:
+    parameters:
+      - name: if
+        description: The name of the interface to query
+        required: true
+        schema:
+          type: string
+          enum:
+            - dut
+            - uplink
+    get:
+      summary: Get the link status of the respective interface
+      tags: [Network]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  speed:
+                    type: number
+                  carrier:
+                    type: boolean
+
+components:
+  schemas:
+    Screen:
+      type: string
+      enum:
+        - DutPower
+        - Usb
+        - DigOut
+        - System
+        - IoBus
+        - Uart
+        - ScreenSaver
+        - Breakout
+        - RebootConfirm
+        - Rauc
+
+    DutPwrStatus:
+      type: string
+      enum:
+        - On
+        - Off
+        - OffDischarge
+        - InvertedPolarity
+        - OverCurrent
+        - OverVoltage
+        - RealtimeViolation
+
+    DutPwrRequest:
+      type: string
+      enum:
+        - On
+        - Off
+        - OffDischarge
+
+    UsbDevice:
+      type: object
+      properties:
+        id_product:
+          type: string
+        id_vendor:
+          type: string
+        manufacturer:
+          type: string
+        product:
+          type: string
+
+    Measurement:
+      type: object
+      properties:
+        ts:
+          type: number
+        value:
+          type: number
+
+    Uname:
+      type: object
+      properties:
+        sysname:
+          type: string
+        nodename:
+          type: string
+        release:
+          type: string
+        version:
+          type: string
+        machine:
+          type: string
+
+    Barebox:
+      type: object
+      properties:
+        version:
+          type: string
+        baseboard_release:
+          type: string
+        powerboard_release:
+          type: string
+        baseboard_timestamp:
+          type: string
+        powerboard_timestamp:
+          type: string
+
+    IOBusServerInfo:
+      type: object
+      properties:
+        hostname:
+          type: string
+        started:
+          type: string
+        can_interface:
+          type: string
+        can_interface_is_up:
+          type: boolean
+        lss_state:
+          type: string
+          enum:
+            - Idle
+            - Scanning
+        can_tx_error:
+          type: boolean
+
+    IOBusServerNodes:
+      type: object
+      properties:
+        code:
+          type: number
+        error_message:
+          type: string
+        result:
+          type: array
+          items:
+            type: string
+
+    RaucProgress:
+      type: object
+      properties:
+        percentage:
+          type: number
+        message:
+          type: string
+        nesting_depth:
+          type: number
+
+tags:
+  - name: User Interface
+    description: Everything concerning the user interface
+  - name: DUT Power
+    description: Control the power supply of the device under test
+  - name: USB Host
+    description: Control the USB Hub directly on the TAC
+  - name: System
+    description: System and Health info
+  - name: IOBus
+    description: Status of the local IOBus server
+  - name: Input/Output
+    description: Analog and Digtial Inputs/Outputs
+  - name: Updating
+    description: System upgrades via RAUC
+  - name: Network
+    description: Network information
