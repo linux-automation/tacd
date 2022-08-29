@@ -1,15 +1,22 @@
+use std::convert::TryInto;
+
 use anyhow;
 use async_std;
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
+use async_std::task::spawn;
 use futures::{future::FutureExt, pin_mut, select};
 use zbus::{Connection, PropertyStream};
 use zvariant::{ObjectPath, OwnedObjectPath};
-mod devices;
-mod networkmanager;
+
 use log::trace;
 use serde::{Deserialize, Serialize};
-use std::convert::TryInto;
+
+mod devices;
+mod hostname;
+mod networkmanager;
+
+use crate::broker::{BrokerBuilder, Topic};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LinkInfo {
@@ -201,5 +208,83 @@ impl<'a> IpStream<'a> {
             }
         }
         Err(anyhow::anyhow!("No IP found"))
+    }
+}
+
+pub struct Network {
+    pub hostname: Arc<Topic<String>>,
+    pub bridge_interface: Arc<Topic<Vec<String>>>,
+    pub dut_interface: Arc<Topic<LinkInfo>>,
+    pub uplink_interface: Arc<Topic<LinkInfo>>,
+}
+
+impl Network {
+    fn setup_topics(bb: &mut BrokerBuilder, hostname: String) -> Self {
+        Self {
+            hostname: bb.topic_ro("/v1/tac/network/hostname", Some(hostname)),
+            bridge_interface: bb.topic_ro("/v1/tac/network/tac-bridge", None),
+            dut_interface: bb.topic_ro("/v1/tac/network/dut", None),
+            uplink_interface: bb.topic_ro("/v1/tac/network/uplink", None),
+        }
+    }
+
+    #[cfg(feature = "stub_out_dbus")]
+    pub async fn new<C>(bb: &mut BrokerBuilder, _conn: C) -> Self {
+        Self::setup_topics(bb, "lxatac".to_string())
+    }
+
+    #[cfg(not(feature = "stub_out_dbus"))]
+    pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
+        let hostname = hostname::HostnameProxy::new(&conn)
+            .await
+            .unwrap()
+            .hostname()
+            .await
+            .unwrap();
+
+        let this = Self::setup_topics(bb, hostname.to_string());
+
+        {
+            let conn = conn.clone();
+            let mut nm_interface = LinkStream::new(conn, "dut").await.unwrap();
+            let dut_interface = this.dut_interface.clone();
+            spawn(async move {
+                dut_interface.set(nm_interface.now()).await;
+
+                while let Ok(info) = nm_interface.next().await {
+                    dut_interface.set(info).await;
+                }
+            });
+        }
+
+        {
+            let conn = conn.clone();
+            let mut nm_interface = LinkStream::new(conn, "uplink").await.unwrap();
+            let uplink_interface = this.uplink_interface.clone();
+            spawn(async move {
+                uplink_interface.set(nm_interface.now()).await;
+
+                while let Ok(info) = nm_interface.next().await {
+                    uplink_interface.set(info).await;
+                }
+            });
+        }
+
+        {
+            let conn = conn.clone();
+            let mut nm_interface = IpStream::new(conn.clone(), "tac-bridge").await.unwrap();
+            let bridge_interface = this.bridge_interface.clone();
+            spawn(async move {
+                bridge_interface
+                    .set(nm_interface.now(&conn).await.unwrap())
+                    .await;
+
+                while let Ok(info) = nm_interface.next(&conn).await {
+                    bridge_interface.set(info).await;
+                }
+            });
+        }
+
+        this
     }
 }

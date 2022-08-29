@@ -38,26 +38,24 @@ pub struct Rauc {
 }
 
 impl Rauc {
-    #[cfg(feature = "stub_out_dbus")]
-    pub async fn new(bb: &mut BrokerBuilder) -> Self {
+    fn setup_topics(bb: &mut BrokerBuilder) -> Self {
         Self {
-            operation: bb.topic_rw("/v1/tac/update/operation", None),
-            progress: bb.topic_rw("/v1/tac/update/progress", None),
-            slot_status: bb.topic_rw("/v1/tac/update/slots", None),
-            last_error: bb.topic_rw("/v1/tac/update/last_error", None),
-            install: bb.topic_rw("/v1/tac/update/install", Some("".to_string())),
-        }
-    }
-
-    #[cfg(not(feature = "stub_out_dbus"))]
-    pub async fn new(bb: &mut BrokerBuilder, conn: Arc<Connection>) -> Self {
-        let inst = Self {
             operation: bb.topic_ro("/v1/tac/update/operation", None),
             progress: bb.topic_ro("/v1/tac/update/progress", None),
             slot_status: bb.topic_ro("/v1/tac/update/slots", None),
             last_error: bb.topic_ro("/v1/tac/update/last_error", None),
             install: bb.topic_wo("/v1/tac/update/install", Some("".to_string())),
-        };
+        }
+    }
+
+    #[cfg(feature = "stub_out_dbus")]
+    pub async fn new<C>(bb: &mut BrokerBuilder, _conn: C) -> Self {
+        Self::setup_topics(bb)
+    }
+
+    #[cfg(not(feature = "stub_out_dbus"))]
+    pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
+        let inst = Self::setup_topics(bb);
 
         let conn_task = conn.clone();
         let operation = inst.operation.clone();
