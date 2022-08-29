@@ -279,6 +279,15 @@ impl DutPwrThread {
                         }
                     };
 
+                    // Take the next pending OutputRequest (if any) even if it
+                    // may not be used due to a pending error condition, as it
+                    // could be quite surprising for the output to turn on
+                    // immediately when a fault is cleared after quite some time
+                    // of the output being off.
+                    let req = request
+                        .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
+                        .into();
+
                     // Don't even look at the requests if there is an ongoing
                     // overvoltage condition. Instead turn the output off and
                     // go back to measuring.
@@ -312,10 +321,7 @@ impl DutPwrThread {
 
                     // There is no ongoing fault condition, so we could e.g. turn
                     // the output on if requested.
-                    match request
-                        .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
-                        .into()
-                    {
+                    match req {
                         OutputRequest::Idle => {}
                         OutputRequest::On => {
                             discharge_line
