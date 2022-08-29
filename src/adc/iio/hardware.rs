@@ -129,7 +129,7 @@ impl CalibratedChannel {
     /// sampled at the same timestamp.
     ///
     /// Returns None if not all values could be read while the timestamp stayed
-    /// constant.
+    /// constant or if no values were aquired yet.
     ///
     /// As only a tiny fraction of overall runtime is spent updating the values
     /// and timestamps it should be safe to just call this in a loop until it
@@ -155,7 +155,7 @@ impl CalibratedChannel {
 
         let ts_after = self.iio_thread.timestamp.load(Ordering::Acquire);
 
-        if ts_before == ts_after {
+        if (ts_before == ts_after) && (ts_before != 0) {
             let ts = self
                 .iio_thread
                 .ref_instant
