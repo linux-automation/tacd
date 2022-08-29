@@ -15,7 +15,7 @@ mod web;
 
 use adc::Adc;
 use broker::BrokerBuilder;
-use dbus::DbusClient;
+use dbus::DbusSession;
 use digital_io::DigitalIo;
 use dut_power::DutPwrThread;
 use iobus::IoBus;
@@ -36,7 +36,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     let ressources = UiRessources {
         adc,
-        dbus: DbusClient::new(&mut bb).await,
+        dbus: DbusSession::new(&mut bb).await,
         dig_io: DigitalIo::new(&mut bb),
         dut_pwr,
         iobus: IoBus::new(&mut bb),

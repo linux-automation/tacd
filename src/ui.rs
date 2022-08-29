@@ -144,7 +144,7 @@ async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<Framebu
 
 pub struct UiRessources {
     pub adc: crate::adc::Adc,
-    pub dbus: crate::dbus::DbusClient,
+    pub dbus: crate::dbus::DbusSession,
     pub dig_io: crate::digital_io::DigitalIo,
     pub dut_pwr: crate::dut_power::DutPwrThread,
     pub iobus: crate::iobus::IoBus,
