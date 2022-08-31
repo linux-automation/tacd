@@ -66,6 +66,9 @@ fn walk_dir_and_compress(
 /// files in the binary and serves them using the correct mime type
 fn generate_web_includes() {
     let web_files = {
+        let cargo_dir = var_os("CARGO_MANIFEST_DIR").unwrap();
+        let cargo_dir = Path::new(&cargo_dir);
+
         let web_out_dir = {
             let out_dir = var_os("OUT_DIR").unwrap();
             let web_out_dir = Path::new(&out_dir).join("web");
@@ -74,11 +77,13 @@ fn generate_web_includes() {
             web_out_dir
         };
 
-        println!("cargo:rerun-if-changed=web/build");
-
-        let cargo_dir = var_os("CARGO_MANIFEST_DIR").unwrap();
-        let cargo_dir = Path::new(&cargo_dir);
-        let web_in_dir = cargo_dir.join("web").join("build");
+        let web_in_dir = match var_os("TACD_WEB_DIR") {
+            Some(dir) => Path::new(&dir).to_path_buf(),
+            None => {
+                println!("cargo:rerun-if-changed=web/build");
+                cargo_dir.join("web").join("build")
+            }
+        };
 
         let mut files = Vec::new();
         walk_dir_and_compress(&web_out_dir, &web_in_dir, &web_in_dir, &mut files);
