@@ -98,13 +98,17 @@ impl Barebox {
 pub struct System {
     pub uname: Arc<Topic<Uname>>,
     pub barebox: Arc<Topic<Barebox>>,
+    pub tacd_version: Arc<Topic<String>>,
 }
 
 impl System {
     pub fn new(bb: &mut BrokerBuilder) -> Self {
+        let version = env!("VERSION_STRING").to_string();
+
         Self {
             uname: bb.topic_ro("/v1/tac/uname", Some(Uname::get())),
             barebox: bb.topic_ro("/v1/tac/bootloader", Some(Barebox::get())),
+            tacd_version: bb.topic_ro("/v1/tac/tacd_version", Some(version)),
         }
     }
 }

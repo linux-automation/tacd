@@ -79,12 +79,27 @@ function Navigation() {
 }
 
 export default function App() {
+  const [runningVersion, setRunningVersion] = useState<string | undefined>();
   const hostname = useMqttSubscription("/v1/tac/network/hostname");
+  const tacd_version = useMqttSubscription<string>("/v1/tac/tacd_version");
 
   useEffect(() => {
     document.title =
       hostname === undefined ? "LXA TAC" : `LXA TAC (${hostname})`;
   }, [hostname]);
+
+  useEffect(() => {
+    if (tacd_version !== undefined) {
+      if (runningVersion !== undefined && runningVersion !== tacd_version) {
+        // We have seen a previous version but then it changed.
+        // This can happen if someone installed a new bundle and clicked reboot.
+        // Make sure to load the new web interface in that case.
+        window.location.reload();
+      }
+
+      setRunningVersion(tacd_version);
+    }
+  }, [runningVersion, tacd_version]);
 
   return (
     <AppLayout
