@@ -1,6 +1,6 @@
 use async_std::sync::Arc;
 
-use tide::Request;
+use tide::{Request, Response};
 
 use super::AnyTopic;
 
@@ -24,7 +24,7 @@ async fn put_handler(topic: Arc<dyn AnyTopic>, mut req: Request<()>) -> tide::Re
     topic
         .set_from_bytes(&req.body_bytes().await?)
         .await
-        .map(|_| "".into())
+        .map(|_| Response::new(204))
         .map_err(|_| tide::Error::from_str(400, "Malformed payload"))
 }
 
