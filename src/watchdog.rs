@@ -3,19 +3,19 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use async_std::future::pending;
-use async_std::sync::Arc;
+use async_std::sync::Weak;
 use async_std::task::sleep;
 
 use systemd::daemon::{notify, watchdog_enabled, STATE_READY, STATE_WATCHDOG};
 
 pub struct Watchdog {
-    dut_power_tick: Arc<AtomicU32>,
+    dut_power_tick: Weak<AtomicU32>,
 }
 
 impl Watchdog {
-    pub fn new(dut_power_tick: &Arc<AtomicU32>) -> Self {
+    pub fn new(dut_power_tick: Weak<AtomicU32>) -> Self {
         Self {
-            dut_power_tick: dut_power_tick.clone(),
+            dut_power_tick: dut_power_tick,
         }
     }
 
@@ -41,14 +41,25 @@ impl Watchdog {
 
         notify(false, [(STATE_READY, "1")].iter())?;
 
-        let mut prev = self.dut_power_tick.load(Ordering::Relaxed);
+        let mut prev = self
+            .dut_power_tick
+            .upgrade()
+            .map(|v| v.load(Ordering::Relaxed));
 
         loop {
             sleep(interval).await;
 
-            let curr = self.dut_power_tick.load(Ordering::Relaxed);
+            let curr = self
+                .dut_power_tick
+                .upgrade()
+                .map(|v| v.load(Ordering::Relaxed));
 
-            if prev == curr {
+            let (p, c) = prev.zip(curr).unwrap_or((0, 0));
+
+            // Fail if the power thread tick did not increment in the meantime or if
+            // the DutPwrThread was dropped (e.g. dut_power_tick could not be upgraded
+            // from Weak<_> to Arc<_>).
+            if p == c {
                 eprintln!("Power Thread has stalled. Will trigger watchdog.");
 
                 notify(false, [(STATE_WATCHDOG, "trigger")].iter())?;

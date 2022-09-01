@@ -1,10 +1,10 @@
 use std::convert::TryFrom;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use async_std::prelude::*;
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Weak};
 use async_std::task;
 use gpio_cdev::{LineHandle, LineRequestFlags};
 use serde::{Deserialize, Serialize};
@@ -99,8 +99,7 @@ impl From<u8> for OutputState {
 pub struct DutPwrThread {
     pub request: Arc<Topic<OutputRequest>>,
     pub state: Arc<Topic<OutputState>>,
-    pub tick: Arc<AtomicU32>,
-    run: Arc<AtomicBool>,
+    tick: Arc<AtomicU32>,
     join: Option<thread::JoinHandle<()>>,
 }
 
@@ -118,11 +117,8 @@ fn fail(
 
 impl DutPwrThread {
     pub fn new(bb: &mut BrokerBuilder, pwr_volt: AdcChannel, pwr_curr: AdcChannel) -> Self {
-        let run = Arc::new(AtomicBool::new(true));
-        let run_thread = run.clone();
-
         let tick = Arc::new(AtomicU32::new(0));
-        let tick_thread = tick.clone();
+        let tick_weak = Arc::downgrade(&tick);
 
         let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
         let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
@@ -166,9 +162,10 @@ impl DutPwrThread {
             }
         });
 
-        let spawn = thread::Builder::new().name("tacd power".into());
-
-        let join = spawn
+        // Spawn a high priority thread that handles the power status
+        // in a realtimey fashion.
+        let join = thread::Builder::new()
+            .name("tacd power".into())
             .spawn(move || {
                 let pwr_line = find_line("IO0")
                     .unwrap()
@@ -192,7 +189,7 @@ impl DutPwrThread {
                 // Run as long as there is a strong reference to `tick`.
                 // As tick is a private memeber of the struct this is equivalent
                 // to running as long as the DutPwrThread was not dropped.
-                while run_thread.load(Ordering::Relaxed) {
+                while let Some(tick) = tick_weak.upgrade() {
                     thread::sleep(THREAD_INTERVAL);
 
                     // Get new voltage and current readings while making sure
@@ -220,7 +217,7 @@ impl DutPwrThread {
                         } else {
                             // We have a fresh ADC value. Signal "everythin is well"
                             // to the watchdog task.
-                            tick_thread.fetch_add(1, Ordering::Relaxed);
+                            tick.fetch_add(1, Ordering::Relaxed);
                         }
 
                         if let Some((_, [volt, curr])) = feedback {
@@ -259,8 +256,13 @@ impl DutPwrThread {
                         continue;
                     }
 
-                    match request.load(Ordering::Relaxed).into() {
-                        OutputRequest::Idle => continue,
+                    // There is no ongoing fault condition, so we could e.g. turn
+                    // the output on if requested.
+                    match request
+                        .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
+                        .into()
+                    {
+                        OutputRequest::Idle => {}
                         OutputRequest::On => {
                             discharge_line.set_value(1).unwrap();
                             pwr_line.set_value(0).unwrap();
@@ -277,8 +279,6 @@ impl DutPwrThread {
                             state.store(OutputState::OffDischarge as u8, Ordering::Relaxed);
                         }
                     }
-
-                    request.store(OutputRequest::Idle as u8, Ordering::Relaxed);
                 }
             })
             .unwrap();
@@ -287,15 +287,17 @@ impl DutPwrThread {
             request: request_topic,
             state: state_topic,
             tick,
-            run,
             join: Some(join),
         }
+    }
+
+    pub fn tick(&self) -> Weak<AtomicU32> {
+        Arc::downgrade(&self.tick)
     }
 }
 
 impl Drop for DutPwrThread {
     fn drop(&mut self) {
-        self.run.store(false, Ordering::Relaxed);
         self.join.take().unwrap().join().unwrap()
     }
 }

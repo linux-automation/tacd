@@ -32,8 +32,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     let adc = Adc::new(&mut bb);
     let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_curr.clone(), adc.pwr_volt.clone());
-
-    let watchdog = Watchdog::new(&dut_pwr.tick);
+    let watchdog = Watchdog::new(dut_pwr.tick());
 
     let ressources = UiRessources {
         adc,
