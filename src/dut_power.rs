@@ -280,6 +280,9 @@ impl DutPwrThread {
                         }
                     }
                 }
+
+                // Make sure to enter fail safe mode before leaving the thread
+                fail(OutputState::Off, &pwr_line, &discharge_line, &state);
             })
             .unwrap();
 
