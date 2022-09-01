@@ -101,7 +101,8 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
             target,
             anchor,
             Box::new(move |msg, anchor, target| {
-                let fill_width = ((width as f32) * format_fn(msg)) as u32;
+                let val = format_fn(msg).clamp(0.0, 1.0);
+                let fill_width = ((width as f32) * val) as u32;
 
                 let bounding = Rectangle::new(anchor, Size::new(width, height));
                 let filled = Rectangle::new(anchor, Size::new(fill_width, height));
