@@ -13,7 +13,7 @@ import Modal from "@cloudscape-design/components/modal";
 
 import { SwaggerView } from "./ApiDocs";
 
-import { useMqttSubscription, useMqttState } from "./mqtt";
+import { useMqttSubscription, useMqttState, useMqttHistory } from "./mqtt";
 
 var api_pickers = new Set<(state: boolean) => void>();
 
@@ -230,53 +230,36 @@ type Measurement = {
   value: number;
 };
 
+type Point = {
+  x: Date;
+  y: number;
+};
+
+function measToPoint(m: Measurement) {
+  return {
+    x: new Date(m.ts),
+    y: m.value,
+  };
+}
+
 interface MqttChartProps {
   topic: string;
 }
 
 export function MqttChart(props: MqttChartProps) {
-  const payload = useMqttSubscription<Measurement>(props.topic);
-  const [history, setHistory] = useState<Array<{ x: Date; y: number }>>([]);
+  const history = useMqttHistory<Measurement, Point>(
+    props.topic,
+    200,
+    measToPoint
+  );
+  let values = history.current;
 
-  useEffect(() => {
-    if (payload === undefined) {
-      return;
-    }
-
-    let elem = {
-      x: new Date(payload.ts),
-      y: payload.value,
-    };
-
-    if (history.length > 0 && elem.x === history[history.length - 1].x) {
-      return;
-    }
-
-    let new_history = new Array(200);
-
-    let oi = history.length - 1;
-    let ni = new_history.length - 1;
-
-    new_history[ni--] = elem;
-
-    while (oi >= 0 && ni >= 0) {
-      new_history[ni--] = history[oi--];
-    }
-
-    while (ni >= 0) {
-      new_history[ni--] = elem;
-    }
-
-    setHistory(new_history);
-    // eslint-disable-next-line
-  }, [payload]);
-
-  let end = history.length >= 1 ? history[history.length - 1]["x"] : new Date();
+  let end = values.length >= 1 ? values[values.length - 1]["x"] : new Date();
 
   let series: MixedLineBarChartProps.ChartSeries<Date> = {
     type: "line",
     title: "eh",
-    data: history,
+    data: values,
   };
 
   return (

@@ -47,6 +47,40 @@ session.connect({
   reconnect: true,
 });
 
+function subscribe(
+  topic: string,
+  handleMessage: (m: Message | undefined) => void
+) {
+  if (subscriptions[topic] === undefined) {
+    if (session.isConnected()) {
+      session.subscribe(topic);
+    }
+
+    subscriptions[topic] = [];
+  }
+
+  subscriptions[topic].push(handleMessage);
+
+  function unsubscribe() {
+    const index = subscriptions[topic].indexOf(handleMessage, 0);
+
+    if (index > -1) {
+      subscriptions[topic].splice(index, 1);
+    }
+
+    if (subscriptions[topic].length === 0) {
+      delete subscriptions[topic];
+      delete retained[topic];
+
+      if (session.isConnected()) {
+        session.unsubscribe(topic);
+      }
+    }
+  }
+
+  return unsubscribe;
+}
+
 export function useMqttState<T>(topic: string, initial?: T) {
   const [shadow, setShadow] = useState<[boolean, T | undefined]>([
     false,
@@ -62,33 +96,10 @@ export function useMqttState<T>(topic: string, initial?: T) {
       }
     }
 
-    if (subscriptions[topic] === undefined) {
-      if (session.isConnected()) {
-        session.subscribe(topic);
-      }
-
-      subscriptions[topic] = [];
-    }
-
-    subscriptions[topic].push(handleMessage);
+    let unsub = subscribe(topic, handleMessage);
     handleMessage(retained[topic]);
 
-    return function cleanup() {
-      const index = subscriptions[topic].indexOf(handleMessage, 0);
-
-      if (index > -1) {
-        subscriptions[topic].splice(index, 1);
-      }
-
-      if (subscriptions[topic].length === 0) {
-        delete subscriptions[topic];
-        delete retained[topic];
-
-        if (session.isConnected()) {
-          session.unsubscribe(topic);
-        }
-      }
-    };
+    return unsub;
   }, [topic]);
 
   function setPayload(payload: T) {
@@ -105,4 +116,43 @@ export function useMqttSubscription<T>(topic: string, initial?: T) {
   // eslint-disable-next-line
   const [settled, payload, setPayload] = useMqttState<T>(topic, initial);
   return payload;
+}
+
+type History<M> = {
+  current: Array<M>;
+};
+
+export function useMqttHistory<T, M>(
+  topic: string,
+  length: number,
+  format: (t: T) => M
+) {
+  const [hist, setHist] = useState<History<M>>({ current: [] });
+
+  useEffect(() => {
+    let priv_hist: Array<M> = [];
+
+    function handleMessage(message: Message | undefined) {
+      if (message !== undefined) {
+        let msg_json = JSON.parse(message.payloadString);
+        let msg_conv = format(msg_json);
+        priv_hist.push(msg_conv);
+      } else {
+        priv_hist = [];
+      }
+
+      while (priv_hist.length > length) {
+        priv_hist.shift();
+      }
+
+      setHist({ current: priv_hist });
+    }
+
+    let unsub = subscribe(topic, handleMessage);
+    handleMessage(retained[topic]);
+
+    return unsub;
+  }, [topic, length, format]);
+
+  return hist;
 }
