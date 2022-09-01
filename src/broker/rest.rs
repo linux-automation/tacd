@@ -6,7 +6,7 @@ use super::AnyTopic;
 
 async fn get_handler(topic: Arc<dyn AnyTopic>, mut _req: Request<()>) -> tide::Result {
     topic
-        .get_as_bytes()
+        .try_get_as_bytes()
         .await
         .ok_or(tide::Error::from_str(
             404,
