@@ -170,6 +170,43 @@ fn fail(
     fail_state.store(reason as u8, Ordering::Relaxed);
 }
 
+/// Labgrid has a fixed assumption of how a REST based power port should work.
+/// It should consume "1" and "0" as PUT request bodies and return "1" or not
+/// "1" as GET reponse bodies.
+/// Provide a compat interface that provides this behaviour while keeping the
+/// main interface used by e.g. the web UI pretty.
+fn setup_labgrid_compat(
+    bb: &mut BrokerBuilder,
+    request: Arc<Topic<OutputRequest>>,
+    state: Arc<Topic<OutputState>>,
+) {
+    let compat_request = bb.topic_wo::<u8>("/v1/dut/powered/compat", None);
+    let compat_response = bb.topic_ro::<u8>("/v1/dut/powered/compat", None);
+
+    task::spawn(async move {
+        let (mut request_stream, _) = compat_request.subscribe_unbounded().await;
+
+        while let Some(req) = request_stream.next().await {
+            match *req {
+                0 => request.set(OutputRequest::Off).await,
+                1 => request.set(OutputRequest::On).await,
+                _ => {}
+            }
+        }
+    });
+
+    task::spawn(async move {
+        let (mut state_stream, _) = state.subscribe_unbounded().await;
+
+        while let Some(state) = state_stream.next().await {
+            match *state {
+                OutputState::On => compat_response.set(1).await,
+                _ => compat_response.set(0).await,
+            }
+        }
+    });
+}
+
 impl DutPwrThread {
     pub fn new(bb: &mut BrokerBuilder, pwr_volt: AdcChannel, pwr_curr: AdcChannel) -> Self {
         let tick = Arc::new(AtomicU32::new(0));
@@ -185,6 +222,8 @@ impl DutPwrThread {
         // and is not just a copy of the received command.
         let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/powered", None);
         let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", None);
+
+        setup_labgrid_compat(bb, request_topic.clone(), state_topic.clone());
 
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
