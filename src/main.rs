@@ -29,6 +29,8 @@ use web::WebInterface;
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
+    pretty_env_logger::init();
+
     let mut bb = BrokerBuilder::new();
 
     let adc = Adc::new(&mut bb);
@@ -60,6 +62,8 @@ async fn main() -> Result<(), std::io::Error> {
         web_interface.expose_file_rw("/etc/labgrid/environment", "/v1/labgrid/environment");
         web_interface.expose_file_rw("/etc/labgrid/userconfig.yaml", "/v1/labgrid/userconfig");
     }
+
+    log::info!("Setup complete. Handling requests");
 
     race(race(ui.run(), web_interface.serve()), watchdog.keep_fed()).await
 }

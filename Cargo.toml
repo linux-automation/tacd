@@ -28,7 +28,7 @@ futures-lite = "1.12"
 futures-util = "0.3.15"
 gpio-cdev = "0.5"
 industrial-io = "0.3"
-log = { version = "0.4"}
+log = { version = "0.4", features = ["release_max_level_warn"]}
 mqtt-protocol = "0.11.2"
 nix = "0.24"
 png = "0.17"
