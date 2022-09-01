@@ -67,7 +67,7 @@ function Navigation() {
           {
             type: "section",
             text: "Documentation",
-            items: [{ type: "link", text: "API", href: "#/docs/api" }],
+            items: [{ type: "link", text: "REST API", href: "#/docs/api" }],
           },
         ]}
       />
