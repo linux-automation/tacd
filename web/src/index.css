@@ -42,3 +42,10 @@ code {
 .api_picker_inner_active {
   opacity: 0.3;
 }
+
+.terminal_wrap {
+  padding: 1em;
+  background-color: black;
+  border-radius: 1em;
+  box-shadow: 0 0 1em #0000001f;
+}

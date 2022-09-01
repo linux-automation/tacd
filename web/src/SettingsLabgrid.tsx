@@ -11,6 +11,8 @@ import CodeEditor, {
   CodeEditorProps,
 } from "@cloudscape-design/components/code-editor";
 
+import { JournalView } from "./DashboardJournal";
+
 import { useEffect, useState } from "react";
 
 // Make sure to only require (and thus pack using webpack) modules that are
@@ -144,7 +146,13 @@ export default function SettingsLabgrid() {
             Labgrid Exporter Status
           </Header>
         }
-      ></Container>
+      >
+        <JournalView
+          history_len={20}
+          rows={20}
+          unit="labgrid-exporter.service"
+        />
+      </Container>
 
       <Container
         header={

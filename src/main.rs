@@ -6,6 +6,7 @@ mod dbus;
 mod digital_io;
 mod dut_power;
 mod iobus;
+mod journal;
 mod system;
 mod temperatures;
 mod ui;
@@ -48,6 +49,7 @@ async fn main() -> Result<(), std::io::Error> {
     let mut web_interface = WebInterface::new();
     let ui = Ui::new(&mut bb, ressources, &mut web_interface.server);
     bb.build(&mut web_interface.server);
+    journal::serve(&mut web_interface.server);
 
     #[cfg(not(feature = "stub_out_fs"))]
     {

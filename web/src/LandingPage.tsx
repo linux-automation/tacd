@@ -41,6 +41,11 @@ export default function LandingPage() {
             description: "Control various LXA TAC parameters",
           },
           {
+            name: "Dashboard / Journal",
+            href: "/#/dashboard/journal",
+            description: "Watch the most recent systemd journal entries",
+          },
+          {
             name: "Settings / Labgrid",
             href: "/#/settings/labgrid",
             description: "Modify the Labgrid exporter config",

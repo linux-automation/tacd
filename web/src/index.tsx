@@ -8,8 +8,9 @@ import "./index.css";
 import ApiDocs from "./ApiDocs";
 import App from "./App";
 import DashboardDut from "./DashboardDut";
-import LandingPage from "./LandingPage";
+import DashboardJournal from "./DashboardJournal";
 import DashboardTac from "./DashboardTac";
+import LandingPage from "./LandingPage";
 import SettingsLabgrid from "./SettingsLabgrid";
 
 const root = ReactDOM.createRoot(
@@ -22,6 +23,7 @@ root.render(
         <Route path="/" element={<App />}>
           <Route path="" element={<LandingPage />} />
           <Route path="/dashboard/dut" element={<DashboardDut />} />
+          <Route path="/dashboard/journal" element={<DashboardJournal />} />
           <Route path="/dashboard/tac" element={<DashboardTac />} />
           <Route path="/settings/labgrid" element={<SettingsLabgrid />} />
           <Route path="/docs/api" element={<ApiDocs />} />

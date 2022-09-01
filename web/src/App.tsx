@@ -50,6 +50,11 @@ function Navigation() {
                 href: "#/dashboard/dut",
               },
               { type: "link", text: "LXA TAC System", href: "#/dashboard/tac" },
+              {
+                type: "link",
+                text: "Systemd Journal",
+                href: "#/dashboard/journal",
+              },
             ],
           },
           {
