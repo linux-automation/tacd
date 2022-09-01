@@ -2,7 +2,7 @@ import React from "react";
 import AppLayout from "@cloudscape-design/components/app-layout";
 import SideNavigation from "@cloudscape-design/components/side-navigation";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 
 import "@cloudscape-design/global-styles/index.css";
@@ -12,11 +12,28 @@ import { useMqttSubscription } from "./mqtt";
 import { ApiPickerButton } from "./MqttComponents";
 
 function Navigation() {
+  const [activeHref, setActiveHref] = useState("#/");
+
+  useEffect(() => {
+    function update_hash() {
+      setActiveHref(window.location.hash);
+    }
+
+    update_hash();
+    window.addEventListener("hashchange", update_hash);
+
+    return () => {
+      window.removeEventListener("hashchange", update_hash);
+    };
+  }, []);
+
   return (
     <>
       <SideNavigation
+        activeHref={activeHref}
+        onFollow={(ev) => setActiveHref(ev.detail.href)}
         header={{
-          href: "#",
+          href: "#/",
           logo: {
             alt: "LXA TAC",
             src: "/logo.svg",
