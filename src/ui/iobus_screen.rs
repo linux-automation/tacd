@@ -1,4 +1,5 @@
 use async_std::prelude::*;
+use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
 
@@ -125,8 +126,9 @@ impl MountableScreen for IoBusScreen {
         spawn(async move {
             while let Some(ev) = button_events.next().await {
                 if let ButtonEvent::ButtonOne(_) = *ev {
-                    let state = iobus_pwr_en.get().await.as_deref().copied().unwrap_or(true);
-                    iobus_pwr_en.set(!state).await;
+                    iobus_pwr_en
+                        .modify(|prev| Some(Arc::new(!prev.as_deref().copied().unwrap_or(true))))
+                        .await
                 }
 
                 if let ButtonEvent::ButtonTwo(_) = *ev {

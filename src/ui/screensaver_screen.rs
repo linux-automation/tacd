@@ -87,10 +87,10 @@ impl ScreenSaverScreen {
             let mut i = 0u32;
 
             loop {
-                if let Some(hostname) = hostname_task.get().await {
-                    i = i.wrapping_add(1);
-                    hostname_dance_task.set((i, (*hostname).clone())).await;
-                }
+                let cur_hostname = hostname_task.get().await;
+
+                i = i.wrapping_add(1);
+                hostname_dance_task.set((i, cur_hostname)).await;
 
                 sleep(Duration::from_millis(100)).await;
             }
@@ -156,8 +156,11 @@ impl MountableScreen for ScreenSaverScreen {
                     if dur > VERY_LONG_PRESS {
                         screen.set(Screen::Breakout).await
                     } else {
-                        let prev = locator.get().await.as_deref().copied().unwrap_or(false);
-                        locator.set(!prev).await
+                        locator
+                            .modify(|prev| {
+                                Some(Arc::new(!prev.as_deref().copied().unwrap_or(false)))
+                            })
+                            .await
                     }
                 }
 

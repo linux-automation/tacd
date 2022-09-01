@@ -249,14 +249,14 @@ impl Ui {
             buttons.clone(),
         );
 
-        // Blinking locator for the locator widget
+        // Animated Locator for the locator widget
         let locator_task = locator.clone();
         let locator_dance_task = locator_dance.clone();
         spawn(async move {
             let (mut rx, _) = locator_task.clone().subscribe_unbounded().await;
 
             loop {
-                while let Some(true) = locator_task.get().await.as_deref().as_deref() {
+                while *locator_task.get().await {
                     for i in (0..64).rev() {
                         locator_dance_task.set(i).await;
                         sleep(Duration::from_millis(100)).await;

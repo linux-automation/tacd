@@ -164,8 +164,29 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
         self.set_arc(Arc::new(msg)).await
     }
 
-    pub async fn get(&self) -> Option<Arc<E>> {
-        self.retained.lock().await.as_ref().map(|r| r.native())
+    // Get the value of this topic
+    //
+    // Waits for a value if none was set yet
+    pub async fn get(self: &Arc<Self>) -> Arc<E> {
+        let (mut rx, handle) = {
+            let retained = self.retained.lock().await;
+
+            if let Some(v) = retained.as_ref() {
+                return v.native();
+            }
+
+            // subscribe while still holding the retained lock so no event can be
+            // lost between checking and subscribing.
+            self.clone().subscribe_unbounded().await
+        };
+
+        // Unwrap here to keep the interface simple. The stream could only yield
+        // None if the sender side is dropped, which will not happen as we hold
+        // an Arc to self which contains the senders vec.
+        let v = rx.next().await.unwrap();
+        handle.unsubscribe().await;
+
+        v
     }
 
     /// Perform an atomic read modify write cycle for this topic

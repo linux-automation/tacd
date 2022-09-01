@@ -87,13 +87,16 @@ impl MountableScreen for UartScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                let highlighted = dir_highlight.get().await.as_deref().copied().unwrap_or(0);
+                let highlighted = *dir_highlight.get().await;
 
                 if let ButtonEvent::ButtonOne(dur) = *ev {
                     if dur > LONG_PRESS {
                         let port = &dir_enables[highlighted as usize];
-                        let state = port.get().await.as_deref().copied().unwrap_or(true);
-                        port.set(!state).await;
+
+                        port.modify(|prev| {
+                            Some(Arc::new(!prev.as_deref().copied().unwrap_or(false)))
+                        })
+                        .await
                     } else {
                         dir_highlight.set((highlighted + 1) % 2).await;
                     }

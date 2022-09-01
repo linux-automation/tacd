@@ -25,10 +25,7 @@ impl RaucScreen {
         let operation = operation.clone();
 
         spawn(async move {
-            let mut operation_prev: Arc<String> = operation
-                .get()
-                .await
-                .unwrap_or_else(|| Arc::new("idle".into()));
+            let mut operation_prev: Arc<String> = operation.get().await;
             let (mut operation_events, _) = operation.subscribe_unbounded().await;
 
             while let Some(ev) = operation_events.next().await {

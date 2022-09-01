@@ -63,11 +63,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         let (mut rx, sub_handle) = topic.clone().subscribe_unbounded().await;
 
         let join_handle = spawn(async move {
-            let mut next = topic.get().await;
-
-            if next.is_none() {
-                next = rx.next().await;
-            }
+            let mut next = Some(topic.get().await);
 
             while let Some(val) = next {
                 let mut prev_bb = draw_fn(&val, anchor, &mut *target.lock().await);

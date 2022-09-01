@@ -104,15 +104,19 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                 product: pro.trim().to_string(),
             });
 
-            let should_set = device
-                .get()
-                .await
-                .map(|prev_dev_info| *prev_dev_info != dev_info)
-                .unwrap_or(true);
+            device
+                .modify(|prev| {
+                    let should_set = prev
+                        .map(|prev_dev_info| *prev_dev_info != dev_info)
+                        .unwrap_or(true);
 
-            if should_set {
-                device.set(dev_info).await;
-            }
+                    if should_set {
+                        Some(Arc::new(dev_info))
+                    } else {
+                        None
+                    }
+                })
+                .await;
 
             sleep(POLL_INTERVAL).await;
         }

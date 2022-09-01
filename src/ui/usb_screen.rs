@@ -120,13 +120,15 @@ impl MountableScreen for UsbScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                let highlighted = port_highlight.get().await.as_deref().copied().unwrap_or(0);
+                let highlighted = *port_highlight.get().await;
 
                 if let ButtonEvent::ButtonOne(dur) = *ev {
                     if dur > LONG_PRESS {
                         let port = &port_enables[highlighted as usize];
-                        let state = port.get().await.as_deref().copied().unwrap_or(true);
-                        port.set(!state).await;
+                        port.modify(|prev| {
+                            Some(Arc::new(!prev.as_deref().copied().unwrap_or(true)))
+                        })
+                        .await;
                     } else {
                         port_highlight.set((highlighted + 1) % 3).await;
                     }
