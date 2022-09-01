@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Result};
 
 use std::convert::{TryFrom, TryInto};
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::thread::JoinHandle;
@@ -190,7 +190,6 @@ impl CalibratedChannel {
 }
 
 pub struct IioThread {
-    run: AtomicBool,
     ref_instant: Instant,
     timestamp: AtomicU64,
     values: [AtomicU16; 10],
@@ -200,7 +199,6 @@ pub struct IioThread {
 impl IioThread {
     pub fn new() -> Arc<Self> {
         let thread = Arc::new(Self {
-            run: AtomicBool::new(true),
             ref_instant: Instant::now(),
             timestamp: AtomicU64::new(0),
             values: [
@@ -218,11 +216,11 @@ impl IioThread {
             join: Mutex::new(None),
         });
 
-        let thread_clone = thread.clone();
+        let thread_weak = Arc::downgrade(&thread);
 
-        let spawn = thread::Builder::new().name("tacd iio".into());
-
-        let join = spawn
+        // Spawn a high priority thread that updates the atomic values in `thread`.
+        let join = thread::Builder::new()
+            .name("tacd iio".into())
             .spawn(move || {
                 let mut ctx = industrial_io::Context::new().unwrap();
 
@@ -283,7 +281,11 @@ impl IioThread {
                 )
                 .unwrap();
 
-                while thread_clone.run.load(Ordering::Relaxed) {
+                // Stop running as soon as the last refernce to this Arc<IioThread>
+                // is dropped (e.g. the weak reference can no longer be upgraded).
+                while let Some(thread) = thread_weak.upgrade() {
+                    // Use the buffer interface to get STM32 ADC values at a high
+                    // sampling rate to perform averaging in software.
                     stm32_buf.refill().unwrap();
 
                     let stm32_values = stm32_channels.iter().map(|ch| {
@@ -302,18 +304,18 @@ impl IioThread {
                     // in the thread.values array.
                     let values = stm32_values.chain(pwr_values);
 
-                    for (d, s) in thread_clone.values.iter().zip(values) {
+                    for (d, s) in thread.values.iter().zip(values) {
                         d.store(s, Ordering::Relaxed)
                     }
 
                     let ts: u64 = Instant::now()
-                        .checked_duration_since(thread_clone.ref_instant)
+                        .checked_duration_since(thread.ref_instant)
                         .unwrap()
                         .as_nanos()
                         .try_into()
                         .unwrap();
 
-                    thread_clone.timestamp.store(ts, Ordering::Release);
+                    thread.timestamp.store(ts, Ordering::Release);
                 }
             })
             .unwrap();
@@ -341,7 +343,6 @@ impl IioThread {
 
 impl Drop for IioThread {
     fn drop(&mut self) {
-        self.run.store(false, Ordering::Relaxed);
         self.join.get_mut().unwrap().take().unwrap().join().unwrap()
     }
 }
