@@ -7,6 +7,8 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 import ExpandableSection from "@cloudscape-design/components/expandable-section";
 
+import { ReactElement, useState } from "react";
+
 import {
   MqttBox,
   MqttToggleConv,
@@ -41,6 +43,25 @@ type UsbDevice = {
   manufacturer: string;
   product: string;
 } | null;
+
+interface UnloadingSectionProps {
+  children: ReactElement;
+  header?: ReactElement | string;
+}
+
+function UnloadingSection(props: UnloadingSectionProps) {
+  const [active, setActive] = useState(false);
+
+  return (
+    <ExpandableSection
+      expanded={active}
+      header={props.header}
+      onChange={(ev) => setActive(ev.detail.expanded)}
+    >
+      {active ? props.children : <span />}
+    </ExpandableSection>
+  );
+}
 
 export default function DashboardDut() {
   return (
@@ -199,9 +220,9 @@ export default function DashboardDut() {
                 }}
                 additionalInfo="The absolute voltage is independent of pin orientation"
               />
-              <ExpandableSection header={`OUT_${port} voltage plot (V)`}>
+              <UnloadingSection header={`OUT_${port} voltage plot (V)`}>
                 <MqttChart topic={`/v1/output/out_${port}/feedback/voltage`} />
-              </ExpandableSection>
+              </UnloadingSection>
             </SpaceBetween>
           </ColumnLayout>
         ))}
@@ -264,9 +285,9 @@ export default function DashboardDut() {
               }}
               additionalInfo="Too many devices may overload the bus"
             />
-            <ExpandableSection header="IOBus current plot">
+            <UnloadingSection header="IOBus current plot">
               <MqttChart topic="/v1/iobus/feedback/current" />
-            </ExpandableSection>
+            </UnloadingSection>
             <MqttBarMeter
               topic="/v1/iobus/feedback/voltage"
               label="IOBus voltage"
@@ -278,9 +299,9 @@ export default function DashboardDut() {
               }}
               additionalInfo="The voltage will go down if the bus is overloaded"
             />
-            <ExpandableSection header="IOBus voltage plot">
+            <UnloadingSection header="IOBus voltage plot">
               <MqttChart topic="/v1/iobus/feedback/voltage" />
-            </ExpandableSection>
+            </UnloadingSection>
           </SpaceBetween>
         </ColumnLayout>
       </Container>
@@ -339,11 +360,11 @@ export default function DashboardDut() {
                     }}
                     additionalInfo="The overall current limit takes precedence over this per-port limit"
                   />
-                  <ExpandableSection header={`USB Port ${port} current plot`}>
+                  <UnloadingSection header={`USB Port ${port} current plot`}>
                     <MqttChart
                       topic={`/v1/usb/host/port${port}/feedback/current`}
                     />
-                  </ExpandableSection>
+                  </UnloadingSection>
                 </SpaceBetween>
               </ColumnLayout>
             </Box>
