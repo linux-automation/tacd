@@ -31,8 +31,11 @@ pub struct SubscriptionHandle<E, T> {
 }
 
 impl<E> SubscriptionHandle<E, Native> {
-    #[allow(dead_code)]
-    pub async fn unsubscribe(&self) {
+    /// Unsubscribe a sender from the topic values
+    ///
+    /// The sender may already have been unsubscribed if e.g. the receiving side
+    /// was dropped and set() was called. This will not result in an error.
+    pub async fn unsubscribe(self) {
         if let Some(topic) = self.topic.upgrade() {
             let mut senders = topic.senders.lock().await;
 
@@ -62,6 +65,10 @@ pub trait AnySubscriptionHandle: Sync + Send {
 
 #[async_trait]
 impl<E: Send + Sync> AnySubscriptionHandle for SubscriptionHandle<E, Encoded> {
+    /// Unsubscribe a sender from the serialized topic values
+    ///
+    /// The sender may already have been unsubscribed if e.g. the receiving side
+    /// was dropped and set() was called. This will not result in an error.
     async fn unsubscribe(&self) {
         Self::unsubscribe(self).await
     }
@@ -69,12 +76,18 @@ impl<E: Send + Sync> AnySubscriptionHandle for SubscriptionHandle<E, Encoded> {
 
 impl<E: Serialize + DeserializeOwned> Topic<E> {
     async fn set_arc_with_retain_lock(&self, msg: Arc<E>, retained: &mut Option<Arc<E>>) {
+        // Do all locking up front and in a known order to prevent deadlocks
         let mut senders = self.senders.lock().await;
         let mut senders_serialized = self.senders_serialized.lock().await;
         let mut retained_serialized = self.retained_serialized.lock().await;
 
         *retained_serialized = None;
 
+        // Iterate through all native senders and try to enqueue the message.
+        // In case of success keep the sender, if the (bounded) queue is full
+        // close the queue (so that e.g. websockets are closed in the respective
+        // task) and remove the sender from the list, if the queue is already
+        // closed also remove it.
         senders.retain(|(_, s)| match s.try_send(msg.clone()) {
             Ok(_) => true,
             Err(TrySendError::Full(_)) => {
@@ -105,12 +118,22 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
         *retained = Some(msg);
     }
 
+    /// Set a new value for the topic and notify subscribers
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - Value to set the topic to (as Arc)
     pub async fn set_arc(&self, msg: Arc<E>) {
         let mut retained = self.retained.lock().await;
 
         self.set_arc_with_retain_lock(msg, &mut *retained).await
     }
 
+    /// Set a new value for the topic and notify subscribers
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - Value to set the topic to
     pub async fn set(&self, msg: E) {
         self.set_arc(Arc::new(msg)).await
     }
@@ -119,6 +142,11 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
         self.retained.lock().await.as_ref().cloned()
     }
 
+    /// Perform an atomic read modify write cycle for this topic
+    ///
+    /// The closure is called with the current value of the topic (may be None).
+    /// If the value returned by the closure is Some(v) the value will then be
+    /// set to v.
     pub async fn modify<F>(&self, cb: F)
     where
         F: FnOnce(Arc<E>) -> Arc<E>,
@@ -131,6 +159,16 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
         }
     }
 
+    /// Add the provided sender to the list of subscribers
+    ///
+    /// The returned SubscriptionHandle can be used to remove the sender again
+    /// from the list of subscribers. The subscriber will also be removed
+    /// implicitly on the first `set` call after the recieving end of the queue
+    /// was dropped.
+    ///
+    /// # Arguments
+    ///
+    /// * `sender` - The sender side of the queue to subscribe
     pub async fn subscribe(
         self: Arc<Self>,
         sender: Sender<Arc<E>>,
@@ -145,6 +183,10 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
         }
     }
 
+    /// Create a new unbounded queue and subscribe it to the topic
+    ///
+    /// The returned SubscriptionHandle can be used to remove the sender again
+    /// from the list of subscribers.
     pub async fn subscribe_unbounded(
         self: Arc<Self>,
     ) -> (Receiver<Arc<E>>, SubscriptionHandle<E, Native>) {
@@ -218,6 +260,14 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + 'static> AnyTopic for Topic
         self.set_from_bytes(msg).await
     }
 
+    /// Add a queue to the list of subscribers for serialized values
+    ///
+    /// The Returned AnySubscriptionHandle can be used to remove the queue
+    /// again from the list of subscribers.
+    ///
+    /// # Arguments:
+    ///
+    /// * `sender` - The sender side of the queue to add
     async fn subscribe_as_bytes(
         self: Arc<Self>,
         sender: Sender<(TopicName, Arc<[u8]>)>,

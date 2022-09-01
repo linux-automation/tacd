@@ -104,6 +104,7 @@ pub struct DutPwrThread {
     join: Option<thread::JoinHandle<()>>,
 }
 
+/// Bring the outputs into a fail safe mode
 fn fail(
     reason: OutputState,
     pwr_line: &LineHandle,
@@ -126,9 +127,16 @@ impl DutPwrThread {
         let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
         let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
 
+        // The request and state topic use the same external path, this way one
+        // can e.g. publish "On" to the topic and be sure that the output is
+        // actually on once a corresponding publish is received from the broker,
+        // as it has done the full round trip through the realtime power thread
+        // and is not just a copy of the received command.
         let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/power/status");
         let state_topic = bb.topic_ro::<OutputState>("/v1/dut/power/status");
 
+        // Requests come from the broker framework and are placed into an atomic
+        // request variable read by the thread.
         let request_task = request.clone();
         let request_topic_task = request_topic.clone();
         task::spawn(async move {
@@ -139,6 +147,8 @@ impl DutPwrThread {
             }
         });
 
+        // State information comes from the thread in the form of an atomic
+        // variable and is forwarded to the broker framework.
         let state_task = state.clone();
         let state_topic_task = state_topic.clone();
         task::spawn(async move {
@@ -179,9 +189,14 @@ impl DutPwrThread {
 
                 let mut last_ts: Option<Instant> = None;
 
+                // Run as long as there is a strong reference to `tick`.
+                // As tick is a private memeber of the struct this is equivalent
+                // to running as long as the DutPwrThread was not dropped.
                 while run_thread.load(Ordering::Relaxed) {
                     thread::sleep(THREAD_INTERVAL);
 
+                    // Get new voltage and current readings while making sure
+                    // that they are not stale
                     let (volt, curr) = loop {
                         let feedback = pwr_volt
                             .fast
@@ -203,6 +218,8 @@ impl DutPwrThread {
                                 &state,
                             );
                         } else {
+                            // We have a fresh ADC value. Signal "everythin is well"
+                            // to the watchdog task.
                             tick_thread.fetch_add(1, Ordering::Relaxed);
                         }
 
@@ -211,12 +228,18 @@ impl DutPwrThread {
                         }
                     };
 
+                    // Don't even look at the requests if there is an ongoing
+                    // overvoltage condition. Instead turn the output off and
+                    // go back to measuring.
                     if volt > MAX_VOLTAGE {
                         fail(OutputState::OverVoltage, &pwr_line, &discharge_line, &state);
 
                         continue;
                     }
 
+                    // Don't even look at the requests if there is an ongoin
+                    // polarity inversion. Turn off, go back to start, do not
+                    // collect $200.
                     if volt < MIN_VOLTAGE {
                         fail(
                             OutputState::InvertedPolarity,
@@ -228,6 +251,8 @@ impl DutPwrThread {
                         continue;
                     }
 
+                    // Don't even look at the requests if there is an ongoin
+                    // overcurrent condition.
                     if curr > MAX_CURRENT {
                         fail(OutputState::OverCurrent, &pwr_line, &discharge_line, &state);
 

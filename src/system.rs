@@ -50,6 +50,7 @@ impl Barebox {
     }
 
     fn get() -> Self {
+        // Get info from devicetree choosen
         Self {
             version: Self::read_property("barebox-version"),
             baseboard_release: {

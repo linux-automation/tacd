@@ -62,6 +62,8 @@ impl Rauc {
 
             loop {
                 // Referesh the slot status whenever the current operation changes
+                // This is mostly relevant for "installing" -> "idle" transitions
+                // but it can't hurt to do it on any transition.
                 if let Ok(slots) = proxy.get_slot_status().await {
                     let slots = slots
                         .into_iter()
@@ -77,6 +79,10 @@ impl Rauc {
                                     let s32 = v.downcast_ref::<u32>().map(|i| format!("{i}"));
                                     let s64 = v.downcast_ref::<u64>().map(|i| format!("{i}"));
 
+                                    // Some of the field names make defining a "RaucSlot" type
+                                    // in Typescript difficult. Not matching the names defined
+                                    // in RAUC's API is also not great, but the lesser evil in
+                                    // this case.
                                     let k = k
                                         .replace("type", "fs_type")
                                         .replace("class", "slot_class")
@@ -88,12 +94,19 @@ impl Rauc {
                                 })
                                 .collect();
 
+                            // Include the (unmangled) slot name as a field in the slot
+                            // dict, once again to make life in the Web Interface easier.
                             info.insert("name".to_string(), slot_name.clone());
 
+                            // Remove "." from the dictionary key to make defining a typescript
+                            // type easier ("rootfs.0" -> "rootfs_0").
                             (slot_name.replace(".", "_").to_string(), info)
                         })
                         .collect();
 
+                    // In the RAUC API the slot status is a list of (name, info) tuples.
+                    // It is once again easier in typescript to represent it as a dict with
+                    // the names as keys, so that is what's exposed here.
                     slot_status.set(slots).await;
                 }
 
@@ -111,6 +124,7 @@ impl Rauc {
         let conn_task = conn.clone();
         let progress = inst.progress.clone();
 
+        // Forward the "progress" property to the broker framework
         spawn(async move {
             let proxy = installer::InstallerProxy::new(&conn_task).await.unwrap();
 
@@ -130,6 +144,7 @@ impl Rauc {
         let conn_task = conn.clone();
         let last_error = inst.last_error.clone();
 
+        // Forward the "last_error" property to the broker framework
         spawn(async move {
             let proxy = installer::InstallerProxy::new(&conn_task).await.unwrap();
 
@@ -149,6 +164,7 @@ impl Rauc {
         let conn_task = conn.clone();
         let install = inst.install.clone();
 
+        // Forward the "install" topic from the broker framework to RAUC
         spawn(async move {
             let proxy = installer::InstallerProxy::new(&conn_task).await.unwrap();
             let (mut stream, _) = install.subscribe_unbounded().await;

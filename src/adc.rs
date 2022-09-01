@@ -11,6 +11,13 @@ mod iio;
 
 pub use iio::{CalibratedChannel, IioThread};
 
+/// Serialize an Instant as a javascript timestamp (f64 containing the number
+/// of milliseconds since Unix Epoch 0).
+/// Since Instants use a monotonic clock that is not actually related to the
+/// system clock this is a somewhat handwavey process.
+///
+/// The idea is to take the current Instant (monotonic time) and System Time
+/// (calender time) and calculate: now_system - (now_instant - ts_instant).
 pub mod json_instant {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::time::{Instant, SystemTime};
@@ -52,6 +59,14 @@ impl From<(Instant, f32)> for Measurement {
 }
 
 #[derive(Clone)]
+/// A reference to an ADC channel.
+///
+/// The channel can be used in two different ways:
+///
+/// * The `fast` way uses Atomic values to provide lockless and constant
+///   time access to the most recent ADC value.
+/// * The `topic` way uses the tacd broker system and allow you to subscribe
+///   to a stream of new values.
 pub struct AdcChannel {
     pub fast: CalibratedChannel,
     pub topic: Arc<Topic<Measurement>>,
@@ -120,6 +135,8 @@ impl Adc {
 
         let adc_clone = adc.clone();
 
+        // Spawn an async task to transfer values from the Atomic value based
+        // "fast" interface to the broker based "slow" interface.
         spawn(async move {
             loop {
                 sleep(Duration::from_millis(100)).await;

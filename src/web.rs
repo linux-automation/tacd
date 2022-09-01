@@ -18,7 +18,8 @@ impl WebInterface {
             server: tide::new(),
         };
 
-        // Use sockets provided by systemd (if any)
+        // Use sockets provided by systemd (if any) to make socket activation
+        // work
         if let Ok(fds) = listen_fds(true) {
             this.listeners
                 .extend(fds.iter().filter_map(|fd| tcp_listener(fd).ok()));
@@ -32,11 +33,14 @@ impl WebInterface {
             ));
         }
 
+        // Serve the React based web interface that is (currently) included in
+        // the tacd binary.
         static_files::register(&mut this.server);
 
         this
     }
 
+    // Serve a file from disk for reading and writing
     pub fn expose_file_rw(&mut self, fs_path: &str, web_path: &str) {
         self.server.at(web_path).serve_file(fs_path).unwrap();
 

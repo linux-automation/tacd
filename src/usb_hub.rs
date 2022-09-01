@@ -56,6 +56,9 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     let device = port.device.clone();
     let disable_path = Path::new(base).join("disable");
 
+    // Spawn a task that turns USB port power on or off upon request.
+    // Also clears the device info upon power off so it does not contain stale
+    // information until the next poll.
     spawn(async move {
         powered.set(true).await;
 
@@ -81,6 +84,11 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
         )
     };
 
+    // Spawn a task that periodically polls the USB device info and updates
+    // the corresponding topic on changes.
+    //
+    // TODO: also check disable status to make sure the state stays consistent
+    // even when e.g. uhubctl is used?
     spawn(async move {
         device.set(None).await;
 

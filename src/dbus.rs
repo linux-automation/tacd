@@ -35,6 +35,8 @@ pub struct System {
     pub reboot: Arc<Topic<bool>>,
 }
 
+/// Bunch together everything that uses a DBus system connection here, even
+/// though it is conceptionally independent
 pub struct DbusClient {
     pub network: Network,
     pub system: System,
@@ -127,6 +129,9 @@ impl DbusClient {
             });
         }
 
+        // TODO: this is arguably prettier than what is done above for network
+        // and systemd. Maybe also push back the broker framework into those
+        // modules.
         let rauc = Rauc::new(bb, conn).await;
 
         Self {

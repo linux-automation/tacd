@@ -65,6 +65,7 @@ pub enum Screen {
 }
 
 impl Screen {
+    /// What is the next screen to transition to when e.g. the button is  pressed?
     fn next(&self) -> Self {
         match self {
             Self::DutPower => Self::Usb,
@@ -80,6 +81,7 @@ impl Screen {
         }
     }
 
+    /// Should screensaver be automatically enabled when in this screen?
     fn use_screensaver(&self) -> bool {
         match self {
             Self::Rauc => false,
@@ -111,6 +113,8 @@ trait MountableScreen: Sync + Send {
     async fn unmount(&mut self);
 }
 
+/// Draw static screen border contining a title and an indicator for the
+/// position of the screen in the list of screens.
 async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<FramebufferDrawTarget>>) {
     let mut draw_target = draw_target.lock().await;
 
@@ -159,6 +163,8 @@ pub struct Ui {
     res: UiRessources,
 }
 
+/// Spawn a thread that blockingly reads user input and pushes them into
+/// a broker framework topic.
 fn handle_button(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
     spawn_blocking(move || {
         let mut device = evdev::Device::open(path).unwrap();
@@ -178,12 +184,14 @@ fn handle_button(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
                 };
 
                 if ev.value() == 0 {
+                    // Button release -> send event
                     if let Some(start) = start_time[id].take() {
                         if let Ok(duration) = ev.timestamp().duration_since(start) {
                             block_on(topic.set(ButtonEvent::from_id(duration, id)))
                         }
                     }
                 } else {
+                    // Button press -> register start time but don't send event
                     start_time[id] = Some(ev.timestamp())
                 }
             }
@@ -191,6 +199,7 @@ fn handle_button(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
     });
 }
 
+/// Add a web endpoint that serves the current framebuffer as png
 fn serve_framebuffer(server: &mut Server<()>, draw_target: Arc<Mutex<FramebufferDrawTarget>>) {
     server.at("/v1/tac/display/content").get(move |_| {
         let draw_target = draw_target.clone();
@@ -212,6 +221,7 @@ impl Ui {
         let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance");
         let buttons = bb.topic_rw("/v1/tac/display/buttons");
 
+        // Initialize all the screens now so they can be mounted later
         let screens = {
             let mut s: Vec<Box<dyn MountableScreen>> = Vec::new();
 
@@ -265,6 +275,7 @@ impl Ui {
 
         let draw_target = Arc::new(Mutex::new(FramebufferDrawTarget::new()));
 
+        // Expose the framebuffer as png via the web interface
         serve_framebuffer(server, draw_target.clone());
 
         Self {
@@ -293,19 +304,25 @@ impl Ui {
         let mut next_screen_type = Screen::ScreenSaver;
 
         loop {
+            // Only unmount / mount the shown screen if a change was requested
             let should_change = curr_screen_type
                 .map(|c| c != next_screen_type)
                 .unwrap_or(true);
 
             if should_change {
+                // Find the currently shown screen (if any) and unmount it
                 if let Some(curr) = curr_screen_type {
                     if let Some(screen) = screens.iter_mut().find(|s| s.is_my_type(curr)) {
                         screen.unmount().await;
                     }
                 }
 
+                // Clear the screen as static elements are not cleared by the
+                // widget framework magic
                 self.draw_target.lock().await.clear();
 
+                // Find the screen to show (if any) and "mount" it
+                // (e.g. tell it to handle the screen by itself).
                 if let Some(screen) = screens.iter_mut().find(|s| s.is_my_type(next_screen_type)) {
                     screen.mount(&self).await;
                 }

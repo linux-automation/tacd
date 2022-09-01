@@ -11,6 +11,13 @@ fn gunzip(src: &[u8]) -> Vec<u8> {
     dst
 }
 
+/// Serve a byte slice containing gzipped data
+///
+/// Handle clients that do not support compression by decompressing
+/// content on the fly.
+/// Handle caching using ETags generated at build time.
+///
+/// This function is used by the code generated in build.rs
 fn response(req: &Request<()>, etag: &str, mime: &str, body_gzipped: &[u8]) -> Result<Response> {
     let etag_matches = req
         .header("If-None-Match")

@@ -15,6 +15,9 @@ use industrial_io::Channel;
 use log::debug;
 use thread_priority::*;
 
+// Hard coded list of channels using the internal STM32MP1 ADC.
+// Consists of the IIO channel name, the location of the calibration data
+// in the device tree and an internal name for the channel.
 const CHANNELS_STM32: &[(&str, &str, &str)] = &[
     (
         "voltage13",
@@ -50,6 +53,8 @@ const CHANNELS_STM32: &[(&str, &str, &str)] = &[
     ),
 ];
 
+// The same as for the STM32MP1 channels but for the discrete ADC on the power
+// board.
 const CHANNELS_PWR: &[(&str, &str, &str)] = &[
     ("voltage", "powerboard-factory-data/pwr-volt", "pwr-volt"),
     ("current", "powerboard-factory-data/pwr-curr", "pwr-curr"),
@@ -62,6 +67,10 @@ struct Calibration {
 }
 
 impl Calibration {
+    /// Load ADC-Calibration data from `path`
+    ///
+    /// The `path` should most likely point to somewhere in the devicetree
+    /// choosen parameters.
     fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         let mut fd = std::fs::File::open(path.as_ref()).with_context(|| {
             format!(
@@ -104,6 +113,8 @@ pub struct CalibratedChannel {
 }
 
 impl CalibratedChannel {
+    /// Create a new calibrated channel using calibration data from `calibration_name`.
+    /// Values will be read from the value array of `iio_thread` at index `index`.
     fn from_name(iio_thread: Arc<IioThread>, index: usize, calibration_name: &str) -> Result<Self> {
         let calibration = Calibration::from_devicetree_chosen(calibration_name)?;
 
@@ -114,11 +125,22 @@ impl CalibratedChannel {
         })
     }
 
+    /// Get values for multiple channels of the same `iio_thread` that were
+    /// sampled at the same timestamp.
+    ///
+    /// Returns None if not all values could be read while the timestamp stayed
+    /// constant.
+    ///
+    /// As only a tiny fraction of overall runtime is spent updating the values
+    /// and timestamps it should be safe to just call this in a loop until it
+    /// succeeds.
     pub fn try_get_multiple<const N: usize>(
         &self,
         channels: [&Self; N],
     ) -> Option<(Instant, [f32; N])> {
         let ts_before = self.iio_thread.timestamp.load(Ordering::Acquire);
+
+        // TODO: should there be a fence() here?
 
         let mut values_raw = [0; N];
         for (d, ch) in values_raw.iter_mut().zip(channels.iter()) {
@@ -128,6 +150,8 @@ impl CalibratedChannel {
             );
             *d = self.iio_thread.values[ch.index].load(Ordering::Relaxed);
         }
+
+        // TODO: should there be a fence() here?
 
         let ts_after = self.iio_thread.timestamp.load(Ordering::Acquire);
 
@@ -149,10 +173,13 @@ impl CalibratedChannel {
         }
     }
 
+    /// Get the value of the channel, or None if the timestamp changed while
+    /// reading the value (which should be extremely rare)
     pub fn try_get(&self) -> Option<(Instant, f32)> {
         self.try_get_multiple([self]).map(|(ts, [val])| (ts, val))
     }
 
+    // Get the current value of the channel
     pub fn get(&self) -> (Instant, f32) {
         loop {
             if let Some(r) = self.try_get() {
@@ -265,10 +292,14 @@ impl IioThread {
                         (buf_sum / (stm32_buf.capacity() as u32)) as u16
                     });
 
+                    // Use the sysfs based interface to get the values from the
+                    // power board ADC at a slow sampling rate.
                     let pwr_values = pwr_channels
                         .iter()
                         .map(|ch| ch.attr_read_int("raw").unwrap() as u16);
 
+                    // The power board values are located after the stm32 values
+                    // in the thread.values array.
                     let values = stm32_values.chain(pwr_values);
 
                     for (d, s) in thread_clone.values.iter().zip(values) {
@@ -292,6 +323,8 @@ impl IioThread {
         thread
     }
 
+    /// Use the channel names defined at the top of the file to get a reference
+    /// to a channel
     pub fn get_channel(self: Arc<Self>, ch_name: &str) -> Result<CalibratedChannel> {
         CHANNELS_STM32
             .iter()

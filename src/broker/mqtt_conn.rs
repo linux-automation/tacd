@@ -18,8 +18,17 @@ pub use mqtt::TopicName;
 
 use super::{AnySubscriptionHandle, AnyTopic};
 
+/// Limit the number of elements in the queue leading to the websocket
+/// connection. This assumes that the websocket connection will provide
+/// backpressure when overloaded.
+/// The intent is to drop the connection when overloaded so that the user
+/// gets a visual indication that the web interface is no longer up to date.
 const MAX_QUEUE_LENGTH: usize = 256;
 
+// The mqtt crate provides the Decodable and Encodable traits that can decode/
+// encode packets from/to Readers/Writers.
+// This is nice, but we use Vec<u8> instead of Readers/Writers.
+// Provide convenience wrappers that use/provide Vec<u8> directly.
 trait DecodableExt: Decodable
 where
     <Self as Decodable>::Cond: Default,
@@ -46,10 +55,18 @@ trait EncodableExt: Encodable {
 
 impl<E> EncodableExt for E where E: Encodable {}
 
+/// Handle the full lifetime of a MQTT over websocket connection,
+/// from protocol handshake to teardown.
 async fn handle_connection(
     topics: Arc<Vec<Arc<dyn AnyTopic>>>,
     mut stream: WebSocketConnection,
 ) -> tide::Result<()> {
+    // The MQTT connection starts with a CONNECT packet.
+    // Since we are only targeting the one MQTT (over WebSockets)
+    // implementation used in the web interface we can make some assumptions.
+    // The first one is that MQTT packets will always be aligned with
+    // Websocket frames. If we would want to support MQTT over raw TCP as well
+    // we would have to use the length fields contained in the MQTT packets.
     let conn_pkg = {
         let msg = stream
             .next()
@@ -66,6 +83,9 @@ async fn handle_connection(
         }?
     };
 
+    // The second assumption is that the client will always use the same MQTT
+    // subset. If a client comes around and wants to use features we do not
+    // know we can simply drop the connection.
     if conn_pkg.user_name().is_some()
         || conn_pkg.password().is_some()
         || conn_pkg.will().is_some()
@@ -78,6 +98,7 @@ async fn handle_connection(
         ))?
     }
 
+    // Send CONNACK packet to signal a successful connection setup
     stream
         .send_bytes(ConnackPacket::new(false, ConnectReturnCode::ConnectionAccepted).as_bytes()?)
         .await?;
@@ -85,6 +106,13 @@ async fn handle_connection(
     let mut subscription_handles: HashMap<TopicFilter, Vec<Box<dyn AnySubscriptionHandle>>> =
         HashMap::new();
 
+    // Set up a task that takes messages from a queue, wraps them in a MQTT
+    // packet and sends them out over the websocket.
+    // This should generate backpressure on the queue if the websocket can not
+    // make progress and the senders should close the queue if it is full.
+    // FIXME: the queue being closed will only result in this task ending but
+    // not in the WebSocket being closed. This needs to be fixed but
+    // tide_websockets does not provide us with a way to explicitly close the socket.
     let (to_websocket, mut for_websocket) = bounded::<(TopicName, Arc<[u8]>)>(MAX_QUEUE_LENGTH);
     let stream_tx = stream.clone();
     spawn(async move {
@@ -119,11 +147,21 @@ async fn handle_connection(
                 .as_bytes()
                 .unwrap();
 
+                // We should get the suback out before sending the retained
+                // values. So send it now even though we did not do the
+                // subscribing yet.
                 if stream.send_bytes(suback_pkg).await.is_err() {
                     break 'connection;
                 }
 
+                // One subscribe packet can (in theory) contain multiple topics
+                // (including wildcards) to subscribe to.
+                // Currently the web interface uses neither of these features,
+                // but it could.
                 for (filter, _qos) in sub_pkg.subscribes() {
+                    // Go through all registered topics and check if the
+                    // subscribe request matches. This should make sure that
+                    // wildcard subscriptions work.
                     let matcher = filter.get_matcher();
                     let sub_topics = topics
                         .iter()
@@ -137,12 +175,18 @@ async fn handle_connection(
                             let _ = to_websocket.try_send((topic.path().clone(), retained));
                         }
 
+                        // Subscribe to the serialized messages via the broker
+                        // framwork. This uses a single queue per connection for
+                        // all topics.
                         let sub_handle =
                             topic.clone().subscribe_as_bytes(to_websocket.clone()).await;
 
                         new_subscribes.push(sub_handle);
                     }
 
+                    // Only allow one subscribe with the same match per
+                    // connection, so if there is an existing one it should
+                    // be cleared.
                     if let Some(old_subscribes) =
                         subscription_handles.insert(filter.clone(), new_subscribes)
                     {
