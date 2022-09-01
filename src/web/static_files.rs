@@ -35,16 +35,20 @@ fn response(req: &Request<()>, etag: &str, mime: &str, body_gzipped: &[u8]) -> R
         .unwrap_or(false);
 
     let res = match (etag_matches, accept_gzip) {
-        (true, _) => Response::new(304),
+        (true, _) => Response::builder(304)
+            .header("Vary", "Accept-Encoding")
+            .build(),
         (false, true) => Response::builder(200)
             .content_type(mime)
             .header("Content-Encoding", "gzip")
+            .header("Vary", "Accept-Encoding")
             .header("ETag", etag)
             .body(body_gzipped)
             .build(),
         (false, false) => Response::builder(200)
             .content_type(mime)
             .header("ETag", etag)
+            .header("Vary", "Accept-Encoding")
             .body(gunzip(body_gzipped))
             .build(),
     };
