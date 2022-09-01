@@ -103,9 +103,6 @@ async fn handle_connection(
         .send_bytes(ConnackPacket::new(false, ConnectReturnCode::ConnectionAccepted).as_bytes()?)
         .await?;
 
-    let mut subscription_handles: HashMap<TopicFilter, Vec<Box<dyn AnySubscriptionHandle>>> =
-        HashMap::new();
-
     // Set up a task that takes messages from a queue, wraps them in a MQTT
     // packet and sends them out over the websocket.
     // This should generate backpressure on the queue if the websocket can not
@@ -125,6 +122,12 @@ async fn handle_connection(
         }
     });
 
+    // Keep track of the currently subscribed topics to be able to handle
+    // unsubscribe requests and clean up once the connection is closed.
+    let mut subscription_handles: HashMap<TopicFilter, Vec<Box<dyn AnySubscriptionHandle>>> =
+        HashMap::new();
+
+    // Handle packets sent by the client
     'connection: while let Some(pkg) = stream
         .next()
         .await
@@ -170,9 +173,13 @@ async fn handle_connection(
                     let mut new_subscribes = Vec::new();
 
                     for topic in sub_topics {
-                        if let Some(retained) = topic.get_as_bytes().await {
-                            // Handle full?
-                            let _ = to_websocket.try_send((topic.path().clone(), retained));
+                        // Do we have a retained value for this topic?
+                        // If so: send it to the client
+                        if let Some(retained) = topic.try_get_as_bytes().await {
+                            if let Err(_) = to_websocket.try_send((topic.path().clone(), retained))
+                            {
+                                break 'connection;
+                            }
                         }
 
                         // Subscribe to the serialized messages via the broker
