@@ -1,17 +1,18 @@
 use async_std::channel::bounded;
+use async_std::io::BufReader;
 use async_std::prelude::*;
-use async_std::sync::Arc;
 use async_std::task::{block_on, spawn_blocking};
 
 use serde::Deserialize;
 use serde_json::to_string;
-use tide::sse::endpoint;
-use tide::{Error, Server};
+use tide::http::Body;
+use tide::{Request, Response, Server};
 
 #[cfg(any(test, feature = "stub_out_root"))]
 mod sd {
     use std::collections::btree_map::BTreeMap;
     pub use std::io::Result;
+    use std::io::{Error, ErrorKind};
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
@@ -46,11 +47,15 @@ mod sd {
             Ok(())
         }
 
+        pub fn previous_entry(&mut self) -> Result<Option<JournalRecord>> {
+            Ok(None)
+        }
+
         pub fn watch_all_elements<F>(&mut self, mut f: F) -> Result<()>
         where
             F: FnMut(JournalRecord) -> Result<()>,
         {
-            loop {
+            for _i in 0..10 {
                 let ts = SystemTime::UNIX_EPOCH.elapsed().unwrap().as_micros();
 
                 let mut rec = JournalRecord::new();
@@ -62,6 +67,8 @@ mod sd {
 
                 sleep(Duration::from_secs(5));
             }
+
+            Err(Error::new(ErrorKind::Other, "Simulation ended"))
         }
     }
 }
@@ -72,7 +79,7 @@ mod sd {
     pub use systemd::*;
 }
 
-use sd::{Journal, OpenOptions, Result};
+use sd::{Journal, JournalRecord, OpenOptions, Result};
 
 #[derive(Deserialize)]
 struct QueryParams {
@@ -80,61 +87,122 @@ struct QueryParams {
     unit: Option<String>,
 }
 
-fn open_journal(history_len: u64) -> Result<Journal> {
+struct UnitFilter {
+    unit: Option<String>,
+}
+
+impl UnitFilter {
+    pub fn new(unit: Option<String>) -> Self {
+        Self { unit }
+    }
+
+    pub fn filter(&self, record: JournalRecord) -> Option<JournalRecord> {
+        let unit = record.get("UNIT").or(record.get("_SYSTEMD_UNIT"));
+
+        // Send the entry if the unit matches or no filter was set
+        let should_send = match (unit, self.unit.as_ref()) {
+            (_, None) => true,
+            (Some(u), Some(f)) => u == f,
+            (None, Some(_)) => false,
+        };
+
+        if should_send {
+            Some(record)
+        } else {
+            None
+        }
+    }
+}
+
+fn open_journal(mut history_len: u64, filter: &UnitFilter) -> Result<Journal> {
     let mut journal = OpenOptions::default()
         .system(true)
         .local_only(true)
         .open()?;
 
     journal.seek_tail()?;
-    journal.previous_skip(history_len)?;
+
+    let mut element_limit = 2048;
+
+    // Try to go back far enough to have history_len entries matching the
+    // specified filter in in the backlog. But limit the effort to a maximum
+    // number of elements to look at.
+    while (history_len > 0) && (element_limit > 0) {
+        if let Some(entry) = journal.previous_entry()? {
+            if filter.filter(entry).is_some() {
+                history_len -= 1;
+            }
+
+            element_limit -= 1
+        } else {
+            element_limit = 0;
+        }
+    }
+
     Ok(journal)
 }
 
 pub fn serve(server: &mut Server<()>) {
     server
         .at("/v1/tac/journal")
-        .get(endpoint(|req, sender| async move {
-            let query: QueryParams = req.query()?;
+        .get(|req: Request<()>| async move {
+            let (response_tx, mut response_rx) = bounded::<Response>(1);
 
             // The Journal is not Send, so it has to be set up in the thread
             // that uses it.
             // It would however be nice to return a HTTP error code if the
             // setup process fails early on.
-            // This is why we have this channel contraption, which sends a
-            // single error or success code when the journal is opened to
-            // inform the client.
-            // TODO: check if the sse endpoint implementation actually allows
-            // this
-            let (early_tx, mut early_rx) = bounded::<Result<()>>(1);
-
+            // This is why we have this channel contraption, which sends a single
+            // response back to be sent to the client.
             spawn_blocking(move || {
-                let sender = Arc::new(sender);
+                let (sender, mut journal, filter) = {
+                    let (unit, history_len) = match req.query() {
+                        Ok(QueryParams { history_len, unit }) => (unit, history_len),
+                        Err(e) => {
+                            let resp = Response::builder(500)
+                                .body(format!("Failed to parse query parameters: {e}"))
+                                .build();
+                            let _ = response_tx.try_send(resp);
+                            return;
+                        }
+                    };
 
-                let mut journal = match open_journal(query.history_len.unwrap_or(10)) {
-                    Ok(j) => {
-                        let _ = early_tx.try_send(Ok(()));
-                        j
-                    }
-                    Err(e) => {
-                        let _ = early_tx.try_send(Err(e));
+                    let filter = UnitFilter::new(unit);
+
+                    let journal = match open_journal(history_len.unwrap_or(10), &filter) {
+                        Ok(j) => j,
+                        Err(e) => {
+                            let resp = Response::builder(500)
+                                .body(format!("Failed to open journal file(s): {e}"))
+                                .build();
+                            let _ = response_tx.try_send(resp);
+                            return;
+                        }
+                    };
+
+                    // The journal was opened sucessfully, we can send a sucessful
+                    // response to the client.
+                    let (sender, encoder) = async_sse::encode();
+
+                    let resp = Response::builder(200)
+                        .body(Body::from_reader(BufReader::new(encoder), None))
+                        .header("Cache-Control", "no-cache")
+                        .content_type(tide::http::mime::SSE)
+                        .build();
+
+                    if response_tx.try_send(resp).is_err() {
+                        // The Future handling the get request was canceled, the
+                        // reponse Receiver dropped and thus the channel closed.
                         return;
                     }
+
+                    (sender, journal, filter)
                 };
 
                 let sender_watch = sender.clone();
                 let res = journal.watch_all_elements(move |element| {
-                    let unit = element.get("UNIT").or(element.get("_SYSTEMD_UNIT"));
-
-                    // Send the entry if the unit matches or no filter was set
-                    let should_send = match (unit, query.unit.as_ref()) {
-                        (_, None) => true,
-                        (Some(u), Some(f)) => u == f,
-                        (None, Some(_)) => false,
-                    };
-
-                    if should_send {
-                        let json = to_string(&element)?;
+                    if let Some(elem) = filter.filter(element) {
+                        let json = to_string(&elem)?;
                         block_on(sender_watch.send("entry", &json, None))?;
                     }
 
@@ -142,17 +210,20 @@ pub fn serve(server: &mut Server<()>) {
                 });
 
                 // An error occured once we have already set up the SSE session
-                // signal it on an extra "error" topic.
+                // (e.g. a sucess was already signaled via HTTP response code).
+                // Use an extra "error" SSE topic to somehow inform the client
+                // anyways.
                 if let Err(e) = res {
                     let _ = block_on(sender.send("error", &e.to_string(), None));
                 }
             });
 
-            if let Some(res) = early_rx.next().await {
-                res.map_err(|err| Error::from_str(500, err))
-            } else {
-                Err(Error::from_str(500, "Journal reader stopped unexpectely"))
-            }
-            .into()
-        }));
+            let resp = response_rx.next().await.unwrap_or(
+                Response::builder(500)
+                    .body("Journal reader stopped unexpectedly")
+                    .build(),
+            );
+
+            Ok(resp)
+        });
 }

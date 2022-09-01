@@ -284,6 +284,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-sse"
+version = "5.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e6fa871e4334a622afd6bb2f611635e8083a6f5e2936c0f90f37c7ef9856298"
+dependencies = [
+ "async-channel",
+ "futures-lite",
+ "http-types",
+ "log",
+ "memchr",
+ "pin-project-lite 0.2.8",
+]
+
+[[package]]
 name = "async-std"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2105,6 +2119,7 @@ name = "tacd"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "async-sse 5.1.0",
  "async-std",
  "async-trait",
  "async-tungstenite",
@@ -2194,7 +2209,7 @@ checksum = "c459573f0dd2cc734b539047f57489ea875af8ee950860ded20cf93a79a1dee0"
 dependencies = [
  "async-h1",
  "async-session",
- "async-sse",
+ "async-sse 4.1.0",
  "async-std",
  "async-trait",
  "femme",
