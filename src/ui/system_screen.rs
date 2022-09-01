@@ -112,7 +112,7 @@ impl MountableScreen for SystemScreen {
         }
 
         for mut widget in self.widgets.drain(..) {
-            widget.unmount_any().await
+            widget.unmount().await
         }
     }
 }

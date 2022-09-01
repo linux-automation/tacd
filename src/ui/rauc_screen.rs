@@ -103,7 +103,7 @@ impl MountableScreen for RaucScreen {
 
     async fn unmount(&mut self) {
         for mut widget in self.widgets.drain(..) {
-            widget.unmount_any().await
+            widget.unmount().await
         }
     }
 }

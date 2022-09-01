@@ -224,13 +224,6 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
     ) -> Self {
         Self::text_aligned(topic, target, anchor, format_fn, Alignment::Center).await
     }
-
-    pub async fn unmount(&mut self) {
-        if let Some((sh, jh)) = self.handles.take() {
-            sh.unsubscribe().await;
-            jh.await;
-        }
-    }
 }
 
 impl DynamicWidget<i32> {
@@ -267,12 +260,19 @@ impl DynamicWidget<i32> {
 
 #[async_trait]
 pub trait AnyWidget: Send + Sync {
-    async fn unmount_any(&mut self);
+    async fn unmount(&mut self);
 }
 
 #[async_trait]
 impl<T: Sync + Send + Serialize + DeserializeOwned + 'static> AnyWidget for DynamicWidget<T> {
-    async fn unmount_any(&mut self) {
-        self.unmount().await
+    // Remove the widget from screen
+    //
+    // This has to be async, which is why it can not be performed by
+    // implementing the Drop trait.
+    async fn unmount(&mut self) {
+        if let Some((sh, jh)) = self.handles.take() {
+            sh.unsubscribe().await;
+            jh.await;
+        }
     }
 }
