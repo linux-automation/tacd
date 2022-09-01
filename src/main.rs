@@ -38,7 +38,7 @@ async fn main() -> Result<(), std::io::Error> {
     let ressources = UiRessources {
         adc,
         dbus: DbusClient::new(&mut bb).await,
-        dig_io: DigitalIo::new(&mut bb).await,
+        dig_io: DigitalIo::new(&mut bb),
         dut_pwr,
         iobus: IoBus::new(&mut bb),
         system: System::new(&mut bb),
