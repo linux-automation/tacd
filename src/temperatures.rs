@@ -19,7 +19,7 @@ pub struct Temperatures {
 impl Temperatures {
     pub fn new(bb: &mut BrokerBuilder) -> Self {
         let run = Arc::new(AtomicBool::new(true));
-        let soc_temperature = bb.topic_ro("/v1/tac/temperatures/soc");
+        let soc_temperature = bb.topic_ro("/v1/tac/temperatures/soc", None);
 
         let run_thread = run.clone();
         let soc_temperature_thread = soc_temperature.clone();

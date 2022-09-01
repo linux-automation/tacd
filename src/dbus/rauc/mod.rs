@@ -40,11 +40,11 @@ pub struct Rauc {
 impl Rauc {
     pub async fn new(bb: &mut BrokerBuilder, conn: Arc<Connection>) -> Self {
         let inst = Self {
-            operation: bb.topic_ro("/v1/tac/update/operation"),
-            progress: bb.topic_ro("/v1/tac/update/progress"),
-            slot_status: bb.topic_ro("/v1/tac/update/slots"),
-            last_error: bb.topic_ro("/v1/tac/update/last_error"),
-            install: bb.topic_wo("/v1/tac/update/install"),
+            operation: bb.topic_ro("/v1/tac/update/operation", None),
+            progress: bb.topic_ro("/v1/tac/update/progress", None),
+            slot_status: bb.topic_ro("/v1/tac/update/slots", None),
+            last_error: bb.topic_ro("/v1/tac/update/last_error", None),
+            install: bb.topic_wo("/v1/tac/update/install", Some("".to_string())),
         };
 
         let conn_task = conn.clone();

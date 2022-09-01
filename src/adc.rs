@@ -93,43 +93,43 @@ impl Adc {
         let adc = Self {
             usb_host_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("usb-host-curr").unwrap(),
-                topic: bb.topic_ro("/v1/usb/host/total/feedback/current"),
+                topic: bb.topic_ro("/v1/usb/host/total/feedback/current", None),
             },
             usb_host1_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("usb-host1-curr").unwrap(),
-                topic: bb.topic_ro("/v1/usb/host/port1/feedback/current"),
+                topic: bb.topic_ro("/v1/usb/host/port1/feedback/current", None),
             },
             usb_host2_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("usb-host2-curr").unwrap(),
-                topic: bb.topic_ro("/v1/usb/host/port2/feedback/current"),
+                topic: bb.topic_ro("/v1/usb/host/port2/feedback/current", None),
             },
             usb_host3_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("usb-host3-curr").unwrap(),
-                topic: bb.topic_ro("/v1/usb/host/port3/feedback/current"),
+                topic: bb.topic_ro("/v1/usb/host/port3/feedback/current", None),
             },
             out0_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("out0-volt").unwrap(),
-                topic: bb.topic_ro("/v1/output/out_0/feedback/voltage"),
+                topic: bb.topic_ro("/v1/output/out_0/feedback/voltage", None),
             },
             out1_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("out1-volt").unwrap(),
-                topic: bb.topic_ro("/v1/output/out_1/feedback/voltage"),
+                topic: bb.topic_ro("/v1/output/out_1/feedback/voltage", None),
             },
             iobus_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("iobus-curr").unwrap(),
-                topic: bb.topic_ro("/v1/iobus/feedback/current"),
+                topic: bb.topic_ro("/v1/iobus/feedback/current", None),
             },
             iobus_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("iobus-volt").unwrap(),
-                topic: bb.topic_ro("/v1/iobus/feedback/voltage"),
+                topic: bb.topic_ro("/v1/iobus/feedback/voltage", None),
             },
             pwr_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("pwr-volt").unwrap(),
-                topic: bb.topic_ro("/v1/power/dut/feedback/voltage"),
+                topic: bb.topic_ro("/v1/power/dut/feedback/voltage", None),
             },
             pwr_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("pwr-curr").unwrap(),
-                topic: bb.topic_ro("/v1/power/dut/feedback/current"),
+                topic: bb.topic_ro("/v1/power/dut/feedback/current", None),
             },
         };
 

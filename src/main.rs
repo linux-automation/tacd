@@ -41,7 +41,7 @@ async fn main() -> Result<(), std::io::Error> {
         dig_io: DigitalIo::new(&mut bb).await,
         dut_pwr,
         iobus: IoBus::new(&mut bb),
-        system: System::new(&mut bb).await,
+        system: System::new(&mut bb),
         temperatures: Temperatures::new(&mut bb),
         usb_hub: UsbHub::new(&mut bb),
     };

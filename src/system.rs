@@ -85,15 +85,10 @@ pub struct System {
 }
 
 impl System {
-    pub async fn new(bb: &mut BrokerBuilder) -> Self {
-        let sys = Self {
-            uname: bb.topic_ro("/v1/tac/uname"),
-            barebox: bb.topic_ro("/v1/tac/bootloader"),
-        };
-
-        sys.uname.set(Uname::get()).await;
-        sys.barebox.set(Barebox::get()).await;
-
-        sys
+    pub fn new(bb: &mut BrokerBuilder) -> Self {
+        Self {
+            uname: bb.topic_ro("/v1/tac/uname", Some(Uname::get())),
+            barebox: bb.topic_ro("/v1/tac/bootloader", Some(Barebox::get())),
+        }
     }
 }

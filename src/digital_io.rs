@@ -59,12 +59,12 @@ fn handle_line_ro(line: Line, topic: Arc<Topic<bool>>) {
 impl DigitalIo {
     pub async fn new(bb: &mut BrokerBuilder) -> Self {
         let dig_io = Self {
-            out_0: bb.topic_rw("/v1/output/out_0/asserted"),
-            out_1: bb.topic_rw("/v1/output/out_1/asserted"),
-            uart_rx_en: bb.topic_rw("/v1/dut/uart/rx/enabled"),
-            uart_tx_en: bb.topic_rw("/v1/dut/uart/tx/enabled"),
-            iobus_pwr_en: bb.topic_rw("/v1/iobus/powered"),
-            iobus_flt_fb: bb.topic_ro("/v1/iobus/feedback/fault"),
+            out_0: bb.topic_rw("/v1/output/out_0/asserted", None),
+            out_1: bb.topic_rw("/v1/output/out_1/asserted", None),
+            uart_rx_en: bb.topic_rw("/v1/dut/uart/rx/enabled", None),
+            uart_tx_en: bb.topic_rw("/v1/dut/uart/tx/enabled", None),
+            iobus_pwr_en: bb.topic_rw("/v1/iobus/powered", None),
+            iobus_flt_fb: bb.topic_ro("/v1/iobus/feedback/fault", None),
         };
 
         handle_line_wo(find_line("OUT_0").unwrap(), dig_io.out_0.clone());

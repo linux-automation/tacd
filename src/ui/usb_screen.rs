@@ -22,7 +22,7 @@ pub struct UsbScreen {
 impl UsbScreen {
     pub fn new(bb: &mut BrokerBuilder) -> Self {
         Self {
-            highlighted: bb.topic_hidden(),
+            highlighted: bb.topic_hidden(Some(0)),
             widgets: Vec::new(),
             buttons_handle: None,
         }
@@ -119,7 +119,6 @@ impl MountableScreen for UsbScreen {
         let screen = ui.screen.clone();
 
         spawn(async move {
-            port_highlight.set(0).await;
             while let Some(ev) = button_events.next().await {
                 let highlighted = port_highlight.get().await.as_deref().copied().unwrap_or(0);
 

@@ -35,7 +35,7 @@ fn bounce(i: u32, range: i32) -> i32 {
 }
 
 pub struct ScreenSaverScreen {
-    hostname_dance: Arc<Topic<(u32, String)>>,
+    hostname_dance: Arc<Topic<(u32, Arc<String>)>>,
     widgets: Vec<Box<dyn AnyWidget>>,
     buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
 }
@@ -47,7 +47,7 @@ impl ScreenSaverScreen {
         screen: &Arc<Topic<Screen>>,
         hostname: &Arc<Topic<String>>,
     ) -> Self {
-        let hostname_dance = bb.topic_hidden();
+        let hostname_dance = bb.topic_hidden(None);
 
         // Activate screensaver if no button is pressed for some time
         let buttons_task = buttons.clone();
@@ -66,11 +66,13 @@ impl ScreenSaverScreen {
                 if activate_screensaver {
                     screen_task
                         .modify(|screen| {
-                            if screen.use_screensaver() {
-                                Arc::new(Screen::ScreenSaver)
-                            } else {
-                                screen
-                            }
+                            screen.and_then(|s| {
+                                if s.use_screensaver() {
+                                    Some(Arc::new(Screen::ScreenSaver))
+                                } else {
+                                    None
+                                }
+                            })
                         })
                         .await;
                 }

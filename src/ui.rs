@@ -216,10 +216,10 @@ fn serve_framebuffer(server: &mut Server<()>, draw_target: Arc<Mutex<Framebuffer
 
 impl Ui {
     pub fn new(bb: &mut BrokerBuilder, res: UiRessources, server: &mut Server<()>) -> Self {
-        let screen = bb.topic_rw("/v1/tac/display/screen");
-        let locator = bb.topic_rw("/v1/tac/display/locator");
-        let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance");
-        let buttons = bb.topic_rw("/v1/tac/display/buttons");
+        let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
+        let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
+        let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", None);
+        let buttons = bb.topic_rw("/v1/tac/display/buttons", None);
 
         // Initialize all the screens now so they can be mounted later
         let screens = {
@@ -254,8 +254,6 @@ impl Ui {
         let locator_dance_task = locator_dance.clone();
         spawn(async move {
             let (mut rx, _) = locator_task.clone().subscribe_unbounded().await;
-
-            locator_task.set(false).await;
 
             loop {
                 while let Some(true) = locator_task.get().await.as_deref().as_deref() {

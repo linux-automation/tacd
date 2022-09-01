@@ -38,8 +38,8 @@ pub struct IoBus {
 
 impl IoBus {
     pub fn new(bb: &mut BrokerBuilder) -> Self {
-        let server_info = bb.topic_ro("/v1/iobus/server/info");
-        let nodes = bb.topic_ro("/v1/iobus/server/nodes");
+        let server_info = bb.topic_ro("/v1/iobus/server/info", None);
+        let nodes = bb.topic_ro("/v1/iobus/server/nodes", None);
 
         let server_info_task = server_info.clone();
         let nodes_task = nodes.clone();

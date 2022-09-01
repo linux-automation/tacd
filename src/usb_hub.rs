@@ -48,8 +48,8 @@ pub struct UsbHub {
 
 fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -> UsbPort {
     let port = UsbPort {
-        powered: bb.topic_rw(format!("/v1/usb/host/{name}/powered").as_str()),
-        device: bb.topic_ro(format!("/v1/usb/host/{name}/device").as_str()),
+        powered: bb.topic_rw(format!("/v1/usb/host/{name}/powered").as_str(), Some(true)),
+        device: bb.topic_ro(format!("/v1/usb/host/{name}/device").as_str(), Some(None)),
     };
 
     let powered = port.powered.clone();
@@ -60,8 +60,6 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     // Also clears the device info upon power off so it does not contain stale
     // information until the next poll.
     spawn(async move {
-        powered.set(true).await;
-
         let (mut src, _) = powered.subscribe_unbounded().await;
 
         while let Some(ev) = src.next().await.as_deref() {
@@ -90,8 +88,6 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     // TODO: also check disable status to make sure the state stays consistent
     // even when e.g. uhubctl is used?
     spawn(async move {
-        device.set(None).await;
-
         loop {
             let id_product = read_to_string(&id_product_path).ok();
             let id_vendor = read_to_string(&id_vendor_path).ok();

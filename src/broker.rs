@@ -7,6 +7,7 @@ mod rest;
 mod topic;
 
 pub use mqtt_conn::TopicName;
+use topic::RetainedValue;
 pub use topic::{AnySubscriptionHandle, AnyTopic, Native, SubscriptionHandle, Topic};
 
 pub struct BrokerBuilder {
@@ -39,17 +40,18 @@ impl BrokerBuilder {
         path: &str,
         web_readable: bool,
         web_writable: bool,
+        initial: Option<E>,
     ) -> Arc<Topic<E>> {
         let path = TopicName::new(path).unwrap();
+        let retained = initial.map(|v| RetainedValue::new(Arc::new(v)));
 
         let topic = Arc::new(Topic {
             path,
             web_readable,
             web_writable,
             senders: Mutex::new(Vec::new()),
-            retained: Mutex::new(None),
+            retained: Mutex::new(retained),
             senders_serialized: Mutex::new(Vec::new()),
-            retained_serialized: Mutex::new(None),
         });
 
         self.topics.push(topic.clone());
@@ -61,31 +63,35 @@ impl BrokerBuilder {
     pub fn topic_ro<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
         &mut self,
         path: &str,
+        initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, true, false)
+        self.topic(path, true, false, initial)
     }
 
     /// Register a new topic that is both readable and writable from the outside
     pub fn topic_rw<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
         &mut self,
         path: &str,
+        initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, true, true)
+        self.topic(path, true, true, initial)
     }
 
     /// Register a new topic that is only writable from the outside
     pub fn topic_wo<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
         &mut self,
         path: &str,
+        initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, false, true)
+        self.topic(path, false, true, initial)
     }
 
     /// Register a new topic that can only be used internally
     pub fn topic_hidden<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
         &mut self,
+        initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(&"/hidden", false, false)
+        self.topic(&"/hidden", false, false, initial)
     }
 
     /// Finish building the broker

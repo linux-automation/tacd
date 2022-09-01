@@ -48,16 +48,16 @@ impl DbusClient {
         let conn = Arc::new(zbus::Connection::system().await.unwrap());
 
         let hostname = {
-            let topic = bb.topic_ro("/v1/tac/network/hostname");
+            let topic = bb.topic_ro("/v1/tac/network/hostname", None);
             let manager = HostnameProxy::new(&conn).await.unwrap();
             let hostname = manager.hostname().await.unwrap();
             topic.set(hostname).await;
             topic
         };
 
-        let bridge_interface = bb.topic_ro("/v1/tac/network/tac-bridge");
-        let dut_interface = bb.topic_ro("/v1/tac/network/dut");
-        let uplink_interface = bb.topic_ro("/v1/tac/network/uplink");
+        let bridge_interface = bb.topic_ro("/v1/tac/network/tac-bridge", None);
+        let dut_interface = bb.topic_ro("/v1/tac/network/dut", None);
+        let uplink_interface = bb.topic_ro("/v1/tac/network/uplink", None);
 
         {
             let conn = conn.clone();
@@ -101,7 +101,7 @@ impl DbusClient {
         }
 
         let sd = Systemd::new(conn.clone());
-        let reboot = bb.topic_rw("/v1/tac/reboot");
+        let reboot = bb.topic_rw("/v1/tac/reboot", Some(false));
 
         {
             let sd = sd.clone();
@@ -116,7 +116,8 @@ impl DbusClient {
             });
         }
 
-        let restart_service = bb.topic_rw::<String>("/v1/tac/restart_service");
+        let restart_service =
+            bb.topic_rw::<String>("/v1/tac/restart_service", Some("".to_string()));
 
         {
             let sd = sd.clone();
