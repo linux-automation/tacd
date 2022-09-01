@@ -18,7 +18,7 @@ pub struct Systemd {
 impl Systemd {
     fn setup_topics(bb: &mut BrokerBuilder) -> Self {
         Self {
-            restart_service: bb.topic_rw("/v1/tac/restart_service", Some("".to_string())),
+            restart_service: bb.topic_rw("/v1/tac/service/restart", Some("".to_string())),
             reboot: bb.topic_rw("/v1/tac/reboot", Some(false)),
         }
     }

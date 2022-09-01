@@ -63,7 +63,7 @@ paths:
         '400':
           description: The value could not be parsed into a boolean
 
-  /v1/dut/power/status:
+  /v1/dut/powered:
     get:
       summary: Get the current Power Switch state
       tags: [DUT Power]
@@ -160,7 +160,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Measurement'
 
-  /v1/tac/uname:
+  /v1/tac/info/uname:
     get:
       summary: Get the information commonly accessed via "uname"
       tags: [System]
@@ -171,7 +171,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Uname'
 
-  /v1/tac/bootloader:
+  /v1/tac/info/bootloader:
     get:
       summary: Get the information passed through from the bootloader
       tags: [System]
@@ -181,6 +181,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Barebox'
+
+  /v1/tac/info/tacd/version:
+    get:
+      summary: Get the tacd version string
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
 
   /v1/iobus/server/info:
     get:
@@ -238,7 +249,7 @@ paths:
         '400':
           description: The value could not be parsed as boolean
 
-  /v1/dut/uart/{rx_tx}/enabled:
+  /v1/uart/{rx_tx}/enabled:
     parameters:
       - name: rx_tx
         description: The direction to get status for/modify
@@ -375,7 +386,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Measurement'
 
-  /v1/power/dut/feedback/current:
+  /v1/dut/feedback/current:
     get:
       summary: Get the current consumed by the DUT
       tags: [Input/Output, DUT Power]
@@ -386,7 +397,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Measurement'
 
-  /v1/power/dut/feedback/voltage:
+  /v1/dut/feedback/voltage:
     get:
       summary: Get the voltage applied to the DUT
       tags: [Input/Output, DUT Power]
@@ -397,7 +408,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Measurement'
 
-  /v1/tac/restart_service:
+  /v1/tac/service/restart:
     put:
       summary: Restart a systemd service
       tags: [System]
@@ -510,7 +521,7 @@ paths:
                 items:
                   type: string
 
-  /v1/tac/network/{if}:
+  /v1/tac/network/interface/{if}:
     parameters:
       - name: if
         description: The name of the interface to query

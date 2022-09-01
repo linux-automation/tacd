@@ -135,11 +135,11 @@ impl Adc {
             },
             pwr_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("pwr-volt").unwrap(),
-                topic: bb.topic_ro("/v1/power/dut/feedback/voltage", None),
+                topic: bb.topic_ro("/v1/dut/feedback/voltage", None),
             },
             pwr_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("pwr-curr").unwrap(),
-                topic: bb.topic_ro("/v1/power/dut/feedback/current", None),
+                topic: bb.topic_ro("/v1/dut/feedback/current", None),
             },
         };
 

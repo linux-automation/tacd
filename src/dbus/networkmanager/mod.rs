@@ -222,9 +222,9 @@ impl Network {
     fn setup_topics(bb: &mut BrokerBuilder, hostname: String) -> Self {
         Self {
             hostname: bb.topic_ro("/v1/tac/network/hostname", Some(hostname)),
-            bridge_interface: bb.topic_ro("/v1/tac/network/tac-bridge", None),
-            dut_interface: bb.topic_ro("/v1/tac/network/dut", None),
-            uplink_interface: bb.topic_ro("/v1/tac/network/uplink", None),
+            bridge_interface: bb.topic_ro("/v1/tac/network/interface/tac-bridge", None),
+            dut_interface: bb.topic_ro("/v1/tac/network/interface/dut", None),
+            uplink_interface: bb.topic_ro("/v1/tac/network/interface/uplink", None),
         }
     }
 

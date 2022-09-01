@@ -82,21 +82,21 @@ export default function DashboardTac() {
           <Box>
             <Box variant="awsui-key-label">Kernel Version</Box>
             <MqttBox
-              topic="/v1/tac/uname"
+              topic="/v1/tac/info/uname"
               format={(msg: Uname) => msg.release}
             />
           </Box>
           <Box>
             <Box variant="awsui-key-label">Bootloader Version</Box>
             <MqttBox
-              topic="/v1/tac/bootloader"
+              topic="/v1/tac/info/bootloader"
               format={(msg: Bootloader) => msg.version}
             />
           </Box>
           <Box>
             <Box variant="awsui-key-label">Mainboard Release</Box>
             <MqttBox
-              topic="/v1/tac/bootloader"
+              topic="/v1/tac/info/bootloader"
               format={(msg: Bootloader) => msg.baseboard_release}
             />
           </Box>
@@ -104,7 +104,7 @@ export default function DashboardTac() {
           <Box>
             <Box variant="awsui-key-label">Mainboard Bringup Date</Box>
             <MqttBox
-              topic="/v1/tac/bootloader"
+              topic="/v1/tac/info/bootloader"
               format={(msg: Bootloader) => {
                 let date = new Date(msg.baseboard_timestamp * 1000);
                 return date.toLocaleString();
@@ -114,14 +114,14 @@ export default function DashboardTac() {
           <Box>
             <Box variant="awsui-key-label">Powerboard Release</Box>
             <MqttBox
-              topic="/v1/tac/bootloader"
+              topic="/v1/tac/info/bootloader"
               format={(msg: Bootloader) => msg.powerboard_release}
             />
           </Box>
           <Box>
             <Box variant="awsui-key-label">Powerboard Bringup Date</Box>
             <MqttBox
-              topic="/v1/tac/bootloader"
+              topic="/v1/tac/info/bootloader"
               format={(msg: Bootloader) => {
                 let date = new Date(msg.powerboard_timestamp * 1000);
                 return date.toLocaleString();
@@ -159,7 +159,7 @@ export default function DashboardTac() {
           <Box>
             <Box variant="awsui-key-label">Uplink Status</Box>
             <MqttBox
-              topic="/v1/tac/network/uplink"
+              topic="/v1/tac/network/interface/uplink"
               format={(obj: LinkStatus) => {
                 return obj.carrier ? `${obj.speed} MBit/s` : "Down";
               }}
@@ -168,7 +168,7 @@ export default function DashboardTac() {
           <Box>
             <Box variant="awsui-key-label">DUT Link Status</Box>
             <MqttBox
-              topic="/v1/tac/network/dut"
+              topic="/v1/tac/network/interface/dut"
               format={(obj: LinkStatus) => {
                 return obj.carrier ? `${obj.speed} MBit/s` : "Down";
               }}
@@ -177,7 +177,7 @@ export default function DashboardTac() {
           <Box>
             <Box variant="awsui-key-label">IP Adress</Box>
             <MqttBox
-              topic="/v1/tac/network/tac-bridge"
+              topic="/v1/tac/network/interface/tac-bridge"
               format={(obj: IpList) => {
                 return obj.length < 1 ? "-" : obj[0];
               }}

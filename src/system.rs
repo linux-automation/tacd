@@ -106,9 +106,9 @@ impl System {
         let version = env!("VERSION_STRING").to_string();
 
         Self {
-            uname: bb.topic_ro("/v1/tac/uname", Some(Uname::get())),
-            barebox: bb.topic_ro("/v1/tac/bootloader", Some(Barebox::get())),
-            tacd_version: bb.topic_ro("/v1/tac/tacd_version", Some(version)),
+            uname: bb.topic_ro("/v1/tac/info/uname", Some(Uname::get())),
+            barebox: bb.topic_ro("/v1/tac/info/bootloader", Some(Barebox::get())),
+            tacd_version: bb.topic_ro("/v1/tac/info/tacd/version", Some(version)),
         }
     }
 }

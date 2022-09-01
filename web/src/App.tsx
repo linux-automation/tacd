@@ -81,7 +81,7 @@ function Navigation() {
 export default function App() {
   const [runningVersion, setRunningVersion] = useState<string | undefined>();
   const hostname = useMqttSubscription("/v1/tac/network/hostname");
-  const tacd_version = useMqttSubscription<string>("/v1/tac/tacd_version");
+  const tacd_version = useMqttSubscription<string>("/v1/tac/info/tacd/version");
 
   useEffect(() => {
     document.title =

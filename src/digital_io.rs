@@ -91,8 +91,8 @@ impl DigitalIo {
         Self {
             out_0: handle_line_wo(bb, "/v1/output/out_0/asserted", "OUT_0", false),
             out_1: handle_line_wo(bb, "/v1/output/out_1/asserted", "OUT_1", false),
-            uart_rx_en: handle_line_wo(bb, "/v1/dut/uart/rx/enabled", "UART_RX_EN", true),
-            uart_tx_en: handle_line_wo(bb, "/v1/dut/uart/tx/enabled", "UART_TX_EN", true),
+            uart_rx_en: handle_line_wo(bb, "/v1/uart/rx/enabled", "UART_RX_EN", true),
+            uart_tx_en: handle_line_wo(bb, "/v1/uart/tx/enabled", "UART_TX_EN", true),
             iobus_pwr_en: handle_line_wo(bb, "/v1/iobus/powered", "IOBUS_PWR_EN", true),
             iobus_flt_fb: handle_line_ro(bb, "/v1/iobus/feedback/fault", "IOBUS_FLT_FB"),
         }

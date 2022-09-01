@@ -86,18 +86,18 @@ export default function DashboardDut() {
         <ColumnLayout columns={2} variant="text-grid">
           <Box>
             <Box variant="awsui-key-label">DUT voltage (V)</Box>
-            <MqttChart topic="/v1/power/dut/feedback/voltage" />
+            <MqttChart topic="/v1/dut/feedback/voltage" />
           </Box>
           <Box>
             <Box variant="awsui-key-label">DUT current (A)</Box>
-            <MqttChart topic="/v1/power/dut/feedback/current" />
+            <MqttChart topic="/v1/dut/feedback/current" />
           </Box>
         </ColumnLayout>
         <ColumnLayout columns={4} variant="text-grid">
           <Box>
             <Box variant="awsui-key-label">Power Supply</Box>
             <MqttToggleConv
-              topic="/v1/dut/power/status"
+              topic="/v1/dut/powered"
               to_bool={(status: string) => status === "On"}
               from_bool={(on: boolean) => (on ? "On" : "Off")}
             >
@@ -106,15 +106,12 @@ export default function DashboardDut() {
           </Box>
           <Box>
             <Box variant="awsui-key-label">Status</Box>
-            <MqttBox
-              topic="/v1/dut/power/status"
-              format={(msg: string) => msg}
-            />
+            <MqttBox topic="/v1/dut/powered" format={(msg: string) => msg} />
           </Box>
           <Box>
             <Box variant="awsui-key-label">Voltage</Box>
             <MqttBox
-              topic="/v1/power/dut/feedback/voltage"
+              topic="/v1/dut/feedback/voltage"
               format={(obj: Measurement) => {
                 return `${obj.value.toFixed(1)}V / 48.0V`;
               }}
@@ -123,7 +120,7 @@ export default function DashboardDut() {
           <Box>
             <Box variant="awsui-key-label">Current</Box>
             <MqttBox
-              topic="/v1/power/dut/feedback/current"
+              topic="/v1/dut/feedback/current"
               format={(obj: Measurement) => {
                 return `${obj.value.toFixed(2)}A / 5.00A`;
               }}
@@ -385,11 +382,11 @@ export default function DashboardDut() {
         <ColumnLayout columns={4} variant="text-grid">
           <Box>
             <Box variant="awsui-key-label">TX Enable</Box>
-            <MqttToggle topic="/v1/dut/uart/tx/enabled">TX Enable</MqttToggle>
+            <MqttToggle topic="/v1/uart/tx/enabled">TX Enable</MqttToggle>
           </Box>
           <Box>
             <Box variant="awsui-key-label">RX Enable</Box>
-            <MqttToggle topic="/v1/dut/uart/rx/enabled">TX Enable</MqttToggle>
+            <MqttToggle topic="/v1/uart/rx/enabled">TX Enable</MqttToggle>
           </Box>
         </ColumnLayout>
       </Container>

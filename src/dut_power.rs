@@ -183,8 +183,8 @@ impl DutPwrThread {
         // actually on once a corresponding publish is received from the broker,
         // as it has done the full round trip through the realtime power thread
         // and is not just a copy of the received command.
-        let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/power/status", None);
-        let state_topic = bb.topic_ro::<OutputState>("/v1/dut/power/status", None);
+        let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/powered", None);
+        let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", None);
 
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
