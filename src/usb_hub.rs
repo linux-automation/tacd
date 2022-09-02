@@ -75,7 +75,7 @@ pub struct UsbHub {
 
 fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -> UsbPort {
     let port = UsbPort {
-        powered: bb.topic_rw(format!("/v1/usb/host/{name}/powered").as_str(), Some(true)),
+        powered: bb.topic_rw(format!("/v1/usb/host/{name}/powered").as_str(), None),
         device: bb.topic_ro(format!("/v1/usb/host/{name}/device").as_str(), Some(None)),
     };
 
@@ -98,7 +98,9 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
         }
     });
 
+    let powered = port.powered.clone();
     let device = port.device.clone();
+    let disable_path = Path::new(base).join("disable");
     let (id_product_path, id_vendor_path, manufacturer_path, product_path) = {
         let device_path = Path::new(base).join("device");
         (
@@ -109,13 +111,31 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
         )
     };
 
-    // Spawn a task that periodically polls the USB device info and updates
-    // the corresponding topic on changes.
-    //
-    // TODO: also check disable status to make sure the state stays consistent
-    // even when e.g. uhubctl is used?
+    // Spawn a task that periodically polls the USB device info and disable state
+    // and updates the corresponding topic on changes.
     spawn(async move {
         loop {
+            if let Ok(disable) = read_to_string(&disable_path) {
+                let is_powered = match disable.trim() {
+                    "1" => false,
+                    "0" => true,
+                    _ => panic!("Read unexpected value for USB port disable state"),
+                };
+
+                powered
+                    .modify(|prev| {
+                        let should_set = prev
+                            .map(|prev_powered| *prev_powered != is_powered)
+                            .unwrap_or(true);
+
+                        match should_set {
+                            true => Some(Arc::new(is_powered)),
+                            false => None,
+                        }
+                    })
+                    .await;
+            }
+
             let id_product = read_to_string(&id_product_path).ok();
             let id_vendor = read_to_string(&id_vendor_path).ok();
             let manufacturer = read_to_string(&manufacturer_path).ok();
@@ -137,10 +157,9 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                         .map(|prev_dev_info| *prev_dev_info != dev_info)
                         .unwrap_or(true);
 
-                    if should_set {
-                        Some(Arc::new(dev_info))
-                    } else {
-                        None
+                    match should_set {
+                        true => Some(Arc::new(dev_info)),
+                        false => None,
                     }
                 })
                 .await;
