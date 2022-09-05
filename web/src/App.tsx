@@ -85,7 +85,9 @@ export default function App() {
 
   useEffect(() => {
     document.title =
-      hostname === undefined ? "LXA TAC" : `LXA TAC (${hostname})`;
+      hostname === undefined
+        ? "LXA TAC (connecting …)"
+        : `LXA TAC (${hostname})`;
   }, [hostname]);
 
   useEffect(() => {
