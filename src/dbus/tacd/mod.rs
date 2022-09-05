@@ -1,13 +1,12 @@
-use std::env;
-
-use zbus::{dbus_interface, ConnectionBuilder};
+use super::ConnectionBuilder;
 
 pub struct Tacd {}
 
-#[dbus_interface(name = "de.pengutronix.tacd1")]
+#[cfg(not(feature = "stub_out_dbus"))]
+#[zbus::dbus_interface(name = "de.pengutronix.tacd1")]
 impl Tacd {
     fn get_version(&mut self) -> String {
-        env!("VERSION_STRING").to_string()
+        std::env!("VERSION_STRING").to_string()
     }
 }
 

@@ -2,6 +2,39 @@ use async_std::sync::Arc;
 
 use crate::broker::BrokerBuilder;
 
+#[cfg(feature = "stub_out_dbus")]
+mod zb {
+    pub type Result<T> = std::result::Result<T, ()>;
+
+    pub struct Connection;
+    pub struct ConnectionBuilder;
+
+    impl ConnectionBuilder {
+        pub fn system() -> Result<Self> {
+            Ok(Self)
+        }
+
+        pub fn name(self, _: &'static str) -> Result<Self> {
+            Ok(self)
+        }
+
+        pub fn serve_at<T>(self, _: &'static str, _: T) -> Result<Self> {
+            Ok(self)
+        }
+
+        pub async fn build(self) -> Result<Connection> {
+            Ok(Connection)
+        }
+    }
+}
+
+#[cfg(not(feature = "stub_out_dbus"))]
+mod zb {
+    pub use zbus::*;
+}
+
+use zb::{Connection, ConnectionBuilder, Result};
+
 mod networkmanager;
 mod rauc;
 mod systemd;
@@ -24,24 +57,12 @@ impl DbusSession {
     pub async fn new(bb: &mut BrokerBuilder) -> Self {
         let tacd = Tacd::new();
 
-        #[cfg(not(feature = "stub_out_dbus"))]
-        let conn = {
-            let conn = tacd
-                .serve(
-                    zbus::ConnectionBuilder::system()
-                        .unwrap()
-                        .name("de.pengutronix.tacd")
-                        .unwrap(),
-                )
-                .build()
-                .await
-                .unwrap();
+        let conn_builder = ConnectionBuilder::system()
+            .unwrap()
+            .name("de.pengutronix.tacd")
+            .unwrap();
 
-            Arc::new(conn)
-        };
-
-        #[cfg(feature = "stub_out_dbus")]
-        let conn = ();
+        let conn = Arc::new(tacd.serve(conn_builder).build().await.unwrap());
 
         Self {
             network: Network::new(bb, &conn).await,
