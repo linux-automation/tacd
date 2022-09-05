@@ -5,8 +5,38 @@ use std::time::{Duration, Instant};
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn_blocking};
 
+#[cfg(feature = "stub_out_hwmon")]
+mod hw {
+    pub trait SysClass {
+        fn input(&self) -> Result<u32, ()>;
+    }
+
+    pub struct HwMon;
+    pub struct TempDecoy;
+
+    impl SysClass for TempDecoy {
+        fn input(&self) -> Result<u32, ()> {
+            Ok(30_000)
+        }
+    }
+
+    impl HwMon {
+        pub fn new(_: &'static str) -> Result<Self, ()> {
+            Ok(Self)
+        }
+
+        pub fn temp(&self, _: u64) -> Result<TempDecoy, ()> {
+            Ok(TempDecoy)
+        }
+    }
+}
+
 #[cfg(not(feature = "stub_out_hwmon"))]
-use sysfs_class::{HwMon, SysClass};
+mod hw {
+    pub use sysfs_class::*;
+}
+
+use hw::{HwMon, SysClass};
 
 use crate::adc::Measurement;
 use crate::broker::{BrokerBuilder, Topic};
@@ -26,7 +56,6 @@ impl Temperatures {
         let run_thread = run.clone();
         let soc_temperature_thread = soc_temperature.clone();
 
-        #[cfg(not(feature = "stub_out_hwmon"))]
         spawn_blocking(move || {
             while run_thread.load(Ordering::Relaxed) {
                 let val = HwMon::new(&"hwmon0")
