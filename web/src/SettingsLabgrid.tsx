@@ -1,7 +1,9 @@
 import "ace-builds/src-noconflict/ace"; // Load Ace Editor
 import { config } from "ace-builds/src-noconflict/ace";
 
+import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
+import ColumnLayout from "@cloudscape-design/components/column-layout";
 import Form from "@cloudscape-design/components/form";
 import Header from "@cloudscape-design/components/header";
 import Container from "@cloudscape-design/components/container";
@@ -11,9 +13,10 @@ import CodeEditor, {
   CodeEditorProps,
 } from "@cloudscape-design/components/code-editor";
 
-import { JournalView } from "./DashboardJournal";
-
 import { useEffect, useState } from "react";
+
+import { MqttBox, MqttButton } from "./MqttComponents";
+import { JournalView } from "./DashboardJournal";
 
 // Make sure to only require (and thus pack using webpack) modules that are
 // actually used.
@@ -91,11 +94,9 @@ function ConfigEditor(props: ConfigEditorProps) {
   return (
     <Form
       actions={
-        <SpaceBetween direction="horizontal" size="xs">
-          <Button formAction="none" variant="primary" onClick={save}>
-            Save
-          </Button>
-        </SpaceBetween>
+        <Button formAction="none" variant="primary" onClick={save}>
+          Save
+        </Button>
       }
     >
       <CodeEditor
@@ -130,6 +131,13 @@ function ConfigEditor(props: ConfigEditorProps) {
   );
 }
 
+type ServiceStatus = {
+  active_state: string;
+  sub_state: string;
+  active_enter_ts: number;
+  active_exit_ts: number;
+};
+
 export default function SettingsLabgrid() {
   return (
     <SpaceBetween size="m">
@@ -147,11 +155,80 @@ export default function SettingsLabgrid() {
           </Header>
         }
       >
-        <JournalView
-          history_len={20}
-          rows={20}
-          unit="labgrid-exporter.service"
-        />
+        <Form
+          actions={
+            <SpaceBetween size="xs" direction="horizontal">
+              <MqttButton
+                iconName="status-positive"
+                topic="/v1/tac/service/labgrid-exporter/action"
+                send={"Start"}
+              >
+                Start
+              </MqttButton>
+              <MqttButton
+                iconName="status-stopped"
+                topic="/v1/tac/service/labgrid-exporter/action"
+                send={"Stop"}
+              >
+                Stop
+              </MqttButton>
+              <MqttButton
+                iconName="refresh"
+                topic="/v1/tac/service/labgrid-exporter/action"
+                send={"Restart"}
+              >
+                Restart
+              </MqttButton>
+            </SpaceBetween>
+          }
+        >
+          <SpaceBetween size="m">
+            <ColumnLayout columns={3} variant="text-grid">
+              <Box>
+                <Box variant="awsui-key-label">Service Status</Box>
+                <MqttBox
+                  topic="/v1/tac/service/labgrid-exporter/status"
+                  format={(state: ServiceStatus) => {
+                    return `${state.active_state} (${state.sub_state})`;
+                  }}
+                />
+              </Box>
+              <Box>
+                <Box variant="awsui-key-label">Last Started</Box>
+                <MqttBox
+                  topic="/v1/tac/service/labgrid-exporter/status"
+                  format={(state: ServiceStatus) => {
+                    if (state.active_enter_ts !== 0) {
+                      let date = new Date(state.active_enter_ts / 1000);
+                      return date.toLocaleString();
+                    } else {
+                      return "never";
+                    }
+                  }}
+                />
+              </Box>
+              <Box>
+                <Box variant="awsui-key-label">Last Stopped</Box>
+                <MqttBox
+                  topic="/v1/tac/service/labgrid-exporter/status"
+                  format={(state: ServiceStatus) => {
+                    if (state.active_exit_ts !== 0) {
+                      let date = new Date(state.active_exit_ts / 1000);
+                      return date.toLocaleString();
+                    } else {
+                      return "never";
+                    }
+                  }}
+                />
+              </Box>
+            </ColumnLayout>
+            <JournalView
+              history_len={20}
+              rows={20}
+              unit="labgrid-exporter.service"
+            />
+          </SpaceBetween>
+        </Form>
       </Container>
 
       <Container

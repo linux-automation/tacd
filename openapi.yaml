@@ -408,20 +408,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/Measurement'
 
-  /v1/tac/service/restart:
+  /v1/tac/service/{service}/action:
+    parameters:
+      - name: service
+        description: The service to perform the action on
+        required: true
+        schema:
+          type: string
+          enum:
+            - network-manager
+            - labgrid-exporter
+            - lxa-iobus
     put:
-      summary: Restart a systemd service
+      summary: Perform an action on a systemd service
       tags: [System]
       requestBody:
         content:
           application/json:
             schema:
-              type: string
+              $ref: '#/components/schemas/ServiceAction'
       responses:
         '204':
-          description: The service was asked to restart
+          description: The service was asked to perform the action
         '400':
-          description: The value could not be parsed as string
+          description: The value could not be parsed as action
+
+  /v1/tac/service/{service}/status:
+    parameters:
+      - name: service
+        description: The service to get the status for
+        required: true
+        schema:
+          type: string
+          enum:
+            - network-manager
+            - labgrid-exporter
+            - lxa-iobus
+    get:
+      summary: Get the status of a systemd service
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceStatus'
 
   /v1/tac/reboot:
     put:
@@ -668,6 +699,25 @@ components:
           type: string
         nesting_depth:
           type: number
+
+    ServiceStatus:
+      type: object
+      properties:
+        active_state:
+          type: string
+        sub_state:
+          type: string
+        active_enter_ts:
+          type: number
+        active_exit_ts:
+          type: number
+
+    ServiceAction:
+      type: string
+      enum:
+        - Start
+        - Stop
+        - Restart
 
 tags:
   - name: User Interface

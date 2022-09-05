@@ -21,7 +21,10 @@
 
 use zbus::dbus_proxy;
 
-#[dbus_proxy(interface = "org.freedesktop.systemd1.Service")]
+#[dbus_proxy(
+    default_service = "org.freedesktop.systemd1",
+    interface = "org.freedesktop.systemd1.Service"
+)]
 pub(crate) trait Service {
     /// AttachProcesses method
     fn attach_processes(&self, subcgroup: &str, pids: &[u32]) -> zbus::Result<()>;
@@ -1253,7 +1256,10 @@ pub(crate) trait Service {
     fn working_directory(&self) -> zbus::Result<String>;
 }
 
-#[dbus_proxy(interface = "org.freedesktop.systemd1.Unit")]
+#[dbus_proxy(
+    default_service = "org.freedesktop.systemd1",
+    interface = "org.freedesktop.systemd1.Unit"
+)]
 pub(crate) trait Unit {
     /// Clean method
     fn clean(&self, mask: &[&str]) -> zbus::Result<()>;
