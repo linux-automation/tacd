@@ -34,11 +34,12 @@ fn handle_line_wo(
     path: &str,
     line_name: &str,
     initial: bool,
+    inverted: bool,
 ) -> Arc<Topic<bool>> {
-    let topic = bb.topic_rw(path, Some(initial));
+    let topic = bb.topic_rw(path, Some(initial ^ inverted));
     let line = find_line(line_name).unwrap();
     let dst = line
-        .request(LineRequestFlags::OUTPUT, initial as _, "tacd")
+        .request(LineRequestFlags::OUTPUT, (initial ^ inverted) as _, "tacd")
         .unwrap();
 
     let topic_task = topic.clone();
@@ -47,7 +48,7 @@ fn handle_line_wo(
         let (mut src, _) = topic_task.subscribe_unbounded().await;
 
         while let Some(ev) = src.next().await {
-            dst.set_value(*ev as _).unwrap();
+            dst.set_value((*ev ^ inverted) as _).unwrap();
         }
     });
 
@@ -89,11 +90,11 @@ fn handle_line_ro(bb: &mut BrokerBuilder, path: &str, line_name: &str) -> Arc<To
 impl DigitalIo {
     pub fn new(bb: &mut BrokerBuilder) -> Self {
         Self {
-            out_0: handle_line_wo(bb, "/v1/output/out_0/asserted", "OUT_0", false),
-            out_1: handle_line_wo(bb, "/v1/output/out_1/asserted", "OUT_1", false),
-            uart_rx_en: handle_line_wo(bb, "/v1/uart/rx/enabled", "UART_RX_EN", true),
-            uart_tx_en: handle_line_wo(bb, "/v1/uart/tx/enabled", "UART_TX_EN", true),
-            iobus_pwr_en: handle_line_wo(bb, "/v1/iobus/powered", "IOBUS_PWR_EN", true),
+            out_0: handle_line_wo(bb, "/v1/output/out_0/asserted", "OUT_0", false, false),
+            out_1: handle_line_wo(bb, "/v1/output/out_1/asserted", "OUT_1", false, false),
+            uart_rx_en: handle_line_wo(bb, "/v1/uart/rx/enabled", "UART_RX_EN", true, true),
+            uart_tx_en: handle_line_wo(bb, "/v1/uart/tx/enabled", "UART_TX_EN", true, true),
+            iobus_pwr_en: handle_line_wo(bb, "/v1/iobus/powered", "IOBUS_PWR_EN", true, false),
             iobus_flt_fb: handle_line_ro(bb, "/v1/iobus/feedback/fault", "IOBUS_FLT_FB"),
         }
     }
