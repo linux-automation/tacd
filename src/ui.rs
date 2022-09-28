@@ -257,12 +257,31 @@ impl Ui {
             let (mut rx, _) = locator_task.clone().subscribe_unbounded().await;
 
             loop {
-                while *locator_task.get().await {
-                    for i in (0..64).rev() {
-                        locator_dance_task.set(i).await;
-                        sleep(Duration::from_millis(100)).await;
-                    }
+                // As long as the locator is active:
+                // count down the value in locator_dance from 63 to 0
+                // with some pause in between in a loop.
+                while locator_task
+                    .try_get()
+                    .await
+                    .as_deref()
+                    .copied()
+                    .unwrap_or(false)
+                {
+                    locator_dance_task
+                        .modify(|v| {
+                            let v = match v.as_deref().copied() {
+                                None | Some(0) => 63,
+                                Some(v) => v - 1,
+                            };
+
+                            Some(Arc::new(v))
+                        })
+                        .await;
+                    sleep(Duration::from_millis(100)).await;
                 }
+
+                // If the locator is empty stop the animation
+                locator_dance_task.set(0).await;
 
                 match rx.next().await.as_deref().as_deref() {
                     Some(true) => {}
