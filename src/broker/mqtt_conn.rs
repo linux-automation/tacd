@@ -42,7 +42,7 @@ use super::{AnySubscriptionHandle, AnyTopic};
 /// backpressure when overloaded.
 /// The intent is to drop the connection when overloaded so that the user
 /// gets a visual indication that the web interface is no longer up to date.
-const MAX_QUEUE_LENGTH: usize = 256;
+const MAX_QUEUE_LENGTH: usize = 4096;
 
 /// Force a flush on the Websocket every now and then to make sure that
 /// the backpressure mechanism mentioned above actually does something.
@@ -270,16 +270,6 @@ async fn handle_connection(
                     let mut new_subscribes = Vec::new();
 
                     for topic in sub_topics {
-                        // Do we have a retained value for this topic?
-                        // If so: send it to the client
-                        if let Some(retained) = topic.try_get_as_bytes().await {
-                            if let Err(e) = to_websocket.try_send((topic.path().clone(), retained))
-                            {
-                                res = Err(e.into());
-                                break 'connection;
-                            }
-                        }
-
                         // Subscribe to the serialized messages via the broker
                         // framwork. This uses a single queue per connection for
                         // all topics.

@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 
+const HISTORY_LENGTH: usize = 200;
+
 #[cfg(any(test, feature = "stub_out_adc"))]
 mod iio {
     mod stub;
@@ -103,43 +105,103 @@ impl Adc {
         let adc = Self {
             usb_host_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("usb-host-curr").unwrap(),
-                topic: bb.topic_ro("/v1/usb/host/total/feedback/current", None),
+                topic: bb.topic(
+                    "/v1/usb/host/total/feedback/current",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             usb_host1_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("usb-host1-curr").unwrap(),
-                topic: bb.topic_ro("/v1/usb/host/port1/feedback/current", None),
+                topic: bb.topic(
+                    "/v1/usb/host/port1/feedback/current",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             usb_host2_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("usb-host2-curr").unwrap(),
-                topic: bb.topic_ro("/v1/usb/host/port2/feedback/current", None),
+                topic: bb.topic(
+                    "/v1/usb/host/port2/feedback/current",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             usb_host3_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("usb-host3-curr").unwrap(),
-                topic: bb.topic_ro("/v1/usb/host/port3/feedback/current", None),
+                topic: bb.topic(
+                    "/v1/usb/host/port3/feedback/current",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             out0_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("out0-volt").unwrap(),
-                topic: bb.topic_ro("/v1/output/out_0/feedback/voltage", None),
+                topic: bb.topic(
+                    "/v1/output/out_0/feedback/voltage",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             out1_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("out1-volt").unwrap(),
-                topic: bb.topic_ro("/v1/output/out_1/feedback/voltage", None),
+                topic: bb.topic(
+                    "/v1/output/out_1/feedback/voltage",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             iobus_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("iobus-curr").unwrap(),
-                topic: bb.topic_ro("/v1/iobus/feedback/current", None),
+                topic: bb.topic(
+                    "/v1/iobus/feedback/current",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             iobus_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("iobus-volt").unwrap(),
-                topic: bb.topic_ro("/v1/iobus/feedback/voltage", None),
+                topic: bb.topic(
+                    "/v1/iobus/feedback/voltage",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             pwr_volt: AdcChannel {
                 fast: iio_thread.clone().get_channel("pwr-volt").unwrap(),
-                topic: bb.topic_ro("/v1/dut/feedback/voltage", None),
+                topic: bb.topic(
+                    "/v1/dut/feedback/voltage",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
             pwr_curr: AdcChannel {
                 fast: iio_thread.clone().get_channel("pwr-curr").unwrap(),
-                topic: bb.topic_ro("/v1/dut/feedback/current", None),
+                topic: bb.topic(
+                    "/v1/dut/feedback/current",
+                    true,
+                    false,
+                    None,
+                    HISTORY_LENGTH,
+                ),
             },
         };
 

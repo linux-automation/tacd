@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::marker::PhantomData;
 
 use async_std::channel::{unbounded, Receiver, Sender, TrySendError};
@@ -49,7 +50,8 @@ pub struct Topic<E> {
     pub(super) path: TopicName,
     pub(super) web_readable: bool,
     pub(super) web_writable: bool,
-    pub(super) retained: Mutex<Option<RetainedValue<E>>>,
+    pub(super) retained: Mutex<VecDeque<RetainedValue<E>>>,
+    pub(super) retained_length: usize,
     pub(super) senders: Mutex<Vec<(Unique, Sender<Arc<E>>)>>,
     pub(super) senders_serialized: Mutex<Vec<(Unique, Sender<(TopicName, Arc<[u8]>)>)>>,
 }
@@ -102,7 +104,11 @@ impl<E: Send + Sync> AnySubscriptionHandle for SubscriptionHandle<E, Serialized>
 }
 
 impl<E: Serialize + DeserializeOwned> Topic<E> {
-    async fn set_arc_with_retain_lock(&self, msg: Arc<E>, retained: &mut Option<RetainedValue<E>>) {
+    async fn set_arc_with_retain_lock(
+        &self,
+        msg: Arc<E>,
+        retained: &mut VecDeque<RetainedValue<E>>,
+    ) {
         // Do all locking up front and in a known order to prevent deadlocks
         let mut senders = self.senders.lock().await;
         let mut senders_serialized = self.senders_serialized.lock().await;
@@ -135,7 +141,11 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
             }
         });
 
-        *retained = Some(val);
+        retained.push_back(val);
+
+        while retained.len() > self.retained_length {
+            retained.pop_front();
+        }
     }
 
     /// Set a new value for the topic and notify subscribers
@@ -160,39 +170,23 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
 
     /// Get the current value
     ///
-    /// Or nothing if none is set yet or we could not get a lock
-    #[allow(dead_code)]
-    pub fn try_get(&self) -> Option<Arc<E>> {
-        if let Some(retained) = self.retained.try_lock() {
-            retained.as_ref().map(|v| v.native())
-        } else {
-            None
-        }
+    /// Or nothing if none is set
+    pub async fn try_get(&self) -> Option<Arc<E>> {
+        self.retained.lock().await.back().map(|v| v.native())
     }
 
     // Get the value of this topic
     //
     // Waits for a value if none was set yet
     pub async fn get(self: &Arc<Self>) -> Arc<E> {
-        let (mut rx, handle) = {
-            let retained = self.retained.lock().await;
-
-            if let Some(v) = retained.as_ref() {
-                return v.native();
-            }
-
-            // subscribe while still holding the retained lock so no event can be
-            // lost between checking and subscribing.
-            self.clone().subscribe_unbounded().await
-        };
+        let (mut rx, sub) = self.clone().subscribe_unbounded().await;
+        let val = rx.next().await;
+        sub.unsubscribe().await;
 
         // Unwrap here to keep the interface simple. The stream could only yield
         // None if the sender side is dropped, which will not happen as we hold
         // an Arc to self which contains the senders vec.
-        let v = rx.next().await.unwrap();
-        handle.unsubscribe().await;
-
-        v
+        val.unwrap()
     }
 
     /// Perform an atomic read modify write cycle for this topic
@@ -206,7 +200,7 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
     {
         let mut retained = self.retained.lock().await;
 
-        if let Some(new) = cb(retained.as_ref().map(|v| v.native())) {
+        if let Some(new) = cb(retained.back().map(|v| v.native())) {
             self.set_arc_with_retain_lock(new, &mut *retained).await;
         }
     }
@@ -217,6 +211,7 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
     /// from the list of subscribers. The subscriber will also be removed
     /// implicitly on the first `set` call after the recieving end of the queue
     /// was dropped.
+    /// If a retained value is present it will be enqueued immediately.
     ///
     /// # Arguments
     ///
@@ -226,7 +221,27 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
         sender: Sender<Arc<E>>,
     ) -> SubscriptionHandle<E, Native> {
         let token = Unique::new();
-        self.senders.lock().await.push((token, sender));
+
+        // If there is a retained value try to enqueue it right away.
+        // It that fails mimic what set_arc_with_retain_lock would do.
+        let retained_send_res = {
+            let retained = self.retained.lock().await;
+
+            retained
+                .back()
+                .map(|val| sender.try_send(val.native()))
+                .unwrap_or(Ok(()))
+        };
+
+        match retained_send_res {
+            Ok(_) => {
+                self.senders.lock().await.push((token, sender));
+            }
+            Err(TrySendError::Full(_)) => {
+                sender.close();
+            }
+            Err(TrySendError::Closed(_)) => {}
+        };
 
         SubscriptionHandle {
             topic: Arc::downgrade(&self),
@@ -239,6 +254,7 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
     ///
     /// The returned SubscriptionHandle can be used to remove the sender again
     /// from the list of subscribers.
+    /// If a retained value is present it will be enqueued immediately.
     pub async fn subscribe_unbounded(
         self: Arc<Self>,
     ) -> (Receiver<Arc<E>>, SubscriptionHandle<E, Native>) {
@@ -287,6 +303,7 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + 'static> AnyTopic for Topic
     ///
     /// The Returned AnySubscriptionHandle can be used to remove the queue
     /// again from the list of subscribers.
+    /// If retained values are present they will be enqueued immediately.
     ///
     /// # Arguments:
     ///
@@ -296,7 +313,28 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + 'static> AnyTopic for Topic
         sender: Sender<(TopicName, Arc<[u8]>)>,
     ) -> Box<dyn AnySubscriptionHandle> {
         let token = Unique::new();
-        self.senders_serialized.lock().await.push((token, sender));
+        let mut should_add = true;
+
+        // If there are retained values try to enqueue them right away.
+        // It that fails mimic what set_arc_with_retain_lock would do.
+        for val in self.retained.lock().await.iter_mut() {
+            match sender.try_send((self.path.clone(), val.serialized())) {
+                Ok(_) => {}
+                Err(TrySendError::Full(_)) => {
+                    sender.close();
+                    should_add = false;
+                    break;
+                }
+                Err(TrySendError::Closed(_)) => {
+                    should_add = false;
+                    break;
+                }
+            }
+        }
+
+        if should_add {
+            self.senders_serialized.lock().await.push((token, sender));
+        }
 
         let handle = SubscriptionHandle {
             topic: Arc::downgrade(&self),
@@ -311,12 +349,18 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + 'static> AnyTopic for Topic
     ///
     /// Returns None if no value was set yet.
     async fn try_get_as_bytes(&self) -> Option<Arc<[u8]>> {
-        self.retained.lock().await.as_mut().map(|v| v.serialized())
+        self.retained
+            .lock()
+            .await
+            .back_mut()
+            .map(|v| v.serialized())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
+
     use super::{AnyTopic, RetainedValue, Topic, TopicName};
     use async_std::channel::{unbounded, Receiver};
     use async_std::sync::{Arc, Mutex};
@@ -335,7 +379,8 @@ mod tests {
             path: TopicName::new("/").unwrap(),
             web_readable: true,
             web_writable: true,
-            retained: Mutex::new(None),
+            retained: Mutex::new(VecDeque::new()),
+            retained_length: 1,
             senders: Mutex::new(Vec::new()),
             senders_serialized: Mutex::new(Vec::new()),
         };
@@ -434,7 +479,7 @@ mod tests {
         block_on(async {
             let topic = new_topic::<SerTestType>();
 
-            assert_eq!(topic.try_get(), None);
+            assert_eq!(topic.try_get().await, None);
             assert_eq!(topic.try_get_as_bytes().await, None);
 
             topic
@@ -443,7 +488,7 @@ mod tests {
                 .unwrap();
 
             assert_eq!(
-                topic.try_get(),
+                topic.try_get().await,
                 Some(Arc::new(SerTestType {
                     a: true,
                     b: 1,

@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use async_std::sync::{Arc, Mutex};
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -41,16 +43,26 @@ impl BrokerBuilder {
         web_readable: bool,
         web_writable: bool,
         initial: Option<E>,
+        retained_length: usize,
     ) -> Arc<Topic<E>> {
         let path = TopicName::new(path).unwrap();
-        let retained = initial.map(|v| RetainedValue::new(Arc::new(v)));
+        let retained = {
+            let mut retained = VecDeque::with_capacity(retained_length + 1);
+
+            if let Some(v) = initial {
+                retained.push_back(RetainedValue::new(Arc::new(v)))
+            }
+
+            Mutex::new(retained)
+        };
 
         let topic = Arc::new(Topic {
             path,
             web_readable,
             web_writable,
             senders: Mutex::new(Vec::new()),
-            retained: Mutex::new(retained),
+            retained,
+            retained_length,
             senders_serialized: Mutex::new(Vec::new()),
         });
 
@@ -65,7 +77,7 @@ impl BrokerBuilder {
         path: &str,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, true, false, initial)
+        self.topic(path, true, false, initial, 1)
     }
 
     /// Register a new topic that is both readable and writable from the outside
@@ -74,7 +86,7 @@ impl BrokerBuilder {
         path: &str,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, true, true, initial)
+        self.topic(path, true, true, initial, 1)
     }
 
     /// Register a new topic that is only writable from the outside
@@ -83,7 +95,7 @@ impl BrokerBuilder {
         path: &str,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, false, true, initial)
+        self.topic(path, false, true, initial, 1)
     }
 
     /// Register a new topic that can only be used internally
@@ -91,7 +103,7 @@ impl BrokerBuilder {
         &mut self,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(&"/hidden", false, false, initial)
+        self.topic(&"/hidden", false, false, initial, 1)
     }
 
     /// Finish building the broker

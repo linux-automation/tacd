@@ -220,7 +220,7 @@ impl Ui {
         let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
         let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));
-        let buttons = bb.topic_rw("/v1/tac/display/buttons", None);
+        let buttons = bb.topic("/v1/tac/display/buttons", true, true, None, 0);
 
         // Initialize all the screens now so they can be mounted later
         let screens = {
