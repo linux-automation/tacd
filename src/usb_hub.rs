@@ -10,18 +10,34 @@ use crate::broker::{BrokerBuilder, Topic};
 
 #[cfg(feature = "stub_out_usb_hub")]
 mod rw {
+    use std::collections::HashMap;
     use std::convert::AsRef;
     use std::io::{Error, ErrorKind, Result};
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    static FILESYSTEM: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
     pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
-        Err(Error::new(ErrorKind::NotFound, "eh"))
+        Ok(FILESYSTEM
+            .lock()
+            .unwrap()
+            .get_or_insert(HashMap::new())
+            .get(path.as_ref().to_str().unwrap())
+            .cloned()
+            .unwrap_or(String::from("0")))
     }
 
     pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
         let path: &Path = path.as_ref();
         let contents: &[u8] = contents.as_ref();
         let text = std::str::from_utf8(contents).unwrap_or("[Broken UTF-8]");
+
+        FILESYSTEM
+            .lock()
+            .unwrap()
+            .get_or_insert(HashMap::new())
+            .insert(path.to_str().unwrap().to_string(), text.to_string());
 
         println!("USB: Would write {text} to {path:?} but don't feel like it");
 
