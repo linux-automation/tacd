@@ -40,20 +40,20 @@ pub struct DynamicWidget<T: Sync + Send + 'static> {
 }
 
 impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
-    // Create a generic dynamic widget
-    //
-    // # Arguments:
-    //
-    // * `topic`: The topic to subscribe to. If any change is detected on this
-    //   topic the area occupied by this widget is cleared and then redrawed.
-    // * `target`: The framebuffer to draw the widget on
-    // * `anchor`: A point passed through to the `draw_fn` that should somehow
-    //   correspond to the position the `draw_fn` draws to.
-    //   (This does however not have to be the case).
-    // * `draw_fn`: A function that is called whenever the widget should be
-    //   redrawn. The `draw_fn` should return a rectangle corresponding to the
-    //   bounding box it has drawn to.
-    //   The widget system takes care of clearing this area before redrawing.
+    /// Create a generic dynamic widget
+    ///
+    /// # Arguments:
+    ///
+    /// * `topic`: The topic to subscribe to. If any change is detected on this
+    ///   topic the area occupied by this widget is cleared and then redrawed.
+    /// * `target`: The framebuffer to draw the widget on
+    /// * `anchor`: A point passed through to the `draw_fn` that should somehow
+    ///   correspond to the position the `draw_fn` draws to.
+    ///   (This does however not have to be the case).
+    /// * `draw_fn`: A function that is called whenever the widget should be
+    ///   redrawn. The `draw_fn` should return a rectangle corresponding to the
+    ///   bounding box it has drawn to.
+    ///   The widget system takes care of clearing this area before redrawing.
     pub async fn new(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
@@ -84,10 +84,10 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         }
     }
 
-    // Draw a self-updating status bar with a given `width` and `height`
-    //
-    // The `format_fn` should return a value between 0.0 and 1.0 indicating
-    // the fraction of the graph to fill.
+    /// Draw a self-updating status bar with a given `width` and `height`
+    ///
+    /// The `format_fn` should return a value between 0.0 and 1.0 indicating
+    /// the fraction of the graph to fill.
     pub async fn bar(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
@@ -123,7 +123,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         .await
     }
 
-    // Draw an indicator bubble in an "On", "Off" or "Error" state
+    /// Draw an indicator bubble in an "On", "Off" or "Error" state
     pub async fn indicator(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
@@ -176,7 +176,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         .await
     }
 
-    // Draw self-updating text with configurable alignment
+    /// Draw self-updating text with configurable alignment
     pub async fn text_aligned(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
@@ -206,7 +206,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         .await
     }
 
-    // Draw self-updating left aligned text
+    /// Draw self-updating left aligned text
     pub async fn text(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
@@ -216,7 +216,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         Self::text_aligned(topic, target, anchor, format_fn, Alignment::Left).await
     }
 
-    // Draw self-updating centered text
+    /// Draw self-updating centered text
     pub async fn text_center(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
@@ -228,8 +228,8 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
 }
 
 impl DynamicWidget<i32> {
-    // Draw an animated locator widget at the side of the screen
-    // (if the locator is active).
+    /// Draw an animated locator widget at the side of the screen
+    /// (if the locator is active).
     pub async fn locator(
         topic: Arc<Topic<i32>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
@@ -266,10 +266,10 @@ pub trait AnyWidget: Send + Sync {
 
 #[async_trait]
 impl<T: Sync + Send + Serialize + DeserializeOwned + 'static> AnyWidget for DynamicWidget<T> {
-    // Remove the widget from screen
-    //
-    // This has to be async, which is why it can not be performed by
-    // implementing the Drop trait.
+    /// Remove the widget from screen
+    ///
+    /// This has to be async, which is why it can not be performed by
+    /// implementing the Drop trait.
     async fn unmount(&mut self) {
         if let Some((sh, jh)) = self.handles.take() {
             sh.unsubscribe().await;
