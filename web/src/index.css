@@ -22,6 +22,8 @@ code {
   box-shadow: rgb(233, 235, 237) 0px 0px 1px 1px,
     rgba(0, 7, 22, 0.12) 0px 1px 8px 2px;
   margin-top: 0.5em;
+  image-rendering: crisp-edges;
+  width: 100%;
 }
 
 .api_picker_outer {

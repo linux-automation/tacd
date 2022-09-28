@@ -5,7 +5,12 @@ import Container from "@cloudscape-design/components/container";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 
-import { MqttBox, MqttToggle, MqttButton } from "./MqttComponents";
+import {
+  MqttBox,
+  MqttToggle,
+  MqttButton,
+  MqttDurationButton,
+} from "./MqttComponents";
 import { RaucContainer } from "./TacComponents";
 
 import { useEffect, useState } from "react";
@@ -38,6 +43,35 @@ type Bootloader = {
   powerboard_timestamp: number;
 };
 
+type Duration = {
+  secs: number;
+  nanos: number;
+};
+
+type ButtonPress = {
+  ButtonOne?: Duration;
+  ButtonTwo?: Duration;
+};
+
+function formatButton(button: String, duration: number) {
+  let res: ButtonPress = {};
+
+  let millis = Math.floor(duration);
+
+  let dur = {
+    secs: Math.floor(millis / 1000),
+    nanos: (millis % 1000) * 1000000,
+  };
+
+  if (button === "ButtonOne") {
+    res["ButtonOne"] = dur;
+  } else {
+    res["ButtonTwo"] = dur;
+  }
+
+  return res;
+}
+
 export default function DashboardTac() {
   const [counter, setCounter] = useState(0);
 
@@ -62,14 +96,6 @@ export default function DashboardTac() {
         }
       >
         <ColumnLayout columns={4} variant="text-grid">
-          <Box>
-            <Box variant="awsui-key-label">Live Display</Box>
-            <img
-              className="live-display"
-              src={"/v1/tac/display/content?c=" + counter}
-              alt="Live view"
-            />
-          </Box>
           <Box>
             <Box variant="awsui-key-label">SoC Temperature</Box>
             <MqttBox
@@ -139,6 +165,48 @@ export default function DashboardTac() {
         />
       </Container>
 
+      <Container
+        header={
+          <Header
+            variant="h2"
+            description="Control your TAC as if you were standing in front of it"
+          >
+            Device-Local UI
+          </Header>
+        }
+      >
+        <ColumnLayout columns={3} variant="text-grid">
+          <img
+            className="live-display"
+            src={"/v1/tac/display/content?c=" + counter}
+            alt="Live view"
+          />
+          <SpaceBetween size="m">
+            <Box>
+              <Box variant="awsui-key-label">Upper Button</Box>
+              <MqttDurationButton
+                topic="/v1/tac/display/buttons"
+                format={(dur) => formatButton("ButtonTwo", dur)}
+              >
+                Button 2
+              </MqttDurationButton>
+            </Box>
+            <Box>
+              <Box variant="awsui-key-label">Lower Button</Box>
+              <MqttDurationButton
+                topic="/v1/tac/display/buttons"
+                format={(dur) => formatButton("ButtonOne", dur)}
+              >
+                Button 1
+              </MqttDurationButton>
+            </Box>
+            <Box>
+              <Box variant="awsui-key-label">Locator</Box>
+              <MqttToggle topic="/v1/tac/display/locator">Locator</MqttToggle>
+            </Box>
+          </SpaceBetween>
+        </ColumnLayout>
+      </Container>
       <RaucContainer />
 
       <Container
@@ -182,21 +250,6 @@ export default function DashboardTac() {
                 return obj.length < 1 ? "-" : obj[0];
               }}
             />
-          </Box>
-        </ColumnLayout>
-      </Container>
-
-      <Container
-        header={
-          <Header variant="h2" description="Find this TAC and others around it">
-            Neighbourhood
-          </Header>
-        }
-      >
-        <ColumnLayout columns={4} variant="text-grid">
-          <Box>
-            <Box variant="awsui-key-label">Locator</Box>
-            <MqttToggle topic="/v1/tac/display/locator">Locator</MqttToggle>
           </Box>
         </ColumnLayout>
       </Container>
