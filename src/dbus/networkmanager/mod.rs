@@ -230,7 +230,25 @@ impl Network {
 
     #[cfg(feature = "stub_out_dbus")]
     pub async fn new<C>(bb: &mut BrokerBuilder, _conn: C) -> Self {
-        Self::setup_topics(bb, "lxatac".to_string())
+        let this = Self::setup_topics(bb, "lxatac".to_string());
+
+        this.bridge_interface
+            .set(vec![String::from("0.0.0.0")])
+            .await;
+        this.dut_interface
+            .set(LinkInfo {
+                speed: 0,
+                carrier: false,
+            })
+            .await;
+        this.uplink_interface
+            .set(LinkInfo {
+                speed: 1337,
+                carrier: true,
+            })
+            .await;
+
+        this
     }
 
     #[cfg(not(feature = "stub_out_dbus"))]
