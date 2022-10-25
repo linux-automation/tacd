@@ -159,7 +159,7 @@ export default function DashboardDut() {
                       <p>
                         Asserting OUT_{port} creates a short circuit between the
                         two OUT_{port} pins. What that means in terms of input
-                        voltage at the respevtive DUT pin is dependant on how
+                        voltage at the respective DUT pin is dependant on how
                         the external connections are made.
                       </p>
                       <p>
