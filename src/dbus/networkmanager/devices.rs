@@ -324,9 +324,9 @@ mod wired {
 pub mod ip4 {
     use zbus::dbus_proxy;
     use zvariant::OwnedValue;
-    use zvariant_derive::{DeserializeDict, SerializeDict, TypeDict};
+    use zvariant_derive::{DeserializeDict, SerializeDict, Type};
 
-    #[derive(DeserializeDict, SerializeDict, TypeDict, Debug, OwnedValue)]
+    #[derive(DeserializeDict, SerializeDict, Type, Debug, OwnedValue)]
     pub struct IP4Adress {
         prefix: u32,
         address: String,

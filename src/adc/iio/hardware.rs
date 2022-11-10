@@ -18,7 +18,7 @@
 use anyhow::{anyhow, Context, Result};
 
 use std::convert::{TryFrom, TryInto};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::thread;
@@ -29,7 +29,7 @@ use async_std::sync::Arc;
 
 use industrial_io::Channel;
 
-use log::debug;
+use log::{debug, warn};
 use thread_priority::*;
 
 // Hard coded list of channels using the internal STM32MP1 ADC.
@@ -239,32 +239,24 @@ impl IioThread {
         let join = thread::Builder::new()
             .name("tacd iio".into())
             .spawn(move || {
-                let mut ctx = industrial_io::Context::new().unwrap();
+                let ctx = industrial_io::Context::new().unwrap();
 
                 debug!("IIO devices:");
                 for dev in ctx.devices() {
                     debug!("  * {}", &dev.name().unwrap_or_default());
                 }
 
-                let mut stm32_adc = ctx.find_device("48003000.adc:adc@0").unwrap();
+                let stm32_adc = ctx.find_device("48003000.adc:adc@0").unwrap();
                 let pwr_adc = ctx.find_device("lmp92064").unwrap();
 
-                // FIXME: This should really be done via some attr_write call or similar
-                let buffer_enable_path = format!(
-                    "/sys/bus/iio/devices/{}/buffer/enable",
-                    stm32_adc.id().unwrap()
-                );
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .open(&buffer_enable_path)
-                    .unwrap()
-                    .write_all(b"0\n")
-                    .unwrap();
+                if let Err(err) = stm32_adc.attr_write_bool("buffer/enable", false) {
+                    warn!("Failed to disable STM32 ADC buffer: {}", err);
+                }
 
                 let stm32_channels: Vec<Channel> = CHANNELS_STM32
                     .iter()
                     .map(|(iio_name, _, _)| {
-                        let mut ch = stm32_adc
+                        let ch = stm32_adc
                             .find_channel(iio_name, false)
                             .expect(&format!("Failed to open iio channel {iio_name}"));
 
@@ -286,10 +278,10 @@ impl IioThread {
                 trig.attr_write_int("sampling_frequency", 1024).unwrap();
 
                 stm32_adc.set_trigger(&trig).unwrap();
-                stm32_adc.set_num_kernel_buffers(32).unwrap();
                 ctx.set_timeout_ms(1000).unwrap();
 
                 let mut stm32_buf = stm32_adc.create_buffer(128, false).unwrap();
+                stm32_buf.set_num_kernel_buffers(32).unwrap();
 
                 set_thread_priority_and_policy(
                     thread_native_id(),
