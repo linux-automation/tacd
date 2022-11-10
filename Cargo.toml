@@ -1,9 +1,10 @@
 [package]
 name = "tacd"
 version = "0.2.0"
-authors = ["Jan Luebbe <jlu@pengutronix.de>"]
+authors = ["Jan Luebbe <jlu@pengutronix.de>", "Leonard Göhrs <lgo@pengutronix.de>"]
 edition = "2018"
 repository = "ssh://intern@intern.scm.pengutronix.de/upstream/tacd"
+license = "GPL-2.0-only"
 
 [build-dependencies]
 chrono = "0.4"
