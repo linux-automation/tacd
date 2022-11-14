@@ -54,7 +54,7 @@ async fn main() -> Result<(), std::io::Error> {
     let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone());
     let watchdog = Watchdog::new(dut_pwr.tick());
 
-    let ressources = UiRessources {
+    let resources = UiRessources {
         adc,
         dbus: DbusSession::new(&mut bb).await,
         dig_io: DigitalIo::new(&mut bb),
@@ -66,7 +66,7 @@ async fn main() -> Result<(), std::io::Error> {
     };
 
     let mut web_interface = WebInterface::new();
-    let ui = Ui::new(&mut bb, ressources, &mut web_interface.server);
+    let ui = Ui::new(&mut bb, resources, &mut web_interface.server);
     bb.build(&mut web_interface.server);
     journal::serve(&mut web_interface.server);
 

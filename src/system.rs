@@ -87,7 +87,7 @@ pub struct Barebox {
 
 impl Barebox {
     fn get() -> Self {
-        // Get info from devicetree choosen
+        // Get info from devicetree chosen
         Self {
             version: read_dt_property("barebox-version"),
             baseboard_release: {

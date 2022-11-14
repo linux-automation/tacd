@@ -189,7 +189,7 @@ fn fail(
 
 /// Labgrid has a fixed assumption of how a REST based power port should work.
 /// It should consume "1" and "0" as PUT request bodies and return "1" or not
-/// "1" as GET reponse bodies.
+/// "1" as GET response bodies.
 /// Provide a compat interface that provides this behaviour while keeping the
 /// main interface used by e.g. the web UI pretty.
 fn setup_labgrid_compat(
@@ -297,7 +297,7 @@ impl DutPwrThread {
                 let mut last_ts: Option<Instant> = None;
 
                 // Run as long as there is a strong reference to `tick`.
-                // As tick is a private memeber of the struct this is equivalent
+                // As tick is a private member of the struct this is equivalent
                 // to running as long as the DutPwrThread was not dropped.
                 while let Some(tick) = tick_weak.upgrade() {
                     thread::sleep(THREAD_INTERVAL);
@@ -325,7 +325,7 @@ impl DutPwrThread {
                                 &state,
                             );
                         } else {
-                            // We have a fresh ADC value. Signal "everythin is well"
+                            // We have a fresh ADC value. Signal "everything is well"
                             // to the watchdog task.
                             tick.fetch_add(1, Ordering::Relaxed);
                         }

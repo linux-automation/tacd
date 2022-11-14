@@ -49,9 +49,9 @@ impl BrokerBuilder {
     ///
     /// # Arguments
     ///
-    /// * `path` - Where to mount the MQTT topic and REST ressource
-    /// * `web_readable` - Should this ressource be externally readable?
-    /// * `web_writable` - Should this ressource be externally writable?
+    /// * `path` - Where to mount the MQTT topic and REST resource
+    /// * `web_readable` - Should this resource be externally readable?
+    /// * `web_writable` - Should this resource be externally writable?
     /// * `initial` - Retained value to return before set() was called the
     ///    first time. Or None
     pub fn topic<E: Serialize + DeserializeOwned + Sync + Send + 'static>(

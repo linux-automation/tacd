@@ -62,7 +62,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
     /// # Arguments:
     ///
     /// * `topic`: The topic to subscribe to. If any change is detected on this
-    ///   topic the area occupied by this widget is cleared and then redrawed.
+    ///   topic the area occupied by this widget is cleared and then redrawn.
     /// * `target`: The framebuffer to draw the widget on
     /// * `anchor`: A point passed through to the `draw_fn` that should somehow
     ///   correspond to the position the `draw_fn` draws to.

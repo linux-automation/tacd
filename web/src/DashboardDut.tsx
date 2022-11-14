@@ -176,7 +176,7 @@ export default function DashboardDut() {
                       <p>
                         Asserting OUT_{port} creates a short circuit between the
                         two OUT_{port} pins. What that means in terms of input
-                        voltage at the respective DUT pin is dependant on how
+                        voltage at the respective DUT pin is dependent on how
                         the external connections are made.
                       </p>
                       <p>
@@ -203,7 +203,7 @@ export default function DashboardDut() {
                       <p>
                         The OUT_{port} voltage is measured between the two OUT_
                         {port} pins. As the two pins can generally be used
-                        interchangably, you will most likely not care about the
+                        interchangeably, you will most likely not care about the
                         polarity of this voltage. This is why the absolute is
                         shown in the bar graph and the text representation. If
                         you want to see the polarity you can refer to the plots.
@@ -263,7 +263,7 @@ export default function DashboardDut() {
               topic="/v1/iobus/server/nodes"
               format={(obj: IOBusNodes) => `${obj.result.length}`}
             />
-            <Box variant="awsui-key-label">Hostname / CAN inteface</Box>
+            <Box variant="awsui-key-label">Hostname / CAN interface</Box>
             <MqttBox
               topic="/v1/iobus/server/info"
               format={(obj: IOBusServerStatus) =>

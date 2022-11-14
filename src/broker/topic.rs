@@ -226,7 +226,7 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
     ///
     /// The returned SubscriptionHandle can be used to remove the sender again
     /// from the list of subscribers. The subscriber will also be removed
-    /// implicitly on the first `set` call after the recieving end of the queue
+    /// implicitly on the first `set` call after the receiving end of the queue
     /// was dropped.
     /// If a retained value is present it will be enqueued immediately.
     ///

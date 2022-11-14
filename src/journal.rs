@@ -197,7 +197,7 @@ pub fn serve(server: &mut Server<()>) {
                         }
                     };
 
-                    // The journal was opened sucessfully, we can send a sucessful
+                    // The journal was opened successfully, we can send a successful
                     // response to the client.
                     let (sender, encoder) = async_sse::encode();
 
@@ -209,7 +209,7 @@ pub fn serve(server: &mut Server<()>) {
 
                     if response_tx.try_send(resp).is_err() {
                         // The Future handling the get request was canceled, the
-                        // reponse Receiver dropped and thus the channel closed.
+                        // response Receiver dropped and thus the channel closed.
                         return;
                     }
 
@@ -226,8 +226,8 @@ pub fn serve(server: &mut Server<()>) {
                     Ok(())
                 });
 
-                // An error occured once we have already set up the SSE session
-                // (e.g. a sucess was already signaled via HTTP response code).
+                // An error occurred once we have already set up the SSE session
+                // (e.g. a success was already signaled via HTTP response code).
                 // Use an extra "error" SSE topic to somehow inform the client
                 // anyways.
                 if let Err(e) = res {

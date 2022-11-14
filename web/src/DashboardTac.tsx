@@ -260,7 +260,7 @@ export default function DashboardTac() {
             />
           </Box>
           <Box>
-            <Box variant="awsui-key-label">IP Adress</Box>
+            <Box variant="awsui-key-label">IP Address</Box>
             <MqttBox
               topic="/v1/tac/network/interface/tac-bridge"
               format={(obj: IpList) => {

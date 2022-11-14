@@ -87,7 +87,7 @@ impl Calibration {
     /// Load ADC-Calibration data from `path`
     ///
     /// The `path` should most likely point to somewhere in the devicetree
-    /// choosen parameters.
+    /// chosen parameters.
     fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         let mut fd = std::fs::File::open(path.as_ref()).with_context(|| {
             format!(
@@ -146,7 +146,7 @@ impl CalibratedChannel {
     /// sampled at the same timestamp.
     ///
     /// Returns None if not all values could be read while the timestamp stayed
-    /// constant or if no values were aquired yet.
+    /// constant or if no values were acquired yet.
     ///
     /// As only a tiny fraction of overall runtime is spent updating the values
     /// and timestamps it should be safe to just call this in a loop until it
@@ -290,7 +290,7 @@ impl IioThread {
                 )
                 .unwrap();
 
-                // Stop running as soon as the last refernce to this Arc<IioThread>
+                // Stop running as soon as the last reference to this Arc<IioThread>
                 // is dropped (e.g. the weak reference can no longer be upgraded).
                 while let Some(thread) = thread_weak.upgrade() {
                     // Use the buffer interface to get STM32 ADC values at a high

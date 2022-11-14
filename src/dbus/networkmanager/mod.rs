@@ -62,7 +62,7 @@ async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Resul
 
         let interface_name = device_proxy.interface().await?; // name
 
-        // Is this the interface we are interrested in?
+        // Is this the interface we are interested in?
         if interface_name == interface {
             return Ok(path);
         }

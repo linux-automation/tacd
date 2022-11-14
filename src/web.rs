@@ -66,7 +66,7 @@ impl WebInterface {
                 .extend(fds.iter().filter_map(|fd| tcp_listener(fd).ok()));
         }
 
-        // Open [::]:80 / [::]:8080 outselves if systemd did not provide anything.
+        // Open [::]:80 / [::]:8080 ourselves if systemd did not provide anything.
         // This, somewhat confusingly also listens on 0.0.0.0.
         if this.listeners.is_empty() {
             this.listeners.push(TcpListener::bind(FALLBACK_PORT).expect(

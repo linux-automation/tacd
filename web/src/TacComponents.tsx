@@ -262,7 +262,7 @@ export function RaucInstall() {
           }
         >
           <StatusIndicator>Success</StatusIndicator>
-          <Box>Bundle installation finished sucessfully</Box>
+          <Box>Bundle installation finished successfully</Box>
         </Form>
       );
     } else {

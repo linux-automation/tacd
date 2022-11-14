@@ -44,7 +44,7 @@ pub struct DigitalIo {
     pub iobus_flt_fb: Arc<Topic<bool>>,
 }
 
-/// Handle a GPIO line whose state is completely defined by the broker framwork
+/// Handle a GPIO line whose state is completely defined by the broker framework
 /// writing to it. (e.g. whatever it is set to _is_ the line status).
 fn handle_line_wo(
     bb: &mut BrokerBuilder,

@@ -46,7 +46,7 @@ pub use iio::{CalibratedChannel, IioThread};
 /// system clock this is a somewhat handwavey process.
 ///
 /// The idea is to take the current Instant (monotonic time) and System Time
-/// (calender time) and calculate: now_system - (now_instant - ts_instant).
+/// (calendar time) and calculate: now_system - (now_instant - ts_instant).
 pub mod json_instant {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::time::{Instant, SystemTime};
