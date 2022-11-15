@@ -1,0 +1,47 @@
+[package]
+name = "tacd"
+version = "0.2.0"
+authors = ["Jan Luebbe <jlu@pengutronix.de>"]
+edition = "2018"
+repository = "ssh://intern@intern.scm.pengutronix.de/upstream/tacd"
+
+[build-dependencies]
+chrono = "0.4"
+flate2 = "1.0"
+
+[dependencies]
+anyhow = "1.0"
+async-std = { version = "1.12", features = ["attributes"] }
+async-trait = "0.1"
+chrono = "0.4"
+embedded-graphics = "0.7"
+evdev = "0.11"
+flate2 = "1.0"
+framebuffer = "0.3"
+futures = "0.3"
+futures-lite = "1.12"
+gpio-cdev = "0.5"
+industrial-io = "0.3"
+log = { version = "0.4"}
+mqtt-protocol = "0.11.2"
+nix = "0.24"
+png = "0.17"
+pretty_env_logger = "0.4"
+serde_json = "1.0"
+serde_repr = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+surf = { version = "2.3", default-features = false, features = ["h1-client-no-tls"] }
+sysfs-class = "0.1"
+systemd = "0.10"
+thread-priority = "0.4"
+tide = "0.16"
+tide-websockets = "0.4"
+unique-token = "0.2"
+zbus = "2.0"
+zvariant_derive = "3.0"
+zvariant = { version = "3", default-features = false, features = ["enumflags2"] }
+
+[profile.release]
+lto = true
+overflow-checks = true
+#panic = 'abort'
