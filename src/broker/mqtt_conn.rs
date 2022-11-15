@@ -184,10 +184,9 @@ async fn handle_connection(
             let msg = PublishPacket::new(topic, QoSWithPacketIdentifier::Level0, payload.to_vec())
                 .as_message()?;
 
-            // Get a strong reference to the TX-Side of the WebSocket
-            // (this may fail if this task has somehow become an orphan)
+            // stream_tx_task contains an Option that could already have been
+            // .take()n in the teardown routine. If so: stop this task.
             let mut stream_tx_lock = stream_tx_task.lock().await;
-
             let stream_tx = stream_tx_lock
                 .as_mut()
                 .ok_or(anyhow!("WebSocket is gone"))?;
