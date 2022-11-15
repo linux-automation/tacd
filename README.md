@@ -1,6 +1,8 @@
 LXA TAC System Daemon
 =====================
 
+![Web Interface Screenshot](screenshots/web-interface.png?raw=true "Web Interface")
+
 This piece of software provides an interface between the hardware of the
 [Linux Automation GmbH Test Automation Controller (LXA TAC)](https://www.linux-automation.com/en/products/lxa-tac.html)
 and the user.
