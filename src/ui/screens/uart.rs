@@ -60,8 +60,8 @@ impl MountableScreen for UartScreen {
         ));
 
         let ports = [
-            (0, "UART RX EN", 29, &ui.res.dig_io.uart_rx_en),
-            (1, "UART TX EN", 44, &ui.res.dig_io.uart_tx_en),
+            (0, "UART RX EN", 52, &ui.res.dig_io.uart_rx_en),
+            (1, "UART TX EN", 72, &ui.res.dig_io.uart_tx_en),
         ];
 
         for (idx, name, y, status) in ports {
@@ -69,7 +69,7 @@ impl MountableScreen for UartScreen {
                 DynamicWidget::text(
                     self.highlighted.clone(),
                     ui.draw_target.clone(),
-                    Point::new(0, y),
+                    Point::new(8, y),
                     Box::new(move |highlight: &u8| {
                         format!(
                             "{} {}",
@@ -85,7 +85,7 @@ impl MountableScreen for UartScreen {
                 DynamicWidget::indicator(
                     status.clone(),
                     ui.draw_target.clone(),
-                    Point::new(80, y - 7),
+                    Point::new(160, y - 10),
                     Box::new(|state: &bool| match *state {
                         true => IndicatorState::On,
                         false => IndicatorState::Off,

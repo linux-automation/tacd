@@ -63,14 +63,14 @@ impl MountableScreen for DigOutScreen {
             (
                 0,
                 "OUT 0",
-                29,
+                52,
                 &ui.res.dig_io.out_0,
                 &ui.res.adc.out0_volt.topic,
             ),
             (
                 1,
                 "OUT 1",
-                44,
+                72,
                 &ui.res.dig_io.out_1,
                 &ui.res.adc.out1_volt.topic,
             ),
@@ -81,7 +81,7 @@ impl MountableScreen for DigOutScreen {
                 DynamicWidget::text(
                     self.highlighted.clone(),
                     ui.draw_target.clone(),
-                    Point::new(0, y),
+                    Point::new(8, y),
                     Box::new(move |highlight: &u8| {
                         format!(
                             "{} {}",
@@ -97,7 +97,7 @@ impl MountableScreen for DigOutScreen {
                 DynamicWidget::indicator(
                     status.clone(),
                     ui.draw_target.clone(),
-                    Point::new(54, y - 7),
+                    Point::new(100, y - 10),
                     Box::new(|state: &bool| match *state {
                         true => IndicatorState::On,
                         false => IndicatorState::Off,
@@ -110,9 +110,9 @@ impl MountableScreen for DigOutScreen {
                 DynamicWidget::bar(
                     voltage.clone(),
                     ui.draw_target.clone(),
-                    Point::new(70, y - 6),
-                    45,
-                    7,
+                    Point::new(130, y - 14),
+                    90,
+                    18,
                     Box::new(|meas: &Measurement| meas.value.abs() / 5.0),
                 )
                 .await,

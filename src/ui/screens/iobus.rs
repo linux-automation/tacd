@@ -61,11 +61,11 @@ impl MountableScreen for IoBusScreen {
             let ui_text_style: MonoTextStyle<BinaryColor> =
                 MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-            Text::new("Power/Fault:", Point::new(0, 26), ui_text_style)
+            Text::new("Power/Fault:", Point::new(8, 52), ui_text_style)
                 .draw(&mut *draw_target)
                 .unwrap();
 
-            Text::new("Scan/CAN OK:", Point::new(0, 40), ui_text_style)
+            Text::new("Scan/CAN OK:", Point::new(8, 72), ui_text_style)
                 .draw(&mut *draw_target)
                 .unwrap();
         }
@@ -78,7 +78,7 @@ impl MountableScreen for IoBusScreen {
             DynamicWidget::indicator(
                 ui.res.dig_io.iobus_pwr_en.clone(),
                 ui.draw_target.clone(),
-                Point::new(80, 26 - 7),
+                Point::new(140, 52 - 10),
                 Box::new(|state: &bool| match *state {
                     true => IndicatorState::On,
                     false => IndicatorState::Off,
@@ -91,7 +91,7 @@ impl MountableScreen for IoBusScreen {
             DynamicWidget::indicator(
                 ui.res.dig_io.iobus_flt_fb.clone(),
                 ui.draw_target.clone(),
-                Point::new(101, 26 - 7),
+                Point::new(170, 52 - 10),
                 Box::new(|state: &bool| match *state {
                     true => IndicatorState::On,
                     false => IndicatorState::Off,
@@ -104,7 +104,7 @@ impl MountableScreen for IoBusScreen {
             DynamicWidget::indicator(
                 ui.res.iobus.server_info.clone(),
                 ui.draw_target.clone(),
-                Point::new(80, 40 - 7),
+                Point::new(140, 72 - 10),
                 Box::new(|info: &ServerInfo| match info.lss_state {
                     LSSState::Scanning => IndicatorState::On,
                     LSSState::Idle => IndicatorState::Off,
@@ -117,7 +117,7 @@ impl MountableScreen for IoBusScreen {
             DynamicWidget::indicator(
                 ui.res.iobus.server_info.clone(),
                 ui.draw_target.clone(),
-                Point::new(101, 40 - 7),
+                Point::new(170, 70 - 7),
                 Box::new(|info: &ServerInfo| match info.can_tx_error {
                     false => IndicatorState::On,
                     true => IndicatorState::Off,
@@ -130,7 +130,7 @@ impl MountableScreen for IoBusScreen {
             DynamicWidget::text(
                 ui.res.iobus.nodes.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 54),
+                Point::new(8, 92),
                 Box::new(move |nodes: &Nodes| format!("Nodes: {}", nodes.result.len())),
             )
             .await,

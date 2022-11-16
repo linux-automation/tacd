@@ -28,7 +28,7 @@ mod backend {
         pub device: (),
         pub var_screen_info: VarScreeninfo,
         pub fix_screen_info: FixScreeninfo,
-        pub frame: [u8; 128 * 64 * 2],
+        pub frame: [u8; 240 * 240 * 2],
     }
 
     impl Framebuffer {
@@ -37,15 +37,15 @@ mod backend {
                 device: (),
                 var_screen_info: VarScreeninfo {
                     bits_per_pixel: 16,
-                    xres: 128,
-                    yres: 64,
+                    xres: 240,
+                    yres: 240,
                     ..Default::default()
                 },
                 fix_screen_info: FixScreeninfo {
-                    line_length: 256,
+                    line_length: 480,
                     ..Default::default()
                 },
-                frame: [0; 128 * 64 * 2],
+                frame: [0; 240 * 240 * 2],
             })
         }
 

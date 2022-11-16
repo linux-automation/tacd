@@ -26,7 +26,7 @@ use async_std::task::spawn;
 use async_trait::async_trait;
 
 use embedded_graphics::{
-    mono_font::{ascii::FONT_6X9, MonoFont, MonoTextStyle},
+    mono_font::{ascii::FONT_10X20, MonoFont, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::Rectangle,
@@ -39,7 +39,7 @@ use super::{MountableScreen, Screen, Ui};
 
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
-const UI_TEXT_FONT: MonoFont = FONT_6X9;
+const UI_TEXT_FONT: MonoFont = FONT_10X20;
 const SCREEN_TYPE: Screen = Screen::ScreenSaver;
 const SCREENSAVER_TIMEOUT: Duration = Duration::from_secs(600);
 
@@ -142,7 +142,7 @@ impl MountableScreen for ScreenSaverScreen {
         let hostname = ui.res.network.hostname.get().await;
         let bounce = BounceAnimation::new(Rectangle::with_corners(
             Point::new(0, 8),
-            Point::new(118, 64),
+            Point::new(230, 240),
         ));
 
         self.widgets.push(Box::new(
@@ -159,6 +159,7 @@ impl MountableScreen for ScreenSaverScreen {
 
                     let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
                     let text = bounce.bounce(text);
+
                     text.draw(target).unwrap();
 
                     Some(text.bounding_box())
