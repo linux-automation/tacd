@@ -20,7 +20,7 @@ use async_std::sync::{Arc, Mutex};
 use async_std::task::{spawn, JoinHandle};
 use async_trait::async_trait;
 use embedded_graphics::{
-    mono_font::{ascii::FONT_6X9, MonoFont, MonoTextStyle},
+    mono_font::{ascii::FONT_10X20, MonoFont, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
@@ -32,7 +32,7 @@ use serde::Serialize;
 use super::FramebufferDrawTarget;
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
-pub const UI_TEXT_FONT: MonoFont = FONT_6X9; // FIXME: Use font 6x8?
+pub const UI_TEXT_FONT: MonoFont = FONT_10X20;
 
 pub enum IndicatorState {
     On,
@@ -254,9 +254,9 @@ impl DynamicWidget<i32> {
         Self::new(
             topic,
             target,
-            Point::new(128 - 5, 32),
+            Point::new(240 - 5, 120),
             Box::new(move |val, anchor, target| {
-                let size = 64 - ((*val - 32).abs() * 2);
+                let size = 128 - (*val - 32).abs() * 4;
 
                 if size != 0 {
                     let bounding = Rectangle::with_center(anchor, Size::new(10, size as u32));

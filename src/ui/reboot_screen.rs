@@ -49,7 +49,7 @@ fn rly(draw_target: &mut FramebufferDrawTarget) {
 
     Text::with_alignment(
         "Really reboot?\nLong press to confirm",
-        Point::new(64, 28),
+        Point::new(120, 120),
         text_style,
         Alignment::Center,
     )
@@ -64,7 +64,7 @@ fn brb(draw_target: &mut FramebufferDrawTarget) {
 
     Text::with_alignment(
         "Hold tight\nBe right back",
-        Point::new(64, 28),
+        Point::new(120, 120),
         text_style,
         Alignment::Center,
     )

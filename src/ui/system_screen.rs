@@ -61,7 +61,7 @@ impl MountableScreen for SystemScreen {
             DynamicWidget::text(
                 ui.res.temperatures.soc_temperature.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 26),
+                Point::new(8, 52),
                 Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
             )
             .await,
@@ -71,7 +71,7 @@ impl MountableScreen for SystemScreen {
             DynamicWidget::text(
                 ui.res.dbus.network.uplink_interface.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 36),
+                Point::new(8, 72),
                 Box::new(|info: &LinkInfo| match info.carrier {
                     true => format!("Uplink: {}MBit/s", info.speed),
                     false => "Uplink: Down".to_string(),
@@ -84,7 +84,7 @@ impl MountableScreen for SystemScreen {
             DynamicWidget::text(
                 ui.res.dbus.network.dut_interface.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 46),
+                Point::new(8, 92),
                 Box::new(|info: &LinkInfo| match info.carrier {
                     true => format!("DUT:    {}MBit/s", info.speed),
                     false => "DUT:    Down".to_string(),
@@ -97,10 +97,10 @@ impl MountableScreen for SystemScreen {
             DynamicWidget::text(
                 ui.res.dbus.network.bridge_interface.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 56),
+                Point::new(8, 112),
                 Box::new(|ips: &Vec<String>| {
                     let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
-                    format!("IP: {}", ip)
+                    format!("IP:     {}", ip)
                 }),
             )
             .await,

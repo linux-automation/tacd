@@ -63,21 +63,21 @@ impl MountableScreen for UsbScreen {
             (
                 0,
                 "Port 1",
-                28,
+                52,
                 &ui.res.usb_hub.port1.powered,
                 &ui.res.adc.usb_host1_curr.topic,
             ),
             (
                 1,
                 "Port 2",
-                41,
+                72,
                 &ui.res.usb_hub.port2.powered,
                 &ui.res.adc.usb_host2_curr.topic,
             ),
             (
                 2,
                 "Port 3",
-                54,
+                92,
                 &ui.res.usb_hub.port3.powered,
                 &ui.res.adc.usb_host3_curr.topic,
             ),
@@ -88,7 +88,7 @@ impl MountableScreen for UsbScreen {
                 DynamicWidget::text(
                     self.highlighted.clone(),
                     ui.draw_target.clone(),
-                    Point::new(0, y),
+                    Point::new(8, y),
                     Box::new(move |highlight: &u8| {
                         format!(
                             "{} {}",
@@ -104,7 +104,7 @@ impl MountableScreen for UsbScreen {
                 DynamicWidget::indicator(
                     status.clone(),
                     ui.draw_target.clone(),
-                    Point::new(54, y - 7),
+                    Point::new(100, y - 10),
                     Box::new(|state: &bool| match *state {
                         true => IndicatorState::On,
                         false => IndicatorState::Off,
@@ -117,9 +117,9 @@ impl MountableScreen for UsbScreen {
                 DynamicWidget::bar(
                     current.clone(),
                     ui.draw_target.clone(),
-                    Point::new(70, y - 6),
-                    45,
-                    7,
+                    Point::new(130, y - 14),
+                    90,
+                    18,
                     Box::new(|meas: &Measurement| meas.value / 0.5),
                 )
                 .await,

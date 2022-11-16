@@ -30,7 +30,7 @@ pub struct Framebuffer {
     pub device: (),
     pub var_screen_info: VarScreenInfo,
     pub fix_screen_info: FixScreenInfo,
-    pub frame: [u8; 128 * 64 * 2],
+    pub frame: [u8; 240 * 240 * 2],
 }
 
 impl Framebuffer {
@@ -40,11 +40,11 @@ impl Framebuffer {
             var_screen_info: VarScreenInfo {
                 activate: 0,
                 bits_per_pixel: 16,
-                xres: 128,
-                yres: 64,
+                xres: 240,
+                yres: 240,
             },
-            fix_screen_info: FixScreenInfo { line_length: 256 },
-            frame: [0; 128 * 64 * 2],
+            fix_screen_info: FixScreenInfo { line_length: 480 },
+            frame: [0; 240 * 240 * 2],
         })
     }
 

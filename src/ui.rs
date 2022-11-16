@@ -30,7 +30,7 @@ use tide::{Response, Server};
 use evdev::{EventType, InputEventKind, Key};
 
 use embedded_graphics::{
-    mono_font::{ascii::FONT_8X13, MonoTextStyle},
+    mono_font::MonoTextStyle,
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::{Line, PrimitiveStyle},
@@ -61,6 +61,7 @@ use screensaver_screen::ScreenSaverScreen;
 use system_screen::SystemScreen;
 use uart_screen::UartScreen;
 use usb_screen::UsbScreen;
+use widgets::UI_TEXT_FONT;
 
 pub const LONG_PRESS: Duration = Duration::from_millis(750);
 
@@ -125,31 +126,31 @@ trait MountableScreen: Sync + Send {
     async fn unmount(&mut self);
 }
 
-/// Draw static screen border contining a title and an indicator for the
+/// Draw static screen border containing a title and an indicator for the
 /// position of the screen in the list of screens.
 async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<FramebufferDrawTarget>>) {
     let mut draw_target = draw_target.lock().await;
 
     Text::new(
         text,
-        Point::new(4, 13),
-        MonoTextStyle::new(&FONT_8X13, BinaryColor::On),
+        Point::new(8, 17),
+        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On),
     )
     .draw(&mut *draw_target)
     .unwrap();
 
-    Line::new(Point::new(0, 16), Point::new(118, 16))
+    Line::new(Point::new(0, 24), Point::new(230, 24))
         .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
         .draw(&mut *draw_target)
         .unwrap();
 
     let screen_idx = screen as i32;
     let num_screens = Screen::ScreenSaver as i32;
-    let x_start = screen_idx * 128 / num_screens;
-    let x_end = (screen_idx + 1) * 128 / num_screens;
+    let x_start = screen_idx * 240 / num_screens;
+    let x_end = (screen_idx + 1) * 240 / num_screens;
 
-    Line::new(Point::new(x_start, 62), Point::new(x_end, 62))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
+    Line::new(Point::new(x_start, 238), Point::new(x_end, 238))
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
         .draw(&mut *draw_target)
         .unwrap();
 }

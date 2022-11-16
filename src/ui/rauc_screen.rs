@@ -77,7 +77,7 @@ impl MountableScreen for RaucScreen {
             DynamicWidget::text_center(
                 ui.res.dbus.rauc.progress.clone(),
                 ui.draw_target.clone(),
-                Point::new(64, 15),
+                Point::new(120, 100),
                 Box::new(|progress: &Progress| {
                     let (_, text) = progress.message.split_whitespace().fold(
                         (0, String::new()),
@@ -109,9 +109,9 @@ impl MountableScreen for RaucScreen {
             DynamicWidget::bar(
                 ui.res.dbus.rauc.progress.clone(),
                 ui.draw_target.clone(),
-                Point::new(14, 40),
-                100,
-                7,
+                Point::new(20, 180),
+                200,
+                18,
                 Box::new(|progress: &Progress| progress.percentage as f32 / 100.0),
             )
             .await,
