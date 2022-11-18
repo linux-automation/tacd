@@ -62,7 +62,7 @@ impl MountableScreen for PowerScreen {
                 ui.res.adc.pwr_volt.topic.clone(),
                 ui.draw_target.clone(),
                 Point::new(0, 26),
-                Box::new(|meas: &Measurement| format!("V: {:-6.3}A", meas.value)),
+                Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
             )
             .await,
         ));
