@@ -281,7 +281,6 @@ impl IioThread {
                 ctx.set_timeout_ms(1000).unwrap();
 
                 let mut stm32_buf = stm32_adc.create_buffer(128, false).unwrap();
-                stm32_buf.set_num_kernel_buffers(32).unwrap();
 
                 set_thread_priority_and_policy(
                     thread_native_id(),
