@@ -14,6 +14,7 @@
     "@types/paho-mqtt": "^1.0.6",
     "@types/react": "^18.0.15",
     "@types/react-dom": "^18.0.6",
+    "@types/swagger-ui-react": "^4.11.0",
     "ace-builds": "^1.9.6",
     "paho-mqtt": "^1.1.0",
     "prettier": "^2.7.1",
@@ -50,8 +51,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "devDependencies": {
-    "@types/swagger-ui-react": "^4.11.0"
   }
 }
