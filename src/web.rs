@@ -45,8 +45,6 @@ mod sd {
 
 use sd::{listen_fds, tcp_listener, FALLBACK_PORT};
 
-mod static_files;
-
 pub struct WebInterface {
     listeners: Vec<TcpListener>,
     pub server: Server<()>,
@@ -74,11 +72,20 @@ impl WebInterface {
             ));
         }
 
-        // Serve the React based web interface that is (currently) included in
-        // the tacd binary.
-        static_files::register(&mut this.server);
+        this.expose_openapi_json();
 
         this
+    }
+
+    pub fn expose_openapi_json(&mut self) {
+        self.server
+            .at("/v1/openapi.json")
+            .get(|req: Request<()>| async move {
+                Ok(Response::builder(200)
+                    .content_type("application/json")
+                    .body(&include_bytes!(concat!(env!("OUT_DIR"), "/openapi.json"))[..])
+                    .build())
+            });
     }
 
     // Serve a file from disk for reading and writing
