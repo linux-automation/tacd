@@ -41,7 +41,7 @@ fn generate_openapi_include() {
     };
 
     let openapi_file = out_dir.join("openapi.json");
-    write(&openapi_file, serde_json::to_vec(&openapi_json).unwrap()).unwrap();
+    write(&openapi_file, openapi_json).unwrap();
 }
 
 /// Generates a version string

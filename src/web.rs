@@ -22,7 +22,7 @@ use std::net::TcpListener;
 use std::path::Path;
 
 use log::warn;
-use tide::{Request, Response, Server};
+use tide::{Body, Request, Response, Server};
 
 #[cfg(any(test, feature = "stub_out_root"))]
 mod sd {
@@ -52,6 +52,8 @@ mod sd {
 }
 
 use sd::{listen_fds, tcp_listener, FALLBACK_PORT, USER_DIR, WEBUI_DIR};
+
+const OPENAPI_JSON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/openapi.json"));
 
 pub struct WebInterface {
     listeners: Vec<TcpListener>,
@@ -92,10 +94,13 @@ impl WebInterface {
         self.server
             .at("/v1/openapi.json")
             .get(|req: Request<()>| async move {
-                Ok(Response::builder(200)
+                let body = Body::from_bytes(OPENAPI_JSON.into());
+                let response = Response::builder(200)
+                    .body(body)
                     .content_type("application/json")
-                    .body(&include_bytes!(concat!(env!("OUT_DIR"), "/openapi.json"))[..])
-                    .build())
+                    .build();
+
+                Ok(response)
             });
     }
 
