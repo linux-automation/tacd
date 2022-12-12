@@ -37,9 +37,10 @@ linked above.
 
 #### Build web interface
 
-The web interface is bundled into the `tacd` binary during `cargo` build,
-so it needs to be built as least once before the `tacd` can be built.
-This is done via the dark witchcraft that is javascript dependency management:
+The `tacd` serves a React-Based web interface to interactively remote control
+the LXA TAC.
+If you want to use this web interface with you `tacd` build you should build it
+from source using the dark witchcraft that is javascript dependency management:
 
     $ cd web
     $ npm install .
