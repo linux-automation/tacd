@@ -173,6 +173,49 @@ pub struct DutPwrThread {
     tick: Arc<AtomicU32>,
 }
 
+struct MedianFilter<const N: usize> {
+    history: [f32; N],
+    index: usize,
+    ready: bool,
+}
+
+impl<const N: usize> MedianFilter<N> {
+    pub fn new() -> Self {
+        Self {
+            history: [f32::NAN; N],
+            index: 0,
+            ready: false,
+        }
+    }
+
+    /// Return the median of the N last values added or None if less than N
+    /// values were stepped in yet.
+    ///
+    /// Returns the mean of the two center most entries if N is even.
+    pub fn step(&mut self, val: f32) -> Option<f32> {
+        self.history[self.index] = val;
+        self.index = (self.index + 1) % N;
+        self.ready |= self.index == 0;
+
+        if self.ready {
+            let sorted = {
+                let mut sorted = [0.0; N];
+                sorted.clone_from_slice(&self.history);
+                sorted.sort_unstable_by(f32::total_cmp);
+                sorted
+            };
+
+            if N % 2 == 0 {
+                Some((sorted[N / 2 - 1] + sorted[N / 2]) / 2.0)
+            } else {
+                Some(sorted[N / 2])
+            }
+        } else {
+            None
+        }
+    }
+}
+
 /// Bring the outputs into a fail safe mode
 fn fail(
     reason: OutputState,
@@ -296,6 +339,14 @@ impl DutPwrThread {
 
                 let mut last_ts: Option<Instant> = None;
 
+                // There may be transients in the measured voltage/current, e.g. due to EMI or
+                // inrush currents.
+                // Nothing will break if they are sufficiently short, so the DUT can stay powered.
+                // Filter out transients by taking the last four values, throwing away the largest
+                // and smallest and averaging the two remaining ones.
+                let mut volt_filter = MedianFilter::<4>::new();
+                let mut curr_filter = MedianFilter::<4>::new();
+
                 // Run as long as there is a strong reference to `tick`.
                 // As tick is a private member of the struct this is equivalent
                 // to running as long as the DutPwrThread was not dropped.
@@ -333,6 +384,13 @@ impl DutPwrThread {
                         if let Some((_, [volt, curr])) = feedback {
                             break (volt, curr);
                         }
+                    };
+
+                    // The median filter needs some values in it's backlog before it
+                    // starts outputting values.
+                    let (volt, curr) = match (volt_filter.step(volt), curr_filter.step(curr)) {
+                        (Some(volt), Some(curr)) => (volt, curr),
+                        _ => continue,
                     };
 
                     // Take the next pending OutputRequest (if any) even if it
