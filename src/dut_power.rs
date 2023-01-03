@@ -65,7 +65,7 @@ pub enum OutputRequest {
     Idle,
     On,
     Off,
-    OffDischarge,
+    OffFloating,
 }
 
 impl From<u8> for OutputRequest {
@@ -82,8 +82,8 @@ impl From<u8> for OutputRequest {
             return OutputRequest::Off;
         }
 
-        if val == (OutputRequest::OffDischarge as u8) {
-            return OutputRequest::OffDischarge;
+        if val == (OutputRequest::OffFloating as u8) {
+            return OutputRequest::OffFloating;
         }
 
         panic!()
@@ -94,7 +94,7 @@ impl From<u8> for OutputRequest {
 pub enum OutputState {
     On,
     Off,
-    OffDischarge,
+    OffFloating,
     InvertedPolarity,
     OverCurrent,
     OverVoltage,
@@ -107,8 +107,8 @@ impl From<u8> for OutputState {
             return OutputState::Off;
         }
 
-        if val == (OutputState::OffDischarge as u8) {
-            return OutputState::OffDischarge;
+        if val == (OutputState::OffFloating as u8) {
+            return OutputState::OffFloating;
         }
 
         if val == (OutputState::On as u8) {
@@ -182,7 +182,7 @@ fn fail(
 ) {
     pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
     discharge_line
-        .set_value(1 - DISCHARGE_LINE_ASSERTED)
+        .set_value(DISCHARGE_LINE_ASSERTED)
         .unwrap();
     fail_state.store(reason as u8, Ordering::Relaxed);
 }
@@ -287,7 +287,7 @@ impl DutPwrThread {
                     .unwrap()
                     .request(
                         LineRequestFlags::OUTPUT,
-                        1 - DISCHARGE_LINE_ASSERTED,
+                        DISCHARGE_LINE_ASSERTED,
                         "tacd",
                     )
                     .unwrap();
@@ -387,16 +387,16 @@ impl DutPwrThread {
                             state.store(OutputState::On as u8, Ordering::Relaxed);
                         }
                         OutputRequest::Off => {
+                            discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
+                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                            state.store(OutputState::Off as u8, Ordering::Relaxed);
+                        }
+                        OutputRequest::OffFloating => {
                             discharge_line
                                 .set_value(1 - DISCHARGE_LINE_ASSERTED)
                                 .unwrap();
                             pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-                            state.store(OutputState::Off as u8, Ordering::Relaxed);
-                        }
-                        OutputRequest::OffDischarge => {
-                            discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
-                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-                            state.store(OutputState::OffDischarge as u8, Ordering::Relaxed);
+                            state.store(OutputState::OffFloating as u8, Ordering::Relaxed);
                         }
                     }
                 }
@@ -457,15 +457,15 @@ mod tests {
 
         // Make sure that the DUT power is off by default
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
-        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(*block_on(dut_pwr.state.get()), OutputState::Off);
 
-        println!("Turn Off with discharge");
-        block_on(dut_pwr.request.set(OutputRequest::OffDischarge));
+        println!("Turn Off Floating");
+        block_on(dut_pwr.request.set(OutputRequest::OffFloating));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
-        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OffDischarge);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OffFloating);
 
         println!("Turn on");
         block_on(dut_pwr.request.set(OutputRequest::On));
@@ -480,7 +480,7 @@ mod tests {
         adc.pwr_volt.fast.set(MIN_VOLTAGE * 0.99);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
-        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(
             *block_on(dut_pwr.state.get()),
             OutputState::InvertedPolarity
@@ -499,7 +499,7 @@ mod tests {
         adc.pwr_curr.fast.set(MAX_CURRENT * 0.99);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
-        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OverCurrent);
 
         println!("Turn on again");
@@ -515,7 +515,7 @@ mod tests {
         adc.pwr_volt.fast.set(MAX_VOLTAGE * 0.99);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
-        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OverVoltage);
 
         println!("Turn on again");
@@ -531,7 +531,7 @@ mod tests {
         adc.pwr_volt.fast.stall(false);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
-        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(
             *block_on(dut_pwr.state.get()),
             OutputState::RealtimeViolation
@@ -548,6 +548,6 @@ mod tests {
         std::mem::drop(dut_pwr);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
-        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
     }
 }
