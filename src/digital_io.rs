@@ -53,7 +53,7 @@ fn handle_line_wo(
     initial: bool,
     inverted: bool,
 ) -> Arc<Topic<bool>> {
-    let topic = bb.topic_rw(path, Some(initial ^ inverted));
+    let topic = bb.topic_rw(path, Some(initial));
     let line = find_line(line_name).unwrap();
     let dst = line
         .request(LineRequestFlags::OUTPUT, (initial ^ inverted) as _, "tacd")
