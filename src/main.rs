@@ -78,6 +78,11 @@ async fn main() -> Result<(), std::io::Error> {
         );
         web_interface.expose_file_rw("/etc/labgrid/environment", "/v1/labgrid/environment");
         web_interface.expose_file_rw("/etc/labgrid/userconfig.yaml", "/v1/labgrid/userconfig");
+
+        web_interface.expose_file_rw(
+            "/home/root/.ssh/authorized_keys",
+            "/v1/tac/ssh/authorized_keys",
+        );
     }
 
     log::info!("Setup complete. Handling requests");
