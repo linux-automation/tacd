@@ -68,6 +68,11 @@ export default function LandingPage() {
             description: "Modify the Labgrid exporter config",
           },
           {
+            name: "Settings / SSH",
+            href: "/#/settings/ssh",
+            description: "Modify the SSH server config",
+          },
+          {
             name: "Documentation / REST API",
             href: "/#/docs/api",
             description: "Find API definitions to automate you LXA TAC",

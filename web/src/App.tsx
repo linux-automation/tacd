@@ -79,6 +79,7 @@ function Navigation() {
             text: "Settings",
             items: [
               { type: "link", text: "Labgrid", href: "#/settings/labgrid" },
+              { type: "link", text: "SSH", href: "#/settings/ssh" },
             ],
           },
           {

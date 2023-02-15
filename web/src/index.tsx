@@ -29,6 +29,7 @@ import DashboardJournal from "./DashboardJournal";
 import DashboardTac from "./DashboardTac";
 import LandingPage from "./LandingPage";
 import SettingsLabgrid from "./SettingsLabgrid";
+import SettingsSSH from "./SettingsSSH";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
@@ -43,6 +44,7 @@ root.render(
           <Route path="/dashboard/journal" element={<DashboardJournal />} />
           <Route path="/dashboard/tac" element={<DashboardTac />} />
           <Route path="/settings/labgrid" element={<SettingsLabgrid />} />
+          <Route path="/settings/ssh" element={<SettingsSSH />} />
           <Route path="/docs/api" element={<ApiDocs />} />
         </Route>
       </Routes>
