@@ -403,7 +403,7 @@ export default function DashboardDut() {
           </Box>
           <Box>
             <Box variant="awsui-key-label">RX Enable</Box>
-            <MqttToggle topic="/v1/uart/rx/enabled">TX Enable</MqttToggle>
+            <MqttToggle topic="/v1/uart/rx/enabled">RX Enable</MqttToggle>
           </Box>
         </ColumnLayout>
       </Container>
