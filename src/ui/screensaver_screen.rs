@@ -33,13 +33,13 @@ use embedded_graphics::{
 };
 
 use super::widgets::{AnyWidget, DynamicWidget};
-use super::{ButtonEvent, MountableScreen, Screen, Ui, VERY_LONG_PRESS};
+use super::{ButtonEvent, MountableScreen, Screen, Ui};
 
 use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
 
 const UI_TEXT_FONT: MonoFont = FONT_6X9;
 const SCREEN_TYPE: Screen = Screen::ScreenSaver;
-const SCREENSAVER_TIMEOUT: Duration = Duration::from_secs(60);
+const SCREENSAVER_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// get the value of a sawtooth wave with max amplitude range at position i
 fn bounce(i: u32, range: i32) -> i32 {
@@ -169,16 +169,10 @@ impl MountableScreen for ScreenSaverScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                if let ButtonEvent::ButtonOne(dur) = *ev {
-                    if dur > VERY_LONG_PRESS {
-                        screen.set(Screen::Breakout).await
-                    } else {
-                        locator
-                            .modify(|prev| {
-                                Some(Arc::new(!prev.as_deref().copied().unwrap_or(false)))
-                            })
-                            .await
-                    }
+                if let ButtonEvent::ButtonOne(_) = *ev {
+                    locator
+                        .modify(|prev| Some(Arc::new(!prev.as_deref().copied().unwrap_or(false))))
+                        .await
                 }
 
                 if let ButtonEvent::ButtonTwo(_) = *ev {

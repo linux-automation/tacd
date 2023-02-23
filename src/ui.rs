@@ -39,7 +39,6 @@ use embedded_graphics::{
 
 use crate::broker::{BrokerBuilder, Topic};
 
-mod breakout_screen;
 mod dig_out_screen;
 mod draw_fb;
 mod iobus_screen;
@@ -52,7 +51,6 @@ mod uart_screen;
 mod usb_screen;
 mod widgets;
 
-use breakout_screen::BreakoutScreen;
 use dig_out_screen::DigOutScreen;
 use draw_fb::FramebufferDrawTarget;
 use iobus_screen::IoBusScreen;
@@ -64,7 +62,6 @@ use system_screen::SystemScreen;
 use uart_screen::UartScreen;
 use usb_screen::UsbScreen;
 
-pub const VERY_LONG_PRESS: Duration = Duration::from_secs(10);
 pub const LONG_PRESS: Duration = Duration::from_millis(750);
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
@@ -76,7 +73,6 @@ pub enum Screen {
     IoBus,
     Uart,
     ScreenSaver,
-    Breakout,
     RebootConfirm,
     Rauc,
 }
@@ -92,7 +88,6 @@ impl Screen {
             Self::IoBus => Self::Uart,
             Self::Uart => Self::ScreenSaver,
             Self::ScreenSaver => Self::DutPower,
-            Self::Breakout => Self::ScreenSaver,
             Self::RebootConfirm => Self::System,
             Self::Rauc => Self::ScreenSaver,
         }
@@ -243,7 +238,6 @@ impl Ui {
         let screens = {
             let mut s: Vec<Box<dyn MountableScreen>> = Vec::new();
 
-            s.push(Box::new(BreakoutScreen::new()));
             s.push(Box::new(DigOutScreen::new(bb)));
             s.push(Box::new(IoBusScreen::new()));
             s.push(Box::new(PowerScreen::new()));
