@@ -598,7 +598,7 @@ components:
       enum:
         - On
         - Off
-        - OffDischarge
+        - OffFloating
         - InvertedPolarity
         - OverCurrent
         - OverVoltage
@@ -609,7 +609,7 @@ components:
       enum:
         - On
         - Off
-        - OffDischarge
+        - OffFloating
 
     UsbDevice:
       type: object
