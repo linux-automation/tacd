@@ -474,6 +474,13 @@ mod tests {
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
 
+        println!("Trigger transient inverted polarity (Output should stay on)");
+        adc.pwr_volt.fast.transient(MIN_VOLTAGE * 1.01);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
         println!("Trigger inverted polarity");
         adc.pwr_volt.fast.set(MIN_VOLTAGE * 1.01);
         block_on(sleep(Duration::from_millis(500)));
@@ -493,6 +500,13 @@ mod tests {
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
 
+        println!("Trigger transient overcurrent (Output should stay on)");
+        adc.pwr_curr.fast.transient(MAX_CURRENT * 1.01);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
         println!("Trigger overcurrent");
         adc.pwr_curr.fast.set(MAX_CURRENT * 1.01);
         block_on(sleep(Duration::from_millis(500)));
@@ -504,6 +518,13 @@ mod tests {
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
+        println!("Trigger transient overvoltage (Output should stay on)");
+        adc.pwr_volt.fast.transient(MAX_VOLTAGE * 1.01);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
