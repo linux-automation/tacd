@@ -93,7 +93,7 @@ impl WebInterface {
     fn expose_openapi_json(&mut self) {
         self.server
             .at("/v1/openapi.json")
-            .get(|req: Request<()>| async move {
+            .get(|_req| async move {
                 let body = Body::from_bytes(OPENAPI_JSON.into());
                 let response = Response::builder(200)
                     .body(body)
