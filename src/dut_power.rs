@@ -181,9 +181,7 @@ fn fail(
     fail_state: &AtomicU8,
 ) {
     pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-    discharge_line
-        .set_value(DISCHARGE_LINE_ASSERTED)
-        .unwrap();
+    discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
     fail_state.store(reason as u8, Ordering::Relaxed);
 }
 
@@ -285,11 +283,7 @@ impl DutPwrThread {
 
                 let discharge_line = find_line("IO1")
                     .unwrap()
-                    .request(
-                        LineRequestFlags::OUTPUT,
-                        DISCHARGE_LINE_ASSERTED,
-                        "tacd",
-                    )
+                    .request(LineRequestFlags::OUTPUT, DISCHARGE_LINE_ASSERTED, "tacd")
                     .unwrap();
 
                 realtime_priority();

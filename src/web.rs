@@ -91,17 +91,15 @@ impl WebInterface {
 
     /// Serve a compiled-in openapi.json file
     fn expose_openapi_json(&mut self) {
-        self.server
-            .at("/v1/openapi.json")
-            .get(|_req| async move {
-                let body = Body::from_bytes(OPENAPI_JSON.into());
-                let response = Response::builder(200)
-                    .body(body)
-                    .content_type("application/json")
-                    .build();
+        self.server.at("/v1/openapi.json").get(|_req| async move {
+            let body = Body::from_bytes(OPENAPI_JSON.into());
+            let response = Response::builder(200)
+                .body(body)
+                .content_type("application/json")
+                .build();
 
-                Ok(response)
-            });
+            Ok(response)
+        });
     }
 
     /// Serve a directory from disk for reading
