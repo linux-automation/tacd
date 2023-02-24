@@ -1,0 +1,54 @@
+name: tacd-webui
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/tacd-webui.yaml'
+      - 'web/**'
+  push:
+    branches:
+      - main
+
+jobs:
+  prettier:
+    name: npx prettier
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: latest
+      - run: npx prettier --check .
+
+  license:
+    name: npx license-checker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: latest
+      - name: npx license-checker
+        run: >
+          npx license-checker --summary --excludePrivatePackages --onlyAllow
+          "0BSD;Apache-2.0;BSD-2-Clause;BSD-3-Clause;CC-BY-4.0;CC0-1.0;EPL-1.0;ISC;MIT;MPL-2.0;Python-2.0;Unlicense;WTFPL"
+
+  build:
+    name: npm run build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: latest
+      - run: npm ci
+      - run: npm run build
