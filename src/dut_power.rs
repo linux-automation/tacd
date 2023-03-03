@@ -173,6 +173,49 @@ pub struct DutPwrThread {
     tick: Arc<AtomicU32>,
 }
 
+struct MedianFilter<const N: usize> {
+    history: [f32; N],
+    index: usize,
+    ready: bool,
+}
+
+impl<const N: usize> MedianFilter<N> {
+    pub fn new() -> Self {
+        Self {
+            history: [f32::NAN; N],
+            index: 0,
+            ready: false,
+        }
+    }
+
+    /// Return the median of the N last values added or None if less than N
+    /// values were stepped in yet.
+    ///
+    /// Returns the mean of the two center most entries if N is even.
+    pub fn step(&mut self, val: f32) -> Option<f32> {
+        self.history[self.index] = val;
+        self.index = (self.index + 1) % N;
+        self.ready |= self.index == 0;
+
+        if self.ready {
+            let sorted = {
+                let mut sorted = [0.0; N];
+                sorted.clone_from_slice(&self.history);
+                sorted.sort_unstable_by(f32::total_cmp);
+                sorted
+            };
+
+            if N % 2 == 0 {
+                Some((sorted[N / 2 - 1] + sorted[N / 2]) / 2.0)
+            } else {
+                Some(sorted[N / 2])
+            }
+        } else {
+            None
+        }
+    }
+}
+
 /// Bring the outputs into a fail safe mode
 fn fail(
     reason: OutputState,
@@ -290,6 +333,14 @@ impl DutPwrThread {
 
                 let mut last_ts: Option<Instant> = None;
 
+                // There may be transients in the measured voltage/current, e.g. due to EMI or
+                // inrush currents.
+                // Nothing will break if they are sufficiently short, so the DUT can stay powered.
+                // Filter out transients by taking the last four values, throwing away the largest
+                // and smallest and averaging the two remaining ones.
+                let mut volt_filter = MedianFilter::<4>::new();
+                let mut curr_filter = MedianFilter::<4>::new();
+
                 // Run as long as there is a strong reference to `tick`.
                 // As tick is a private member of the struct this is equivalent
                 // to running as long as the DutPwrThread was not dropped.
@@ -327,6 +378,13 @@ impl DutPwrThread {
                         if let Some((_, [volt, curr])) = feedback {
                             break (volt, curr);
                         }
+                    };
+
+                    // The median filter needs some values in it's backlog before it
+                    // starts outputting values.
+                    let (volt, curr) = match (volt_filter.step(volt), curr_filter.step(curr)) {
+                        (Some(volt), Some(curr)) => (volt, curr),
+                        _ => continue,
                     };
 
                     // Take the next pending OutputRequest (if any) even if it
@@ -468,6 +526,13 @@ mod tests {
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
 
+        println!("Trigger transient inverted polarity (Output should stay on)");
+        adc.pwr_volt.fast.transient(MIN_VOLTAGE * 1.01);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
         println!("Trigger inverted polarity");
         adc.pwr_volt.fast.set(MIN_VOLTAGE * 1.01);
         block_on(sleep(Duration::from_millis(500)));
@@ -487,6 +552,13 @@ mod tests {
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
 
+        println!("Trigger transient overcurrent (Output should stay on)");
+        adc.pwr_curr.fast.transient(MAX_CURRENT * 1.01);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
         println!("Trigger overcurrent");
         adc.pwr_curr.fast.set(MAX_CURRENT * 1.01);
         block_on(sleep(Duration::from_millis(500)));
@@ -498,6 +570,13 @@ mod tests {
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+
+        println!("Trigger transient overvoltage (Output should stay on)");
+        adc.pwr_volt.fast.transient(MAX_VOLTAGE * 1.01);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);

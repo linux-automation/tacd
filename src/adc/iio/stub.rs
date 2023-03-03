@@ -21,6 +21,8 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Result};
 use async_std::sync::Arc;
 
+const NO_TRANSIENT: u32 = u32::MAX;
+
 const CHANNELS: &[&str] = &[
     "usb-host-curr",
     "usb-host1-curr",
@@ -38,6 +40,7 @@ const CHANNELS: &[&str] = &[
 pub struct CalibratedChannel {
     val: Arc<AtomicU32>,
     stall: Arc<AtomicBool>,
+    transient: Arc<AtomicU32>,
 }
 
 impl CalibratedChannel {
@@ -45,6 +48,7 @@ impl CalibratedChannel {
         Self {
             val: Arc::new(AtomicU32::new(0)),
             stall: Arc::new(AtomicBool::new(false)),
+            transient: Arc::new(AtomicU32::new(NO_TRANSIENT)),
         }
     }
 
@@ -55,7 +59,14 @@ impl CalibratedChannel {
         let mut results = [0.0; N];
 
         for i in 0..N {
-            let val_u32 = channels[i].val.load(Ordering::Relaxed);
+            // If a transient is scheduled (channels[i].transient != NO_TRANSIENT)
+            // output it exactly once. Otherwise output the normal value.
+            let transient_u32 = channels[i].transient.swap(NO_TRANSIENT, Ordering::Relaxed);
+            let val_u32 = match transient_u32 {
+                NO_TRANSIENT => channels[i].val.load(Ordering::Relaxed),
+                transient => transient,
+            };
+
             results[i] = f32::from_bits(val_u32);
         }
 
@@ -86,6 +97,10 @@ impl CalibratedChannel {
 
     pub fn stall(&self, state: bool) {
         self.stall.store(state, Ordering::Relaxed)
+    }
+
+    pub fn transient(&self, val: f32) {
+        self.transient.store(val.to_bits(), Ordering::Relaxed)
     }
 }
 
