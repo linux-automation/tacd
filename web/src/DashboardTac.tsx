@@ -22,12 +22,7 @@ import Container from "@cloudscape-design/components/container";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 
-import {
-  MqttBox,
-  MqttToggle,
-  MqttButton,
-  MqttDurationButton,
-} from "./MqttComponents";
+import { MqttBox, MqttToggle, MqttButton } from "./MqttComponents";
 import { RaucContainer } from "./TacComponents";
 
 import { useEffect, useState } from "react";
@@ -59,35 +54,6 @@ type Bootloader = {
   baseboard_timestamp: number;
   powerboard_timestamp: number;
 };
-
-type Duration = {
-  secs: number;
-  nanos: number;
-};
-
-type ButtonPress = {
-  ButtonOne?: Duration;
-  ButtonTwo?: Duration;
-};
-
-function formatButton(button: String, duration: number) {
-  let res: ButtonPress = {};
-
-  let millis = Math.floor(duration);
-
-  let dur = {
-    secs: Math.floor(millis / 1000),
-    nanos: (millis % 1000) * 1000000,
-  };
-
-  if (button === "ButtonOne") {
-    res["ButtonOne"] = dur;
-  } else {
-    res["ButtonTwo"] = dur;
-  }
-
-  return res;
-}
 
 export default function DashboardTac() {
   const [counter, setCounter] = useState(0);
@@ -201,21 +167,37 @@ export default function DashboardTac() {
           <SpaceBetween size="m">
             <Box>
               <Box variant="awsui-key-label">Upper Button</Box>
-              <MqttDurationButton
-                topic="/v1/tac/display/buttons"
-                format={(dur) => formatButton("ButtonTwo", dur)}
-              >
-                Button 2
-              </MqttDurationButton>
+              <SpaceBetween direction="horizontal" size="xs">
+                <MqttButton
+                  topic="/v1/tac/display/buttons"
+                  send={{ ButtonOne: { secs: 0, nanos: 100000000 } }}
+                >
+                  Short press
+                </MqttButton>
+                <MqttButton
+                  topic="/v1/tac/display/buttons"
+                  send={{ ButtonOne: { secs: 2, nanos: 0 } }}
+                >
+                  Long press
+                </MqttButton>
+              </SpaceBetween>
             </Box>
             <Box>
               <Box variant="awsui-key-label">Lower Button</Box>
-              <MqttDurationButton
-                topic="/v1/tac/display/buttons"
-                format={(dur) => formatButton("ButtonOne", dur)}
-              >
-                Button 1
-              </MqttDurationButton>
+              <SpaceBetween direction="horizontal" size="xs">
+                <MqttButton
+                  topic="/v1/tac/display/buttons"
+                  send={{ ButtonTwo: { secs: 0, nanos: 100000000 } }}
+                >
+                  Short press
+                </MqttButton>
+                <MqttButton
+                  topic="/v1/tac/display/buttons"
+                  send={{ ButtonTwo: { secs: 2, nanos: 0 } }}
+                >
+                  Long press
+                </MqttButton>
+              </SpaceBetween>
             </Box>
             <Box>
               <Box variant="awsui-key-label">Locator</Box>
