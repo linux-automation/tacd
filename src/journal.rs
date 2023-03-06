@@ -60,10 +60,6 @@ mod sd {
             Ok(())
         }
 
-        pub fn previous_skip(&mut self, _: u64) -> Result<()> {
-            Ok(())
-        }
-
         pub fn previous_entry(&mut self) -> Result<Option<JournalRecord>> {
             Ok(None)
         }

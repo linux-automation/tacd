@@ -91,14 +91,17 @@ impl CalibratedChannel {
         }
     }
 
+    #[cfg(test)]
     pub fn set(&self, val: f32) {
         self.val.store(val.to_bits(), Ordering::Relaxed)
     }
 
+    #[cfg(test)]
     pub fn stall(&self, state: bool) {
         self.stall.store(state, Ordering::Relaxed)
     }
 
+    #[cfg(test)]
     pub fn transient(&self, val: f32) {
         self.transient.store(val.to_bits(), Ordering::Relaxed)
     }

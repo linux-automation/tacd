@@ -16,15 +16,18 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use std::convert::AsRef;
+#[cfg(not(feature = "demo_mode"))]
 use std::fs::write;
 use std::io::ErrorKind;
 use std::net::TcpListener;
 use std::path::Path;
 
 use log::warn;
-use tide::{Body, Request, Response, Server};
+#[cfg(not(feature = "demo_mode"))]
+use tide::Request;
+use tide::{Body, Response, Server};
 
-#[cfg(any(test, feature = "demo_mode"))]
+#[cfg(feature = "demo_mode")]
 mod sd {
     use std::io::Result;
     use std::net::TcpListener;
@@ -42,7 +45,7 @@ mod sd {
     }
 }
 
-#[cfg(not(any(test, feature = "demo_mode")))]
+#[cfg(not(feature = "demo_mode"))]
 mod sd {
     pub use systemd::daemon::*;
 
@@ -145,6 +148,7 @@ impl WebInterface {
     }
 
     /// Serve a file from disk for reading and writing
+    #[cfg(not(feature = "demo_mode"))]
     pub fn expose_file_rw(&mut self, fs_path: &str, web_path: &str) {
         self.server.at(web_path).serve_file(fs_path).unwrap();
 

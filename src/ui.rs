@@ -19,14 +19,12 @@ use std::time::Duration;
 
 use async_std::prelude::*;
 use async_std::sync::{Arc, Mutex};
-use async_std::task::{block_on, sleep, spawn, spawn_blocking};
-
+use async_std::task::{sleep, spawn};
 use async_trait::async_trait;
-
 use serde::{Deserialize, Serialize};
-
 use tide::{Response, Server};
 
+#[cfg(not(feature = "demo_mode"))]
 use evdev::{EventType, InputEventKind, Key};
 
 use embedded_graphics::{
@@ -109,6 +107,7 @@ pub enum ButtonEvent {
 }
 
 impl ButtonEvent {
+    #[cfg(not(feature = "demo_mode"))]
     fn from_id(d: Duration, id: usize) -> Self {
         match id {
             0 => Self::ButtonOne(d),
@@ -175,11 +174,14 @@ pub struct Ui {
     res: UiRessources,
 }
 
+#[cfg(feature = "demo_mode")]
+fn handle_button(_path: &'static str, _topic: Arc<Topic<ButtonEvent>>) {}
+
 /// Spawn a thread that blockingly reads user input and pushes them into
 /// a broker framework topic.
+#[cfg(not(feature = "demo_mode"))]
 fn handle_button(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
-    #[cfg(not(feature = "demo_mode"))]
-    spawn_blocking(move || {
+    async_std::task::spawn_blocking(move || {
         let mut device = evdev::Device::open(path).unwrap();
 
         let mut start_time = [None, None];
@@ -200,7 +202,7 @@ fn handle_button(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
                     // Button release -> send event
                     if let Some(start) = start_time[id].take() {
                         if let Ok(duration) = ev.timestamp().duration_since(start) {
-                            block_on(topic.set(ButtonEvent::from_id(duration, id)))
+                            async_std::task::block_on(topic.set(ButtonEvent::from_id(duration, id)))
                         }
                     }
                 } else {
