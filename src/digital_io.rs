@@ -19,10 +19,16 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn, spawn_blocking};
 
-#[cfg(any(test, feature = "demo_mode"))]
+#[cfg(test)]
 mod gpio {
-    mod stub;
-    pub use stub::*;
+    mod test;
+    pub use test::*;
+}
+
+#[cfg(feature = "demo_mode")]
+mod gpio {
+    mod demo_mode;
+    pub use demo_mode::*;
 }
 
 #[cfg(not(any(test, feature = "demo_mode")))]
