@@ -29,6 +29,9 @@ use async_std::task::spawn;
 use super::Connection;
 use crate::broker::{BrokerBuilder, Topic};
 
+#[cfg(feature = "demo_mode")]
+mod demo_mode;
+
 #[cfg(not(feature = "demo_mode"))]
 mod installer;
 
@@ -72,7 +75,15 @@ impl Rauc {
 
     #[cfg(feature = "demo_mode")]
     pub async fn new(bb: &mut BrokerBuilder, _conn: &Arc<Connection>) -> Self {
-        Self::setup_topics(bb)
+        let inst = Self::setup_topics(bb);
+
+        inst.operation.set("idle".to_string()).await;
+        inst.slot_status
+            .set(Arc::new(demo_mode::slot_status()))
+            .await;
+        inst.last_error.set("".to_string()).await;
+
+        inst
     }
 
     #[cfg(not(feature = "demo_mode"))]
