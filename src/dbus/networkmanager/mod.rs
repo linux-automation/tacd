@@ -15,17 +15,23 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+#[cfg(not(feature = "demo_mode"))]
 use std::convert::TryInto;
 
+#[cfg(not(feature = "demo_mode"))]
 use anyhow;
 use async_std;
+#[cfg(not(feature = "demo_mode"))]
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
-use async_std::task::spawn;
+#[cfg(not(feature = "demo_mode"))]
 use futures::{future::FutureExt, pin_mut, select};
+#[cfg(not(feature = "demo_mode"))]
 use zbus::{Connection, PropertyStream};
+#[cfg(not(feature = "demo_mode"))]
 use zvariant::{ObjectPath, OwnedObjectPath};
 
+#[cfg(not(feature = "demo_mode"))]
 use log::trace;
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +49,7 @@ pub struct LinkInfo {
     pub carrier: bool,
 }
 
+#[cfg(not(feature = "demo_mode"))]
 async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Result<OwnedObjectPath> {
     let proxy = networkmanager::NetworkManagerProxy::new(con).await?;
     let device_paths = proxy.get_devices().await?;
@@ -63,6 +70,7 @@ async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Resul
     Err(anyhow::anyhow!("No interface found: {}", interface))
 }
 
+#[cfg(not(feature = "demo_mode"))]
 async fn get_link_info(con: &Connection, path: &str) -> anyhow::Result<LinkInfo> {
     let eth_proxy = devices::WiredProxy::builder(con)
         .path(path)?
@@ -77,6 +85,7 @@ async fn get_link_info(con: &Connection, path: &str) -> anyhow::Result<LinkInfo>
     Ok(info)
 }
 
+#[cfg(not(feature = "demo_mode"))]
 pub async fn get_ip4_address<'a, P>(con: &Connection, path: P) -> anyhow::Result<Vec<String>>
 where
     P: TryInto<ObjectPath<'a>>,
@@ -98,6 +107,7 @@ where
     Ok(Vec::from([ip_address.to_string()]))
 }
 
+#[cfg(not(feature = "demo_mode"))]
 pub struct LinkStream<'a> {
     pub interface: String,
     _con: Arc<Connection>,
@@ -106,6 +116,7 @@ pub struct LinkStream<'a> {
     data: LinkInfo,
 }
 
+#[cfg(not(feature = "demo_mode"))]
 impl<'a> LinkStream<'a> {
     pub async fn new(con: Arc<Connection>, interface: &str) -> anyhow::Result<LinkStream<'a>> {
         let path = path_from_interface(&con, interface)
@@ -161,6 +172,7 @@ impl<'a> LinkStream<'a> {
     }
 }
 
+#[cfg(not(feature = "demo_mode"))]
 pub struct IpStream<'a> {
     pub interface: String,
     _con: Arc<Connection>,
@@ -168,6 +180,7 @@ pub struct IpStream<'a> {
     path: String,
 }
 
+#[cfg(not(feature = "demo_mode"))]
 impl<'a> IpStream<'a> {
     pub async fn new(con: Arc<Connection>, interface: &str) -> anyhow::Result<IpStream<'a>> {
         let path = path_from_interface(&con, interface)
@@ -274,7 +287,7 @@ impl Network {
             let conn = conn.clone();
             let mut nm_interface = LinkStream::new(conn, "dut").await.unwrap();
             let dut_interface = this.dut_interface.clone();
-            spawn(async move {
+            async_std::task::spawn(async move {
                 dut_interface.set(nm_interface.now()).await;
 
                 while let Ok(info) = nm_interface.next().await {
@@ -287,7 +300,7 @@ impl Network {
             let conn = conn.clone();
             let mut nm_interface = LinkStream::new(conn, "uplink").await.unwrap();
             let uplink_interface = this.uplink_interface.clone();
-            spawn(async move {
+            async_std::task::spawn(async move {
                 uplink_interface.set(nm_interface.now()).await;
 
                 while let Ok(info) = nm_interface.next().await {
@@ -300,7 +313,7 @@ impl Network {
             let conn = conn.clone();
             let mut nm_interface = IpStream::new(conn.clone(), "tac-bridge").await.unwrap();
             let bridge_interface = this.bridge_interface.clone();
-            spawn(async move {
+            async_std::task::spawn(async move {
                 bridge_interface
                     .set(nm_interface.now(&conn).await.unwrap())
                     .await;

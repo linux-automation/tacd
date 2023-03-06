@@ -25,7 +25,7 @@ use crate::broker::Topic;
 
 pub const LONG_PRESS: Duration = Duration::from_millis(750);
 
-#[cfg(feature = "stub_out_evdev")]
+#[cfg(feature = "demo_mode")]
 mod evd {
     use evdev::FetchEventsSynced;
     pub use evdev::{EventType, InputEventKind, Key};
@@ -45,7 +45,7 @@ mod evd {
     }
 }
 
-#[cfg(not(feature = "stub_out_evdev"))]
+#[cfg(not(feature = "demo_mode"))]
 mod evd {
     pub use evdev::*;
 }

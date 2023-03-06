@@ -29,8 +29,8 @@ use crate::broker::{BrokerBuilder, Topic};
 mod rw {
     use std::collections::HashMap;
     use std::convert::AsRef;
-    use std::io::{Error, ErrorKind, Result};
-    use std::path::{Path, PathBuf};
+    use std::io::Result;
+    use std::path::Path;
     use std::sync::Mutex;
 
     static FILESYSTEM: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);

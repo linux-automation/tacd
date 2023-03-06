@@ -120,6 +120,7 @@ impl FindDecoy {
         })
     }
 
+    #[cfg(test)]
     pub fn stub_get(&self) -> u8 {
         self.val.load(Ordering::Relaxed)
     }

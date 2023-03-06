@@ -20,11 +20,8 @@ use std::time::Duration;
 use async_std::prelude::*;
 use async_std::sync::{Arc, Mutex};
 use async_std::task::{sleep, spawn};
-
 use async_trait::async_trait;
-
 use serde::{Deserialize, Serialize};
-
 use tide::{Response, Server};
 
 use embedded_graphics::{

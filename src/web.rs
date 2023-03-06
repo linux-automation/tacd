@@ -16,15 +16,16 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use std::convert::AsRef;
+#[cfg(not(feature = "demo_mode"))]
 use std::fs::write;
 use std::io::ErrorKind;
 use std::net::TcpListener;
 use std::path::Path;
 
 use log::warn;
-use tide::{Body, Request, Response, Server};
+use tide::{Body, Response, Server};
 
-#[cfg(any(test, feature = "demo_mode"))]
+#[cfg(feature = "demo_mode")]
 mod sd {
     use std::io::Result;
     use std::net::TcpListener;
@@ -42,7 +43,7 @@ mod sd {
     }
 }
 
-#[cfg(not(any(test, feature = "demo_mode")))]
+#[cfg(not(feature = "demo_mode"))]
 mod sd {
     pub use systemd::daemon::*;
 
@@ -145,21 +146,24 @@ impl WebInterface {
     }
 
     /// Serve a file from disk for reading and writing
+    #[cfg(not(feature = "demo_mode"))]
     pub fn expose_file_rw(&mut self, fs_path: &str, web_path: &str) {
         self.server.at(web_path).serve_file(fs_path).unwrap();
 
         let fs_path = fs_path.to_string();
 
-        self.server.at(web_path).put(move |mut req: Request<()>| {
-            let fs_path = fs_path.clone();
+        self.server
+            .at(web_path)
+            .put(move |mut req: tide::Request<()>| {
+                let fs_path = fs_path.clone();
 
-            async move {
-                let content = req.body_bytes().await?;
-                write(&fs_path, content)?;
+                async move {
+                    let content = req.body_bytes().await?;
+                    write(&fs_path, content)?;
 
-                Ok(Response::new(204))
-            }
-        });
+                    Ok(Response::new(204))
+                }
+            });
     }
 
     pub async fn serve(self) -> Result<(), std::io::Error> {
