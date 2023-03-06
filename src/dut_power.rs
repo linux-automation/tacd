@@ -28,12 +28,12 @@ use crate::adc::AdcChannel;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::digital_io::{find_line, LineHandle, LineRequestFlags};
 
-#[cfg(any(test, feature = "stub_out_root"))]
+#[cfg(any(test, feature = "demo_mode"))]
 mod prio {
     pub fn realtime_priority() {}
 }
 
-#[cfg(not(any(test, feature = "stub_out_root")))]
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod prio {
     use std::convert::TryFrom;
     use thread_priority::*;

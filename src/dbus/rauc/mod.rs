@@ -20,16 +20,16 @@ use std::collections::HashMap;
 use async_std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 use async_std::prelude::*;
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 use async_std::task::spawn;
 
 use super::Connection;
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 mod installer;
 
 #[derive(Serialize, Deserialize)]
@@ -70,12 +70,12 @@ impl Rauc {
         }
     }
 
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     pub async fn new(bb: &mut BrokerBuilder, _conn: &Arc<Connection>) -> Self {
         Self::setup_topics(bb)
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
         let inst = Self::setup_topics(bb);
 

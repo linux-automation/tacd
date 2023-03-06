@@ -245,7 +245,7 @@ impl Network {
         }
     }
 
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     pub async fn new<C>(bb: &mut BrokerBuilder, _conn: C) -> Self {
         let this = Self::setup_topics(bb, "lxatac".to_string());
 
@@ -268,7 +268,7 @@ impl Network {
         this
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
         let hostname = hostname::HostnameProxy::new(&conn)
             .await

@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(any(test, feature = "stub_out_barebox"))]
+#[cfg(any(test, feature = "demo_mode"))]
 mod read_dt_props {
     pub fn read_dt_property(_: &str) -> String {
         "stub".to_string()
@@ -32,7 +32,7 @@ mod read_dt_props {
     }
 }
 
-#[cfg(not(any(test, feature = "stub_out_barebox")))]
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod read_dt_props {
     use std::fs::read;
     use std::str::from_utf8;

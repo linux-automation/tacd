@@ -70,7 +70,7 @@ async fn main() -> Result<(), std::io::Error> {
     bb.build(&mut web_interface.server);
     journal::serve(&mut web_interface.server);
 
-    #[cfg(not(feature = "stub_out_fs"))]
+    #[cfg(not(feature = "demo_mode"))]
     {
         web_interface.expose_file_rw(
             "/etc/labgrid/configuration.yaml",

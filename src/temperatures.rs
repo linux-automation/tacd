@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn_blocking};
 
-#[cfg(feature = "stub_out_hwmon")]
+#[cfg(feature = "demo_mode")]
 mod hw {
     pub trait SysClass {
         fn input(&self) -> Result<u32, ()>;
@@ -48,7 +48,7 @@ mod hw {
     }
 }
 
-#[cfg(not(feature = "stub_out_hwmon"))]
+#[cfg(not(feature = "demo_mode"))]
 mod hw {
     pub use sysfs_class::*;
 }

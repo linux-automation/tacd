@@ -19,7 +19,7 @@ use async_std::sync::Arc;
 
 use crate::broker::BrokerBuilder;
 
-#[cfg(feature = "stub_out_dbus")]
+#[cfg(feature = "demo_mode")]
 mod zb {
     pub type Result<T> = std::result::Result<T, ()>;
 
@@ -45,7 +45,7 @@ mod zb {
     }
 }
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 mod zb {
     pub use zbus::*;
 }

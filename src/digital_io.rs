@@ -19,13 +19,13 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn, spawn_blocking};
 
-#[cfg(any(test, feature = "stub_out_gpio"))]
+#[cfg(any(test, feature = "demo_mode"))]
 mod gpio {
     mod stub;
     pub use stub::*;
 }
 
-#[cfg(not(any(test, feature = "stub_out_gpio")))]
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod gpio {
     mod hardware;
     pub use hardware::*;

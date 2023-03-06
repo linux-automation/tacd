@@ -25,7 +25,7 @@ use serde_json::to_string;
 use tide::http::Body;
 use tide::{Request, Response, Server};
 
-#[cfg(any(test, feature = "stub_out_root"))]
+#[cfg(any(test, feature = "demo_mode"))]
 mod sd {
     use std::collections::btree_map::BTreeMap;
     pub use std::io::Result;
@@ -90,7 +90,7 @@ mod sd {
     }
 }
 
-#[cfg(not(any(test, feature = "stub_out_root")))]
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod sd {
     pub use systemd::journal::*;
     pub use systemd::*;

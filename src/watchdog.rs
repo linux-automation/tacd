@@ -23,7 +23,7 @@ use async_std::task::sleep;
 
 use crate::dut_power::TickReader;
 
-#[cfg(any(test, feature = "stub_out_root"))]
+#[cfg(any(test, feature = "demo_mode"))]
 mod sd {
     use std::io::Result;
 
@@ -40,7 +40,7 @@ mod sd {
     }
 }
 
-#[cfg(not(any(test, feature = "stub_out_root")))]
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod sd {
     pub use systemd::daemon::*;
 }

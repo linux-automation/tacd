@@ -26,13 +26,13 @@ use crate::broker::{BrokerBuilder, Topic};
 
 const HISTORY_LENGTH: usize = 200;
 
-#[cfg(any(test, feature = "stub_out_adc"))]
+#[cfg(any(test, feature = "demo_mode"))]
 mod iio {
     mod stub;
     pub use stub::*;
 }
 
-#[cfg(not(any(test, feature = "stub_out_adc")))]
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod iio {
     mod hardware;
     pub use hardware::*;
