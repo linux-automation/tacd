@@ -27,13 +27,13 @@ use crate::measurement::{Measurement, Timestamp};
 const HISTORY_LENGTH: usize = 200;
 const SLOW_INTERVAL: Duration = Duration::from_millis(100);
 
-#[cfg(any(test, feature = "stub_out_adc"))]
+#[cfg(any(test, feature = "demo_mode"))]
 mod iio {
     mod stub;
     pub use stub::*;
 }
 
-#[cfg(not(any(test, feature = "stub_out_adc")))]
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod iio {
     mod hardware;
     pub use hardware::*;

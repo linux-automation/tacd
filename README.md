@@ -59,7 +59,7 @@ TAC, this means that the full `tacd` can not run on a non-TAC system.
 
 You can however run a stripped-down version by using:
 
-    $ cargo run --features=stub_out_everything --no-default-features
+    $ cargo run --features=demo_mode --no-default-features
 
 Note that rust will complain very loudly about a lot of dead code,
 which is not used when building for PC but used on the TAC.

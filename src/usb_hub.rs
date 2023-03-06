@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(feature = "stub_out_usb_hub")]
+#[cfg(feature = "demo_mode")]
 mod rw {
     use std::collections::HashMap;
     use std::convert::AsRef;
@@ -62,7 +62,7 @@ mod rw {
     }
 }
 
-#[cfg(not(feature = "stub_out_usb_hub"))]
+#[cfg(not(feature = "demo_mode"))]
 mod rw {
     pub use std::fs::*;
 }

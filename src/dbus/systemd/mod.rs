@@ -20,19 +20,19 @@ use async_std::sync::Arc;
 use async_std::task::spawn;
 use serde::{Deserialize, Serialize};
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 pub use futures_lite::future::race;
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 pub use log::warn;
 
 use super::{Connection, Result};
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 mod manager;
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 mod service;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -65,7 +65,7 @@ pub struct Systemd {
 }
 
 impl ServiceStatus {
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     async fn get() -> Result<Self> {
         Ok(Self {
             active_state: "actvive".to_string(),
@@ -75,7 +75,7 @@ impl ServiceStatus {
         })
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     async fn get<'a>(unit: &service::UnitProxy<'a>) -> Result<Self> {
         Ok(Self {
             active_state: unit.active_state().await?,
@@ -94,7 +94,7 @@ impl Service {
         }
     }
 
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     async fn new(
         bb: &mut BrokerBuilder,
         _conn: Arc<Connection>,
@@ -108,7 +108,7 @@ impl Service {
         this
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     async fn new(
         bb: &mut BrokerBuilder,
         conn: Arc<Connection>,
@@ -181,7 +181,7 @@ impl Service {
 }
 
 impl Systemd {
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     pub async fn handle_reboot(reboot: Arc<Topic<bool>>, _conn: Arc<Connection>) {
         let (mut reboot_reqs, _) = reboot.subscribe_unbounded().await;
 
@@ -194,7 +194,7 @@ impl Systemd {
         });
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     pub async fn handle_reboot(reboot: Arc<Topic<bool>>, conn: Arc<Connection>) {
         let (mut reboot_reqs, _) = reboot.subscribe_unbounded().await;
 

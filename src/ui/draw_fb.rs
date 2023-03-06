@@ -20,13 +20,13 @@ use std::io::Cursor;
 use embedded_graphics::{pixelcolor::BinaryColor, prelude::*};
 use png::{BitDepth, ColorType, Encoder};
 
-#[cfg(feature = "stub_out_display")]
+#[cfg(feature = "demo_mode")]
 mod backend {
     mod stub;
     pub use stub::*;
 }
 
-#[cfg(not(feature = "stub_out_display"))]
+#[cfg(not(feature = "demo_mode"))]
 mod backend {
     pub use framebuffer::*;
 }

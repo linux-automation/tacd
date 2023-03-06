@@ -51,28 +51,7 @@ zvariant = { version = "3", default-features = false, features = ["enumflags2"] 
 
 [features]
 default = ["systemd"]
-stub_out_adc = []
-stub_out_barebox = []
-stub_out_display = []
-stub_out_dbus = []
-stub_out_evdev = []
-stub_out_fs = []
-stub_out_gpio = []
-stub_out_hwmon = []
-stub_out_root = []
-stub_out_usb_hub = []
-stub_out_everything = [
-  "stub_out_adc",
-  "stub_out_barebox",
-  "stub_out_display",
-  "stub_out_dbus",
-  "stub_out_evdev",
-  "stub_out_fs",
-  "stub_out_gpio",
-  "stub_out_hwmon",
-  "stub_out_root",
-  "stub_out_usb_hub",
-]
+demo_mode = []
 
 [profile.release]
 lto = true

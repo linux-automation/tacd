@@ -25,7 +25,7 @@ use async_std::task::{block_on, spawn_blocking};
 use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::Measurement;
 
-#[cfg(feature = "stub_out_hwmon")]
+#[cfg(feature = "demo_mode")]
 mod hw {
     pub trait SysClass {
         fn input(&self) -> Result<u32, ()>;
@@ -51,7 +51,7 @@ mod hw {
     }
 }
 
-#[cfg(not(feature = "stub_out_hwmon"))]
+#[cfg(not(feature = "demo_mode"))]
 mod hw {
     pub use sysfs_class::*;
 }
