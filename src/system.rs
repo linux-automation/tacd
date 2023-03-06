@@ -21,18 +21,39 @@ use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(any(test, feature = "demo_mode"))]
+#[cfg(feature = "demo_mode")]
 mod read_dt_props {
-    pub fn read_dt_property(_: &str) -> String {
-        "stub".to_string()
+    const DEMO_DATA_STR: &[(&str, &str)] = &[
+        ("barebox-version", "barebox-2022.11.0-20221121-1"),
+        (
+            "baseboard-factory-data/pcba-hardware-release",
+            "lxatac-S01-R03-B02-C00",
+        ),
+        (
+            "powerboard-factory-data/pcba-hardware-release",
+            "lxatac-S05-R03-V01-C00",
+        ),
+    ];
+
+    const DEMO_DATA_NUM: &[(&str, u32)] = &[
+        ("baseboard-factory-data/modification", 0),
+        ("baseboard-factory-data/factory-timestamp", 1678086417),
+        ("powerboard-factory-data/modification", 0),
+        ("powerboard-factory-data/factory-timestamp", 1678086418),
+    ];
+
+    pub fn read_dt_property(path: &str) -> String {
+        let (_, content) = DEMO_DATA_STR.iter().find(|(p, _)| *p == path).unwrap();
+
+        content.to_string()
     }
 
-    pub fn read_dt_property_u32(_: &str) -> u32 {
-        0
+    pub fn read_dt_property_u32(path: &str) -> u32 {
+        DEMO_DATA_NUM.iter().find(|(p, _)| *p == path).unwrap().1
     }
 }
 
-#[cfg(not(any(test, feature = "demo_mode")))]
+#[cfg(not(feature = "demo_mode"))]
 mod read_dt_props {
     use std::fs::read;
     use std::str::from_utf8;
