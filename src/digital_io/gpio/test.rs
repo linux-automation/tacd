@@ -88,6 +88,7 @@ pub enum EventRequestFlags {
     BOTH_EDGES,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub enum LineRequestFlags {
     OUTPUT,
     INPUT,
@@ -120,7 +121,6 @@ impl FindDecoy {
         })
     }
 
-    #[cfg(test)]
     pub fn stub_get(&self) -> u8 {
         self.val.load(Ordering::Relaxed)
     }
@@ -141,6 +141,6 @@ pub fn find_line(name: &str) -> Result<FindDecoy> {
 
     Ok(FindDecoy {
         name: name.to_string(),
-        val: val,
+        val,
     })
 }
