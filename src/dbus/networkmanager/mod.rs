@@ -254,7 +254,7 @@ impl Network {
         let this = Self::setup_topics(bb, "lxatac".to_string());
 
         this.bridge_interface
-            .set(vec![String::from("0.0.0.0")])
+            .set(vec![String::from("192.168.1.1")])
             .await;
         this.dut_interface
             .set(LinkInfo {
@@ -264,7 +264,7 @@ impl Network {
             .await;
         this.uplink_interface
             .set(LinkInfo {
-                speed: 1337,
+                speed: 1000,
                 carrier: true,
             })
             .await;
