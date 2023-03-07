@@ -25,6 +25,7 @@ mod dut_power;
 mod http_server;
 mod iobus;
 mod journal;
+mod led;
 mod measurement;
 mod regulators;
 mod system;
@@ -40,6 +41,7 @@ use digital_io::DigitalIo;
 use dut_power::DutPwrThread;
 use http_server::HttpServer;
 use iobus::IoBus;
+use led::Led;
 use regulators::Regulators;
 use system::System;
 use temperatures::Temperatures;
@@ -57,6 +59,7 @@ async fn main() -> Result<(), std::io::Error> {
     let mut bb = BrokerBuilder::new();
 
     // Expose hardware on the TAC via the broker framework.
+    let _led = Led::new(&mut bb);
     let adc = Adc::new(&mut bb).await.unwrap();
     let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone())
         .await
