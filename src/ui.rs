@@ -40,6 +40,7 @@ pub struct UiResources {
     pub iobus: crate::iobus::IoBus,
     pub network: crate::dbus::Network,
     pub rauc: crate::dbus::Rauc,
+    pub regulators: crate::regulators::Regulators,
     pub system: crate::system::System,
     pub systemd: crate::dbus::Systemd,
     pub temperatures: crate::temperatures::Temperatures,

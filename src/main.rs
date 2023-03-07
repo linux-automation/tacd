@@ -26,6 +26,7 @@ mod http_server;
 mod iobus;
 mod journal;
 mod measurement;
+mod regulators;
 mod system;
 mod temperatures;
 mod ui;
@@ -39,6 +40,7 @@ use digital_io::DigitalIo;
 use dut_power::DutPwrThread;
 use http_server::HttpServer;
 use iobus::IoBus;
+use regulators::Regulators;
 use system::System;
 use temperatures::Temperatures;
 use ui::{Ui, UiResources};
@@ -60,6 +62,7 @@ async fn main() -> Result<(), std::io::Error> {
         .await
         .unwrap();
     let dig_io = DigitalIo::new(&mut bb);
+    let regulators = Regulators::new(&mut bb);
     let temperatures = Temperatures::new(&mut bb);
     let usb_hub = UsbHub::new(&mut bb);
 
@@ -101,6 +104,7 @@ async fn main() -> Result<(), std::io::Error> {
             dig_io,
             dut_pwr,
             iobus,
+            regulators,
             system,
             temperatures,
             usb_hub,

@@ -276,7 +276,7 @@ paths:
             - tx
     get:
       summary: Check if the selected direction is activated
-      tags: [Input/Output]
+      tags: [Input/Output, UART]
       responses:
         '200':
           content:
@@ -286,7 +286,7 @@ paths:
 
     put:
       summary: Activate/Deactivate the direction
-      tags: [Input/Output]
+      tags: [Input/Output, UART]
       requestBody:
         content:
           application/json:
@@ -295,6 +295,31 @@ paths:
       responses:
         '204':
           description: The direction was enabled/disabled
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/uart/powered:
+    get:
+      summary: Check if the power supply on the DUT UART connector is turned on
+      tags: [Input/Output, UART]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
+    put:
+      summary: Turn the power supply on the DUT UART connector on/off
+      tags: [Input/Output, UART]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: The UART supply was turned on/off
         '400':
           description: The value could not be parsed as boolean
 

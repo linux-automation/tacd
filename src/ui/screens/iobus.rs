@@ -76,7 +76,7 @@ impl MountableScreen for IoBusScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::indicator(
-                ui.res.dig_io.iobus_pwr_en.clone(),
+                ui.res.regulators.iobus_pwr_en.clone(),
                 ui.draw_target.clone(),
                 Point::new(140, 52 - 10),
                 Box::new(|state: &bool| match *state {
@@ -137,7 +137,7 @@ impl MountableScreen for IoBusScreen {
         ));
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
-        let iobus_pwr_en = ui.res.dig_io.iobus_pwr_en.clone();
+        let iobus_pwr_en = ui.res.regulators.iobus_pwr_en.clone();
         let screen = ui.screen.clone();
 
         spawn(async move {

@@ -285,13 +285,13 @@ impl DutPwrThread {
         pwr_volt: AdcChannel,
         pwr_curr: AdcChannel,
     ) -> Result<Self> {
-        let pwr_line = find_line("IO0").unwrap().request(
+        let pwr_line = find_line("DUT_PWR_EN").unwrap().request(
             LineRequestFlags::OUTPUT,
             1 - PWR_LINE_ASSERTED,
             "tacd",
         )?;
 
-        let discharge_line = find_line("IO1").unwrap().request(
+        let discharge_line = find_line("DUT_PWR_DISCH").unwrap().request(
             LineRequestFlags::OUTPUT,
             DISCHARGE_LINE_ASSERTED,
             "tacd",
@@ -538,8 +538,8 @@ mod tests {
 
     #[test]
     fn failsafe() {
-        let pwr_line = find_line("IO0").unwrap();
-        let discharge_line = find_line("IO1").unwrap();
+        let pwr_line = find_line("DUT_PWR_EN").unwrap();
+        let discharge_line = find_line("DUT_PWR_DISCH").unwrap();
 
         let (adc, dut_pwr) = {
             let mut bb = BrokerBuilder::new();
