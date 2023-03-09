@@ -9,6 +9,19 @@
 # * allow - No warning or error will be produced, though in some cases a note
 # will be
 
+[advisories]
+ignore = [
+  "RUSTSEC-2020-0056",
+  "RUSTSEC-2020-0071",
+  "RUSTSEC-2020-0077",
+  "RUSTSEC-2021-0059",
+  "RUSTSEC-2021-0060",
+  "RUSTSEC-2021-0064",
+]
+
+[bans]
+multiple-versions = "allow"
+
 [licenses]
 unlicensed = "deny"
 default = "deny"
