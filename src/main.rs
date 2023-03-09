@@ -46,7 +46,7 @@ use web::WebInterface;
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
-    pretty_env_logger::init();
+    env_logger::init();
 
     let mut bb = BrokerBuilder::new();
 
