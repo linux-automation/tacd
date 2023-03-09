@@ -33,6 +33,8 @@ use async_tungstenite::tungstenite::{
 };
 use async_tungstenite::WebSocketStream;
 
+use base64::Engine;
+
 use futures_lite::future::race;
 use futures_util::future::Either;
 use futures_util::{FutureExt, SinkExt, StreamExt};
@@ -43,8 +45,7 @@ use mqtt::packet::suback::SubscribeReturnCode;
 use mqtt::TopicFilter;
 use mqtt::{packet::*, Decodable, Encodable};
 
-use sha1::{Digest, Sha1};
-
+use sha1::{digest::Update, Digest, Sha1};
 use tide::http::format_err;
 use tide::http::headers::{HeaderName, CONNECTION, UPGRADE};
 use tide::http::upgrade::Connection;
@@ -451,7 +452,8 @@ pub(super) fn register(server: &mut tide::Server<()>, topics: Arc<Vec<Arc<dyn An
             response.insert_header(UPGRADE, "websocket");
             response.insert_header(CONNECTION, "Upgrade");
             let hash = Sha1::new().chain(header).chain(WEBSOCKET_GUID).finalize();
-            response.insert_header("Sec-Websocket-Accept", base64::encode(&hash[..]));
+            let hash = base64::engine::general_purpose::STANDARD.encode(&hash[..]);
+            response.insert_header("Sec-Websocket-Accept", hash);
             response.insert_header("Sec-Websocket-Version", "13");
 
             if let Some(protocol) = protocol {

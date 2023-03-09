@@ -21,7 +21,7 @@
 
 use zbus::dbus_proxy;
 
-#[dbus_proxy(interface = "org.freedesktop.NetworkManager")]
+#[dbus_proxy(assume_defaults = true, interface = "org.freedesktop.NetworkManager")]
 pub trait NetworkManager {
     /// ActivateConnection method
     fn activate_connection(
