@@ -67,8 +67,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          command-arguments: --hide-inclusion-graph bans licenses sources
 
   test:
     name: cargo test
