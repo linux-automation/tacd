@@ -25,8 +25,9 @@ use embedded_graphics::prelude::*;
 use crate::adc::Measurement;
 use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
 
+use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, ButtonEvent, MountableScreen, Screen, Ui, LONG_PRESS};
+use super::{draw_border, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::DigOut;
 
@@ -128,21 +129,31 @@ impl MountableScreen for DigOutScreen {
             while let Some(ev) = button_events.next().await {
                 let highlighted = *port_highlight.get().await;
 
-                if let ButtonEvent::ButtonOne(dur) = *ev {
-                    if dur > LONG_PRESS {
+                match *ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: PressDuration::Long,
+                    } => {
                         let port = &port_enables[highlighted as usize];
 
                         port.modify(|prev| {
                             Some(Arc::new(!prev.as_deref().copied().unwrap_or(true)))
                         })
                         .await;
-                    } else {
+                    }
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: PressDuration::Short,
+                    } => {
                         port_highlight.set((highlighted + 1) % 2).await;
                     }
-                }
-
-                if let ButtonEvent::ButtonTwo(_) = *ev {
-                    screen.set(SCREEN_TYPE.next()).await
+                    ButtonEvent::Release {
+                        btn: Button::Upper,
+                        dur: _,
+                    } => {
+                        screen.set(SCREEN_TYPE.next()).await;
+                    }
+                    _ => {}
                 }
             }
         });

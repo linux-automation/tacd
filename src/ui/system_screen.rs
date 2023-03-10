@@ -25,8 +25,9 @@ use crate::adc::Measurement;
 use crate::broker::{Native, SubscriptionHandle};
 use crate::dbus::LinkInfo;
 
+use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, ButtonEvent, MountableScreen, Screen, Ui};
+use super::{draw_border, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::System;
 
@@ -111,12 +112,17 @@ impl MountableScreen for SystemScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                screen
-                    .set(match *ev {
-                        ButtonEvent::ButtonOne(_) => Screen::RebootConfirm,
-                        ButtonEvent::ButtonTwo(_) => SCREEN_TYPE.next(),
-                    })
-                    .await
+                match *ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: _,
+                    } => screen.set(Screen::RebootConfirm).await,
+                    ButtonEvent::Release {
+                        btn: Button::Upper,
+                        dur: _,
+                    } => screen.set(SCREEN_TYPE.next()).await,
+                    ButtonEvent::Press { btn: _ } => {}
+                }
             }
         });
 

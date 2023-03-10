@@ -170,13 +170,13 @@ export default function DashboardTac() {
               <SpaceBetween direction="horizontal" size="xs">
                 <MqttButton
                   topic="/v1/tac/display/buttons"
-                  send={{ ButtonOne: { secs: 0, nanos: 100000000 } }}
+                  send={{ Release: { btn: "Upper", dur: "Short" } }}
                 >
                   Short press
                 </MqttButton>
                 <MqttButton
                   topic="/v1/tac/display/buttons"
-                  send={{ ButtonOne: { secs: 2, nanos: 0 } }}
+                  send={{ Release: { btn: "Upper", dur: "Long" } }}
                 >
                   Long press
                 </MqttButton>
@@ -187,13 +187,13 @@ export default function DashboardTac() {
               <SpaceBetween direction="horizontal" size="xs">
                 <MqttButton
                   topic="/v1/tac/display/buttons"
-                  send={{ ButtonTwo: { secs: 0, nanos: 100000000 } }}
+                  send={{ Release: { btn: "Lower", dur: "Short" } }}
                 >
                   Short press
                 </MqttButton>
                 <MqttButton
                   topic="/v1/tac/display/buttons"
-                  send={{ ButtonTwo: { secs: 2, nanos: 0 } }}
+                  send={{ Release: { btn: "Lower", dur: "Long" } }}
                 >
                   Long press
                 </MqttButton>

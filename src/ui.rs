@@ -19,15 +19,13 @@ use std::time::Duration;
 
 use async_std::prelude::*;
 use async_std::sync::{Arc, Mutex};
-use async_std::task::{block_on, sleep, spawn, spawn_blocking};
+use async_std::task::{sleep, spawn};
 
 use async_trait::async_trait;
 
 use serde::{Deserialize, Serialize};
 
 use tide::{Response, Server};
-
-use evdev::{EventType, InputEventKind, Key};
 
 use embedded_graphics::{
     mono_font::{ascii::FONT_8X13, MonoTextStyle},
@@ -39,6 +37,7 @@ use embedded_graphics::{
 
 use crate::broker::{BrokerBuilder, Topic};
 
+mod buttons;
 mod dig_out_screen;
 mod draw_fb;
 mod iobus_screen;
@@ -51,6 +50,7 @@ mod uart_screen;
 mod usb_screen;
 mod widgets;
 
+use buttons::{handle_buttons, ButtonEvent};
 use dig_out_screen::DigOutScreen;
 use draw_fb::FramebufferDrawTarget;
 use iobus_screen::IoBusScreen;
@@ -61,8 +61,6 @@ use screensaver_screen::ScreenSaverScreen;
 use system_screen::SystemScreen;
 use uart_screen::UartScreen;
 use usb_screen::UsbScreen;
-
-pub const LONG_PRESS: Duration = Duration::from_millis(750);
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum Screen {
@@ -98,22 +96,6 @@ impl Screen {
         match self {
             Self::Rauc => false,
             _ => true,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
-pub enum ButtonEvent {
-    ButtonOne(Duration),
-    ButtonTwo(Duration),
-}
-
-impl ButtonEvent {
-    fn from_id(d: Duration, id: usize) -> Self {
-        match id {
-            0 => Self::ButtonOne(d),
-            1 => Self::ButtonTwo(d),
-            _ => panic!(),
         }
     }
 }
@@ -175,43 +157,6 @@ pub struct Ui {
     res: UiRessources,
 }
 
-/// Spawn a thread that blockingly reads user input and pushes them into
-/// a broker framework topic.
-fn handle_button(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
-    #[cfg(not(feature = "stub_out_evdev"))]
-    spawn_blocking(move || {
-        let mut device = evdev::Device::open(path).unwrap();
-
-        let mut start_time = [None, None];
-
-        loop {
-            for ev in device.fetch_events().unwrap() {
-                if ev.event_type() != EventType::KEY {
-                    continue;
-                }
-
-                let id = match ev.kind() {
-                    InputEventKind::Key(Key::KEY_HOME) => 0,
-                    InputEventKind::Key(Key::KEY_ESC) => 1,
-                    _ => continue,
-                };
-
-                if ev.value() == 0 {
-                    // Button release -> send event
-                    if let Some(start) = start_time[id].take() {
-                        if let Ok(duration) = ev.timestamp().duration_since(start) {
-                            block_on(topic.set(ButtonEvent::from_id(duration, id)))
-                        }
-                    }
-                } else {
-                    // Button press -> register start time but don't send event
-                    start_time[id] = Some(ev.timestamp())
-                }
-            }
-        }
-    });
-}
-
 /// Add a web endpoint that serves the current framebuffer as png
 fn serve_framebuffer(server: &mut Server<()>, draw_target: Arc<Mutex<FramebufferDrawTarget>>) {
     server.at("/v1/tac/display/content").get(move |_| {
@@ -256,7 +201,7 @@ impl Ui {
             s
         };
 
-        handle_button(
+        handle_buttons(
             &"/dev/input/by-path/platform-gpio-keys-event",
             buttons.clone(),
         );

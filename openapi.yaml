@@ -30,6 +30,21 @@ paths:
         '400':
           description: The value could not be parsed into a screen name
 
+  /v1/tac/display/buttons:
+    put:
+      summary: Simulate a button press/release on the device
+      tags: [User Interface]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ButtonEvent'
+      responses:
+        '204':
+          description: The button event will be simulated
+        '400':
+          description: The value could not be parsed as button event
+
   /v1/tac/display/content:
     get:
       summary: The current screen content rendered into a PNG
@@ -592,6 +607,34 @@ components:
         - Breakout
         - RebootConfirm
         - Rauc
+
+    ButtonEvent:
+      type: object
+      properties:
+        Press:
+          type: object
+          properties:
+            btn:
+              type: string
+              enum:
+                - Upper
+                - Lower
+        Release:
+          type: object
+          properties:
+            btn:
+              type: string
+              enum:
+                - Upper
+                - Lower
+            dur:
+              type: string
+              enum:
+                - Short
+                - Long
+      oneOf:
+        - required: [Press]
+        - required: [Release]
 
     DutPwrStatus:
       type: string

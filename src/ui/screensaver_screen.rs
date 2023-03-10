@@ -32,8 +32,9 @@ use embedded_graphics::{
     text::Text,
 };
 
-use super::widgets::{AnyWidget, DynamicWidget};
-use super::{ButtonEvent, MountableScreen, Screen, Ui};
+use super::buttons::*;
+use super::widgets::*;
+use super::{MountableScreen, Screen, Ui};
 
 use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
 
@@ -169,14 +170,22 @@ impl MountableScreen for ScreenSaverScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                if let ButtonEvent::ButtonOne(_) = *ev {
-                    locator
-                        .modify(|prev| Some(Arc::new(!prev.as_deref().copied().unwrap_or(false))))
-                        .await
-                }
-
-                if let ButtonEvent::ButtonTwo(_) = *ev {
-                    screen.set(SCREEN_TYPE.next()).await
+                match *ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: _,
+                    } => {
+                        locator
+                            .modify(|prev| {
+                                Some(Arc::new(!prev.as_deref().copied().unwrap_or(false)))
+                            })
+                            .await
+                    }
+                    ButtonEvent::Release {
+                        btn: Button::Upper,
+                        dur: _,
+                    } => screen.set(SCREEN_TYPE.next()).await,
+                    _ => {}
                 }
             }
         });

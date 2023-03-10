@@ -27,8 +27,9 @@ use embedded_graphics::{
     text::{Alignment, Text},
 };
 
-use super::{widgets::*, FramebufferDrawTarget, LONG_PRESS};
-use super::{ButtonEvent, MountableScreen, Screen, Ui};
+use super::buttons::*;
+use super::widgets::*;
+use super::{FramebufferDrawTarget, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::RebootConfirm;
 
@@ -88,15 +89,17 @@ impl MountableScreen for RebootConfirmScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                if let ButtonEvent::ButtonOne(dur) = *ev {
-                    if dur > LONG_PRESS {
+                match *ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: PressDuration::Long,
+                    } => {
                         brb(&mut *draw_target.lock().await);
                         reboot.set(true).await;
                         break;
                     }
+                    _ => screen.set(SCREEN_TYPE.next()).await,
                 }
-
-                screen.set(SCREEN_TYPE.next()).await;
             }
         });
 

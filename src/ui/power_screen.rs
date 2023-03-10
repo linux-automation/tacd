@@ -25,8 +25,9 @@ use crate::adc::Measurement;
 use crate::broker::{Native, SubscriptionHandle};
 use crate::dut_power::{OutputRequest, OutputState};
 
+use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, ButtonEvent, MountableScreen, Screen, Ui};
+use super::{draw_border, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::DutPower;
 
@@ -140,19 +141,25 @@ impl MountableScreen for PowerScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                if let ButtonEvent::ButtonOne(_) = *ev {
-                    let state = *power_state.get().await;
+                match *ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: _,
+                    } => {
+                        let state = *power_state.get().await;
 
-                    let req = match state {
-                        OutputState::On => OutputRequest::Off,
-                        _ => OutputRequest::On,
-                    };
+                        let req = match state {
+                            OutputState::On => OutputRequest::Off,
+                            _ => OutputRequest::On,
+                        };
 
-                    power_request.set(req).await;
-                }
-
-                if let ButtonEvent::ButtonTwo(_) = *ev {
-                    screen.set(SCREEN_TYPE.next()).await
+                        power_request.set(req).await;
+                    }
+                    ButtonEvent::Release {
+                        btn: Button::Upper,
+                        dur: _,
+                    } => screen.set(SCREEN_TYPE.next()).await,
+                    ButtonEvent::Press { btn: _ } => {}
                 }
             }
         });
