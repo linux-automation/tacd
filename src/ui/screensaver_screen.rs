@@ -139,7 +139,7 @@ impl MountableScreen for ScreenSaverScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        let hostname = ui.res.dbus.network.hostname.get().await;
+        let hostname = ui.res.network.hostname.get().await;
         let bounce = BounceAnimation::new(Rectangle::with_corners(
             Point::new(0, 8),
             Point::new(118, 64),

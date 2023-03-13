@@ -57,9 +57,13 @@ async fn main() -> Result<(), std::io::Error> {
         .unwrap();
     let watchdog = Watchdog::new(dut_pwr.tick());
 
+    let dbus = DbusSession::new(&mut bb).await;
+
     let resources = UiResources {
         adc,
-        dbus: DbusSession::new(&mut bb).await,
+        network: dbus.network,
+        rauc: dbus.rauc,
+        systemd: dbus.systemd,
         dig_io: DigitalIo::new(&mut bb),
         dut_pwr,
         iobus: IoBus::new(&mut bb),

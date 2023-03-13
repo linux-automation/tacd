@@ -25,7 +25,7 @@ use super::buttons::*;
 use super::widgets::*;
 use super::{draw_border, MountableScreen, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle};
-use crate::dbus::LinkInfo;
+use crate::dbus::networkmanager::LinkInfo;
 use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::System;
@@ -69,7 +69,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::text(
-                ui.res.dbus.network.uplink_interface.clone(),
+                ui.res.network.uplink_interface.clone(),
                 ui.draw_target.clone(),
                 Point::new(0, 36),
                 Box::new(|info: &LinkInfo| match info.carrier {
@@ -82,7 +82,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::text(
-                ui.res.dbus.network.dut_interface.clone(),
+                ui.res.network.dut_interface.clone(),
                 ui.draw_target.clone(),
                 Point::new(0, 46),
                 Box::new(|info: &LinkInfo| match info.carrier {
@@ -95,7 +95,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::text(
-                ui.res.dbus.network.bridge_interface.clone(),
+                ui.res.network.bridge_interface.clone(),
                 ui.draw_target.clone(),
                 Point::new(0, 56),
                 Box::new(|ips: &Vec<String>| {

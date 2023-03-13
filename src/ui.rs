@@ -138,11 +138,13 @@ async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<Framebu
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,
-    pub dbus: crate::dbus::DbusSession,
     pub dig_io: crate::digital_io::DigitalIo,
     pub dut_pwr: crate::dut_power::DutPwrThread,
     pub iobus: crate::iobus::IoBus,
+    pub network: crate::dbus::Network,
+    pub rauc: crate::dbus::Rauc,
     pub system: crate::system::System,
+    pub systemd: crate::dbus::Systemd,
     pub temperatures: crate::temperatures::Temperatures,
     pub usb_hub: crate::usb_hub::UsbHub,
 }
@@ -186,7 +188,7 @@ impl Ui {
             s.push(Box::new(DigOutScreen::new(bb)));
             s.push(Box::new(IoBusScreen::new()));
             s.push(Box::new(PowerScreen::new()));
-            s.push(Box::new(RaucScreen::new(&screen, &res.dbus.rauc.operation)));
+            s.push(Box::new(RaucScreen::new(&screen, &res.rauc.operation)));
             s.push(Box::new(RebootConfirmScreen::new()));
             s.push(Box::new(ScreenSaverScreen::new(&buttons, &screen)));
             s.push(Box::new(SystemScreen::new()));
