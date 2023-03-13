@@ -114,7 +114,7 @@ impl ScreenSaverScreen {
                         .modify(|screen| {
                             screen.and_then(|s| {
                                 if s.use_screensaver() {
-                                    Some(Arc::new(Screen::ScreenSaver))
+                                    Some(Screen::ScreenSaver)
                                 } else {
                                     None
                                 }
@@ -173,17 +173,11 @@ impl MountableScreen for ScreenSaverScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                match *ev {
+                match ev {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
-                    } => {
-                        locator
-                            .modify(|prev| {
-                                Some(Arc::new(!prev.as_deref().copied().unwrap_or(false)))
-                            })
-                            .await
-                    }
+                    } => locator.modify(|prev| Some(!prev.unwrap_or(false))).await,
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,

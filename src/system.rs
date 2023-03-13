@@ -113,8 +113,8 @@ impl Barebox {
 }
 
 pub struct System {
-    pub uname: Arc<Topic<Uname>>,
-    pub barebox: Arc<Topic<Barebox>>,
+    pub uname: Arc<Topic<Arc<Uname>>>,
+    pub barebox: Arc<Topic<Arc<Barebox>>>,
     pub tacd_version: Arc<Topic<String>>,
 }
 
@@ -123,8 +123,8 @@ impl System {
         let version = env!("VERSION_STRING").to_string();
 
         Self {
-            uname: bb.topic_ro("/v1/tac/info/uname", Some(Uname::get())),
-            barebox: bb.topic_ro("/v1/tac/info/bootloader", Some(Barebox::get())),
+            uname: bb.topic_ro("/v1/tac/info/uname", Some(Arc::new(Uname::get()))),
+            barebox: bb.topic_ro("/v1/tac/info/bootloader", Some(Arc::new(Barebox::get()))),
             tacd_version: bb.topic_ro("/v1/tac/info/tacd/version", Some(version)),
         }
     }

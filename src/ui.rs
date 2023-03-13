@@ -213,21 +213,11 @@ impl Ui {
                 // As long as the locator is active:
                 // count down the value in locator_dance from 63 to 0
                 // with some pause in between in a loop.
-                while locator_task
-                    .try_get()
-                    .await
-                    .as_deref()
-                    .copied()
-                    .unwrap_or(false)
-                {
+                while locator_task.try_get().await.unwrap_or(false) {
                     locator_dance_task
-                        .modify(|v| {
-                            let v = match v.as_deref().copied() {
-                                None | Some(0) => 63,
-                                Some(v) => v - 1,
-                            };
-
-                            Some(Arc::new(v))
+                        .modify(|v| match v {
+                            None | Some(0) => Some(63),
+                            Some(v) => Some(v - 1),
                         })
                         .await;
                     sleep(Duration::from_millis(100)).await;
@@ -236,7 +226,7 @@ impl Ui {
                 // If the locator is empty stop the animation
                 locator_dance_task.set(0).await;
 
-                match rx.next().await.as_deref().as_deref() {
+                match rx.next().await {
                     Some(true) => {}
                     Some(false) => continue,
                     None => break,
@@ -302,7 +292,7 @@ impl Ui {
             }
 
             match screen_rx.next().await {
-                Some(screen) => next_screen_type = *screen,
+                Some(screen) => next_screen_type = screen,
                 None => break Ok(()),
             }
         }

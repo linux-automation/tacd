@@ -16,7 +16,6 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use async_std::prelude::*;
-use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
 
@@ -143,15 +142,13 @@ impl MountableScreen for IoBusScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                match *ev {
+                match ev {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
                     } => {
                         iobus_pwr_en
-                            .modify(|prev| {
-                                Some(Arc::new(!prev.as_deref().copied().unwrap_or(true)))
-                            })
+                            .modify(|prev| Some(!prev.unwrap_or(true)))
                             .await
                     }
                     ButtonEvent::Release {

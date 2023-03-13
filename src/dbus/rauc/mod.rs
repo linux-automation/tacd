@@ -32,7 +32,7 @@ use crate::broker::{BrokerBuilder, Topic};
 #[cfg(not(feature = "stub_out_dbus"))]
 mod installer;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Progress {
     pub percentage: i32,
     pub message: String,
@@ -54,7 +54,7 @@ type SlotStatus = HashMap<String, HashMap<String, String>>;
 pub struct Rauc {
     pub operation: Arc<Topic<String>>,
     pub progress: Arc<Topic<Progress>>,
-    pub slot_status: Arc<Topic<SlotStatus>>,
+    pub slot_status: Arc<Topic<Arc<SlotStatus>>>,
     pub last_error: Arc<Topic<String>>,
     pub install: Arc<Topic<String>>,
 }
@@ -139,7 +139,7 @@ impl Rauc {
                     // In the RAUC API the slot status is a list of (name, info) tuples.
                     // It is once again easier in typescript to represent it as a dict with
                     // the names as keys, so that is what's exposed here.
-                    slot_status.set(slots).await;
+                    slot_status.set(Arc::new(slots)).await;
                 }
 
                 // Wait for the current operation to change

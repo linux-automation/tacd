@@ -126,19 +126,16 @@ impl MountableScreen for DigOutScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                let highlighted = *port_highlight.get().await;
+                let highlighted = port_highlight.get().await;
 
-                match *ev {
+                match ev {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Long,
                     } => {
                         let port = &port_enables[highlighted as usize];
 
-                        port.modify(|prev| {
-                            Some(Arc::new(!prev.as_deref().copied().unwrap_or(true)))
-                        })
-                        .await;
+                        port.modify(|prev| Some(!prev.unwrap_or(true))).await;
                     }
                     ButtonEvent::Release {
                         btn: Button::Lower,

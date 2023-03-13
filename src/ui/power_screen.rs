@@ -140,14 +140,12 @@ impl MountableScreen for PowerScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                match *ev {
+                match ev {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
                     } => {
-                        let state = *power_state.get().await;
-
-                        let req = match state {
+                        let req = match power_state.get().await {
                             OutputState::On => OutputRequest::Off,
                             _ => OutputRequest::On,
                         };

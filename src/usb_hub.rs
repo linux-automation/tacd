@@ -86,7 +86,7 @@ const PORTS: &[(&str, &str)] = &[
     ),
 ];
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct UsbDevice {
     id_product: String,
     id_vendor: String,
@@ -122,10 +122,10 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     spawn(async move {
         let (mut src, _) = powered.subscribe_unbounded().await;
 
-        while let Some(ev) = src.next().await.as_deref() {
-            write(&disable_path, if *ev { b"0" } else { b"1" }).unwrap();
+        while let Some(ev) = src.next().await {
+            write(&disable_path, if ev { b"0" } else { b"1" }).unwrap();
 
-            if !*ev {
+            if !ev {
                 device.set(None).await;
             }
         }
@@ -158,11 +158,11 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                 powered
                     .modify(|prev| {
                         let should_set = prev
-                            .map(|prev_powered| *prev_powered != is_powered)
+                            .map(|prev_powered| prev_powered != is_powered)
                             .unwrap_or(true);
 
                         match should_set {
-                            true => Some(Arc::new(is_powered)),
+                            true => Some(is_powered),
                             false => None,
                         }
                     })
@@ -187,11 +187,11 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
             device
                 .modify(|prev| {
                     let should_set = prev
-                        .map(|prev_dev_info| *prev_dev_info != dev_info)
+                        .map(|prev_dev_info| prev_dev_info != dev_info)
                         .unwrap_or(true);
 
                     match should_set {
-                        true => Some(Arc::new(dev_info)),
+                        true => Some(dev_info),
                         false => None,
                     }
                 })

@@ -35,7 +35,7 @@ mod manager;
 #[cfg(not(feature = "stub_out_dbus"))]
 mod service;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ServiceStatus {
     pub active_state: String,
     pub sub_state: String,
@@ -43,7 +43,7 @@ pub struct ServiceStatus {
     pub active_exit_ts: u64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum ServiceAction {
     Start,
     Stop,
@@ -161,7 +161,7 @@ impl Service {
 
         spawn(async move {
             while let Some(action) = action_reqs.next().await {
-                let res = match *action {
+                let res = match action {
                     ServiceAction::Start => unit.start("replace").await,
                     ServiceAction::Stop => unit.stop("replace").await,
                     ServiceAction::Restart => unit.restart("replace").await,
@@ -187,7 +187,7 @@ impl Systemd {
 
         spawn(async move {
             while let Some(req) = reboot_reqs.next().await {
-                if *req {
+                if req {
                     println!("Asked to reboot but don't feel like it");
                 }
             }
@@ -202,7 +202,7 @@ impl Systemd {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();
 
             while let Some(req) = reboot_reqs.next().await {
-                if *req {
+                if req {
                     if let Err(e) = manager.reboot().await {
                         warn!("Failed to trigger reboot: {}", e);
                     }

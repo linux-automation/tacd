@@ -65,7 +65,7 @@ fn handle_line_wo(
         let (mut src, _) = topic_task.subscribe_unbounded().await;
 
         while let Some(ev) = src.next().await {
-            dst.set_value((*ev ^ inverted) as _).unwrap();
+            dst.set_value((ev ^ inverted) as _).unwrap();
         }
     });
 

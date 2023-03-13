@@ -56,7 +56,7 @@ pub struct DynamicWidget<T: Sync + Send + 'static> {
     handles: Option<(SubscriptionHandle<T, Native>, JoinHandle<()>)>,
 }
 
-impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
+impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWidget<T> {
     /// Create a generic dynamic widget
     ///
     /// # Arguments:

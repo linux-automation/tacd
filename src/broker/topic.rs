@@ -31,19 +31,19 @@ use unique_token::Unique;
 use super::TopicName;
 
 pub(super) struct RetainedValue<E> {
-    native: Arc<E>,
+    native: E,
     serialized: Option<Arc<[u8]>>,
 }
 
-impl<E: Serialize> RetainedValue<E> {
-    pub(super) fn new(val: Arc<E>) -> Self {
+impl<E: Serialize + Clone> RetainedValue<E> {
+    pub(super) fn new(val: E) -> Self {
         Self {
             native: val,
             serialized: None,
         }
     }
 
-    fn native(&self) -> Arc<E> {
+    fn native(&self) -> E {
         self.native.clone()
     }
 
@@ -69,7 +69,7 @@ pub struct Topic<E> {
     pub(super) web_writable: bool,
     pub(super) retained: Mutex<VecDeque<RetainedValue<E>>>,
     pub(super) retained_length: usize,
-    pub(super) senders: Mutex<Vec<(Unique, Sender<Arc<E>>)>>,
+    pub(super) senders: Mutex<Vec<(Unique, Sender<E>)>>,
     pub(super) senders_serialized: Mutex<Vec<(Unique, Sender<(TopicName, Arc<[u8]>)>)>>,
 }
 
@@ -120,12 +120,8 @@ impl<E: Send + Sync> AnySubscriptionHandle for SubscriptionHandle<E, Serialized>
     }
 }
 
-impl<E: Serialize + DeserializeOwned> Topic<E> {
-    async fn set_arc_with_retain_lock(
-        &self,
-        msg: Arc<E>,
-        retained: &mut VecDeque<RetainedValue<E>>,
-    ) {
+impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
+    async fn set_with_retain_lock(&self, msg: E, retained: &mut VecDeque<RetainedValue<E>>) {
         // Do all locking up front and in a known order to prevent deadlocks
         let mut senders = self.senders.lock().await;
         let mut senders_serialized = self.senders_serialized.lock().await;
@@ -169,33 +165,24 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
     ///
     /// # Arguments
     ///
-    /// * `msg` - Value to set the topic to (as Arc)
-    pub async fn set_arc(&self, msg: Arc<E>) {
-        let mut retained = self.retained.lock().await;
-
-        self.set_arc_with_retain_lock(msg, &mut *retained).await
-    }
-
-    /// Set a new value for the topic and notify subscribers
-    ///
-    /// # Arguments
-    ///
     /// * `msg` - Value to set the topic to
     pub async fn set(&self, msg: E) {
-        self.set_arc(Arc::new(msg)).await
+        let mut retained = self.retained.lock().await;
+
+        self.set_with_retain_lock(msg, &mut *retained).await
     }
 
     /// Get the current value
     ///
     /// Or nothing if none is set
-    pub async fn try_get(&self) -> Option<Arc<E>> {
+    pub async fn try_get(&self) -> Option<E> {
         self.retained.lock().await.back().map(|v| v.native())
     }
 
     // Get the value of this topic
     //
     // Waits for a value if none was set yet
-    pub async fn get(self: &Arc<Self>) -> Arc<E> {
+    pub async fn get(self: &Arc<Self>) -> E {
         let (mut rx, sub) = self.clone().subscribe_unbounded().await;
         let val = rx.next().await;
         sub.unsubscribe().await;
@@ -213,12 +200,12 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
     /// set to v.
     pub async fn modify<F>(&self, cb: F)
     where
-        F: FnOnce(Option<Arc<E>>) -> Option<Arc<E>>,
+        F: FnOnce(Option<E>) -> Option<E>,
     {
         let mut retained = self.retained.lock().await;
 
         if let Some(new) = cb(retained.back().map(|v| v.native())) {
-            self.set_arc_with_retain_lock(new, &mut *retained).await;
+            self.set_with_retain_lock(new, &mut *retained).await;
         }
     }
 
@@ -233,14 +220,11 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
     /// # Arguments
     ///
     /// * `sender` - The sender side of the queue to subscribe
-    pub async fn subscribe(
-        self: Arc<Self>,
-        sender: Sender<Arc<E>>,
-    ) -> SubscriptionHandle<E, Native> {
+    pub async fn subscribe(self: Arc<Self>, sender: Sender<E>) -> SubscriptionHandle<E, Native> {
         let token = Unique::new();
 
         // If there is a retained value try to enqueue it right away.
-        // It that fails mimic what set_arc_with_retain_lock would do.
+        // It that fails mimic what set_with_retain_lock would do.
         let retained_send_res = {
             let retained = self.retained.lock().await;
 
@@ -274,7 +258,7 @@ impl<E: Serialize + DeserializeOwned> Topic<E> {
     /// If a retained value is present it will be enqueued immediately.
     pub async fn subscribe_unbounded(
         self: Arc<Self>,
-    ) -> (Receiver<Arc<E>>, SubscriptionHandle<E, Native>) {
+    ) -> (Receiver<E>, SubscriptionHandle<E, Native>) {
         let (tx, rx) = unbounded();
         (rx, self.subscribe(tx).await)
     }
@@ -294,7 +278,7 @@ pub trait AnyTopic: Sync + Send {
 }
 
 #[async_trait]
-impl<E: Serialize + DeserializeOwned + Send + Sync + 'static> AnyTopic for Topic<E> {
+impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic for Topic<E> {
     fn path(&self) -> &TopicName {
         &self.path
     }
@@ -384,7 +368,7 @@ mod tests {
     use async_std::task::block_on;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
     struct SerTestType {
         a: bool,
         b: u32,
@@ -405,8 +389,8 @@ mod tests {
         Arc::new(topic)
     }
 
-    fn collect_native<E: Clone>(recv: Receiver<Arc<E>>) -> Vec<E> {
-        std::iter::from_fn(|| recv.try_recv().ok().map(|v| v.as_ref().clone())).collect()
+    fn collect_native<E: Clone>(recv: Receiver<E>) -> Vec<E> {
+        std::iter::from_fn(|| recv.try_recv().ok()).collect()
     }
 
     fn collect_serialized(recv: Receiver<(TopicName, Arc<[u8]>)>) -> Vec<Vec<u8>> {
@@ -506,11 +490,11 @@ mod tests {
 
             assert_eq!(
                 topic.try_get().await,
-                Some(Arc::new(SerTestType {
+                Some(SerTestType {
                     a: true,
                     b: 1,
                     c: "test".to_string()
-                }))
+                })
             );
 
             let ser = topic.try_get_as_bytes().await.unwrap();

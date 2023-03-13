@@ -111,7 +111,7 @@ impl MountableScreen for SystemScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                match *ev {
+                match ev {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,

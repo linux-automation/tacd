@@ -69,10 +69,10 @@ impl IoBus {
                 {
                     server_info_task
                         .modify(|prev| {
-                            let need_update = prev.map(|p| *p != si).unwrap_or(true);
+                            let need_update = prev.map(|p| p != si).unwrap_or(true);
 
                             if need_update {
-                                Some(Arc::new(si))
+                                Some(si)
                             } else {
                                 None
                             }
@@ -86,10 +86,10 @@ impl IoBus {
                 {
                     nodes_task
                         .modify(|prev| {
-                            let need_update = prev.map(|n| *n != nodes).unwrap_or(true);
+                            let need_update = prev.map(|n| n != nodes).unwrap_or(true);
 
                             if need_update {
-                                Some(Arc::new(nodes))
+                                Some(nodes)
                             } else {
                                 None
                             }

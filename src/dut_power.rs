@@ -253,7 +253,7 @@ fn setup_labgrid_compat(
         let (mut request_stream, _) = compat_request.subscribe_unbounded().await;
 
         while let Some(req) = request_stream.next().await {
-            match *req {
+            match req {
                 0 => request.set(OutputRequest::Off).await,
                 1 => request.set(OutputRequest::On).await,
                 _ => {}
@@ -265,7 +265,7 @@ fn setup_labgrid_compat(
         let (mut state_stream, _) = state.subscribe_unbounded().await;
 
         while let Some(state) = state_stream.next().await {
-            match *state {
+            match state {
                 OutputState::On => compat_response.set(1).await,
                 _ => compat_response.set(0).await,
             }
@@ -469,7 +469,7 @@ impl DutPwrThread {
             let (mut request_stream, _) = request_topic_task.subscribe_unbounded().await;
 
             while let Some(req) = request_stream.next().await {
-                request_task.store(*req as u8, Ordering::Relaxed);
+                request_task.store(req as u8, Ordering::Relaxed);
             }
         });
 
@@ -549,28 +549,28 @@ mod tests {
         // Make sure that the DUT power is off by default
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::Off);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::Off);
 
         println!("Turn Off Floating");
         block_on(dut_pwr.request.set(OutputRequest::OffFloating));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OffFloating);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::OffFloating);
 
         println!("Turn on");
         block_on(dut_pwr.request.set(OutputRequest::On));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger transient inverted polarity (Output should stay on)");
         adc.pwr_volt.fast.transient(MIN_VOLTAGE * 1.01);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger inverted polarity");
         adc.pwr_volt.fast.set(MIN_VOLTAGE * 1.01);
@@ -579,24 +579,21 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(
-            *block_on(dut_pwr.state.get()),
-            OutputState::InvertedPolarity
-        );
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::InvertedPolarity);
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger transient overcurrent (Output should stay on)");
         adc.pwr_curr.fast.transient(MAX_CURRENT * 1.01);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger overcurrent");
         adc.pwr_curr.fast.set(MAX_CURRENT * 1.01);
@@ -605,21 +602,21 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OverCurrent);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::OverCurrent);
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger transient overvoltage (Output should stay on)");
         adc.pwr_volt.fast.transient(MAX_VOLTAGE * 1.01);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger overvoltage");
         adc.pwr_volt.fast.set(MAX_VOLTAGE * 1.01);
@@ -628,14 +625,14 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OverVoltage);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::OverVoltage);
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger realtime violation");
         adc.pwr_volt.fast.stall(true);
@@ -645,7 +642,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(
-            *block_on(dut_pwr.state.get()),
+            block_on(dut_pwr.state.get()),
             OutputState::RealtimeViolation
         );
 
@@ -654,7 +651,7 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Drop DutPwrThread");
         std::mem::drop(dut_pwr);
