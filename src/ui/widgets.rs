@@ -40,8 +40,8 @@ pub enum IndicatorState {
     Error,
 }
 
-pub trait DrawFn<T>: Fn(&T, Point, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
-impl<T, U> DrawFn<T> for U where U: Fn(&T, Point, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
+pub trait DrawFn<T>: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
+impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
 
 pub trait IndicatorFormatFn<T>: Fn(&T) -> IndicatorState {}
 impl<T, U> IndicatorFormatFn<T> for U where U: Fn(&T) -> IndicatorState {}
@@ -74,7 +74,6 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
     pub async fn new(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
-        anchor: Point,
         draw_fn: Box<dyn DrawFn<T> + Sync + Send>,
     ) -> Self {
         let (mut rx, sub_handle) = topic.subscribe_unbounded().await;
@@ -92,7 +91,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
                         .unwrap();
                 }
 
-                prev_bb = draw_fn(&val, anchor, &mut *target);
+                prev_bb = draw_fn(&val, &mut *target);
             }
         });
 
@@ -116,8 +115,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         Self::new(
             topic,
             target,
-            anchor,
-            Box::new(move |msg, anchor, target| {
+            Box::new(move |msg, target| {
                 let val = format_fn(msg).clamp(0.0, 1.0);
                 let fill_width = ((width as f32) * val) as u32;
 
@@ -150,8 +148,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         Self::new(
             topic,
             target,
-            anchor,
-            Box::new(move |msg, anchor, target| match format_fn(msg) {
+            Box::new(move |msg, target| match format_fn(msg) {
                 IndicatorState::On => {
                     let circle = Circle::new(anchor, 10);
                     let style = PrimitiveStyleBuilder::new()
@@ -204,8 +201,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         Self::new(
             topic,
             target,
-            anchor,
-            Box::new(move |msg, anchor, target| {
+            Box::new(move |msg, target| {
                 let text = format_fn(msg);
 
                 let ui_text_style: MonoTextStyle<BinaryColor> =
@@ -254,12 +250,12 @@ impl DynamicWidget<i32> {
         Self::new(
             topic,
             target,
-            Point::new(128 - 5, 32),
-            Box::new(move |val, anchor, target| {
+            Box::new(move |val, target| {
                 let size = 64 - ((*val - 32).abs() * 2);
 
                 if size != 0 {
-                    let bounding = Rectangle::with_center(anchor, Size::new(10, size as u32));
+                    let bounding =
+                        Rectangle::with_center(Point::new(128 - 5, 32), Size::new(10, size as u32));
 
                     bounding
                         .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))

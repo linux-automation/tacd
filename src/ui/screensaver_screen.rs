@@ -137,8 +137,7 @@ impl MountableScreen for ScreenSaverScreen {
             DynamicWidget::new(
                 self.hostname_dance.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 0),
-                Box::new(move |msg, _, target| {
+                Box::new(move |msg, target| {
                     let (i, hostname) = msg;
 
                     let ui_text_style: MonoTextStyle<BinaryColor> =
