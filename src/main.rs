@@ -52,7 +52,9 @@ async fn main() -> Result<(), std::io::Error> {
     let mut bb = BrokerBuilder::new();
 
     let adc = Adc::new(&mut bb).await.unwrap();
-    let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone());
+    let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone())
+        .await
+        .unwrap();
     let watchdog = Watchdog::new(dut_pwr.tick());
 
     let resources = UiRessources {
