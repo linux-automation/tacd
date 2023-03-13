@@ -492,7 +492,7 @@ mod tests {
 
         let (adc, dut_pwr) = {
             let mut bb = BrokerBuilder::new();
-            let adc = Adc::new(&mut bb);
+            let adc = block_on(Adc::new(&mut bb)).unwrap();
 
             let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone());
 

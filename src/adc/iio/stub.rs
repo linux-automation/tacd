@@ -111,14 +111,14 @@ pub struct IioThread {
 }
 
 impl IioThread {
-    pub fn new() -> Arc<Self> {
+    pub async fn new() -> Result<Arc<Self>> {
         let mut channels = Vec::new();
 
         for name in CHANNELS {
             channels.push((*name, CalibratedChannel::new()))
         }
 
-        Arc::new(Self { channels })
+        Ok(Arc::new(Self { channels }))
     }
 
     pub fn get_channel(self: Arc<Self>, ch_name: &str) -> Result<CalibratedChannel> {

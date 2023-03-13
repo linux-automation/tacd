@@ -17,6 +17,7 @@
 
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::sync::Arc;
 use async_std::task::{sleep, spawn};
 
@@ -70,8 +71,8 @@ pub struct Adc {
 }
 
 impl Adc {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
-        let iio_thread = IioThread::new();
+    pub async fn new(bb: &mut BrokerBuilder) -> Result<Self> {
+        let iio_thread = IioThread::new().await?;
 
         let adc = Self {
             usb_host_curr: AdcChannel {
@@ -240,6 +241,6 @@ impl Adc {
             }
         });
 
-        adc
+        Ok(adc)
     }
 }

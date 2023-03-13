@@ -15,8 +15,6 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use anyhow::{anyhow, Context, Result};
-
 use std::convert::{TryFrom, TryInto};
 use std::io::Read;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
@@ -25,9 +23,12 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use anyhow::{anyhow, Context, Result};
+use async_std::channel::bounded;
+use async_std::stream::StreamExt;
 use async_std::sync::Arc;
 
-use industrial_io::Channel;
+use industrial_io::{Buffer, Channel};
 
 use log::{debug, warn};
 use thread_priority::*;
@@ -213,80 +214,111 @@ pub struct IioThread {
 }
 
 impl IioThread {
-    pub fn new() -> Arc<Self> {
-        let thread = Arc::new(Self {
-            ref_instant: Instant::now(),
-            timestamp: AtomicU64::new(0),
-            values: [
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-                AtomicU16::new(0),
-            ],
-            join: Mutex::new(None),
-        });
+    fn adc_setup() -> Result<(Vec<Channel>, Buffer, Vec<Channel>)> {
+        let ctx = industrial_io::Context::new()?;
 
-        let thread_weak = Arc::downgrade(&thread);
+        debug!("IIO devices:");
+        for dev in ctx.devices() {
+            debug!("  * {}", &dev.name().unwrap_or_default());
+        }
+
+        let stm32_adc = ctx
+            .find_device("48003000.adc:adc@0")
+            .ok_or(anyhow!("Could not find STM32 ADC"))?;
+        let pwr_adc = ctx
+            .find_device("lmp92064")
+            .ok_or(anyhow!("Could not find Powerboard ADC"))?;
+
+        if let Err(err) = stm32_adc.attr_write_bool("buffer/enable", false) {
+            warn!("Failed to disable STM32 ADC buffer: {}", err);
+        }
+
+        let stm32_channels: Vec<Channel> = CHANNELS_STM32
+            .iter()
+            .map(|(iio_name, _, _)| {
+                let ch = stm32_adc
+                    .find_channel(iio_name, false)
+                    .expect(&format!("Failed to open iio channel {iio_name}"));
+
+                ch.enable();
+                ch
+            })
+            .collect();
+
+        let pwr_channels: Vec<Channel> = CHANNELS_PWR
+            .iter()
+            .map(|(iio_name, _, _)| {
+                pwr_adc
+                    .find_channel(iio_name, false)
+                    .expect(&format!("Failed to open iio channel {iio_name}"))
+            })
+            .collect();
+
+        let trig = ctx
+            .find_device("tim4_trgo")
+            .ok_or(anyhow!("Could not find STM32 Timer 4 trigger"))?;
+        trig.attr_write_int("sampling_frequency", 1024)?;
+
+        stm32_adc.set_trigger(&trig)?;
+        ctx.set_timeout_ms(1000)?;
+
+        let stm32_buf = stm32_adc.create_buffer(128, false)?;
+
+        set_thread_priority_and_policy(
+            thread_native_id(),
+            ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
+            ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
+        )
+        .map_err(|e| anyhow!("Failed to set realtime thread priority: {e:?}"))?;
+
+        Ok((stm32_channels, stm32_buf, pwr_channels))
+    }
+
+    pub async fn new() -> Result<Arc<Self>> {
+        // Some of the adc thread setup can only happen _in_ the adc thread,
+        // like setting the priority or some iio setup, as not all structs
+        // are Send.
+        // We do however not want to return from new() before we know that the
+        // setup was sucessful.
+        // This is why we create Self inside the thread and send it back
+        // to the calling thread via a queue.
+        let (thread_res_tx, mut thread_res_rx) = bounded(1);
 
         // Spawn a high priority thread that updates the atomic values in `thread`.
         let join = thread::Builder::new()
             .name("tacd iio".into())
             .spawn(move || {
-                let ctx = industrial_io::Context::new().unwrap();
+                let (thread_weak, stm32_channels, mut stm32_buf, pwr_channels) =
+                    match Self::adc_setup() {
+                        Ok((stm32_channels, stm32_buf, pwr_channels)) => {
+                            let thread = Arc::new(Self {
+                                ref_instant: Instant::now(),
+                                timestamp: AtomicU64::new(0),
+                                values: [
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                    AtomicU16::new(0),
+                                ],
+                                join: Mutex::new(None),
+                            });
+                            let thread_weak = Arc::downgrade(&thread);
 
-                debug!("IIO devices:");
-                for dev in ctx.devices() {
-                    debug!("  * {}", &dev.name().unwrap_or_default());
-                }
+                            thread_res_tx.try_send(Ok(thread)).unwrap();
 
-                let stm32_adc = ctx.find_device("48003000.adc:adc@0").unwrap();
-                let pwr_adc = ctx.find_device("lmp92064").unwrap();
-
-                if let Err(err) = stm32_adc.attr_write_bool("buffer/enable", false) {
-                    warn!("Failed to disable STM32 ADC buffer: {}", err);
-                }
-
-                let stm32_channels: Vec<Channel> = CHANNELS_STM32
-                    .iter()
-                    .map(|(iio_name, _, _)| {
-                        let ch = stm32_adc
-                            .find_channel(iio_name, false)
-                            .expect(&format!("Failed to open iio channel {iio_name}"));
-
-                        ch.enable();
-                        ch
-                    })
-                    .collect();
-
-                let pwr_channels: Vec<Channel> = CHANNELS_PWR
-                    .iter()
-                    .map(|(iio_name, _, _)| {
-                        pwr_adc
-                            .find_channel(iio_name, false)
-                            .expect(&format!("Failed to open iio channel {iio_name}"))
-                    })
-                    .collect();
-
-                let trig = ctx.find_device("tim4_trgo").unwrap();
-                trig.attr_write_int("sampling_frequency", 1024).unwrap();
-
-                stm32_adc.set_trigger(&trig).unwrap();
-                ctx.set_timeout_ms(1000).unwrap();
-
-                let mut stm32_buf = stm32_adc.create_buffer(128, false).unwrap();
-
-                set_thread_priority_and_policy(
-                    thread_native_id(),
-                    ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
-                    ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
-                )
-                .unwrap();
+                            (thread_weak, stm32_channels, stm32_buf, pwr_channels)
+                        }
+                        Err(e) => {
+                            thread_res_tx.try_send(Err(e)).unwrap();
+                            panic!()
+                        }
+                    };
 
                 // Stop running as soon as the last reference to this Arc<IioThread>
                 // is dropped (e.g. the weak reference can no longer be upgraded).
@@ -324,12 +356,12 @@ impl IioThread {
 
                     thread.timestamp.store(ts, Ordering::Release);
                 }
-            })
-            .unwrap();
+            })?;
 
+        let thread = thread_res_rx.next().await.unwrap()?;
         *thread.join.lock().unwrap() = Some(join);
 
-        thread
+        Ok(thread)
     }
 
     /// Use the channel names defined at the top of the file to get a reference
