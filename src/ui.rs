@@ -136,7 +136,7 @@ async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<Framebu
         .unwrap();
 }
 
-pub struct UiRessources {
+pub struct UiResources {
     pub adc: crate::adc::Adc,
     pub dbus: crate::dbus::DbusSession,
     pub dig_io: crate::digital_io::DigitalIo,
@@ -154,7 +154,7 @@ pub struct Ui {
     locator_dance: Arc<Topic<i32>>,
     buttons: Arc<Topic<ButtonEvent>>,
     screens: Vec<Box<dyn MountableScreen>>,
-    res: UiRessources,
+    res: UiResources,
 }
 
 /// Add a web endpoint that serves the current framebuffer as png
@@ -173,7 +173,7 @@ fn serve_framebuffer(server: &mut Server<()>, draw_target: Arc<Mutex<Framebuffer
 }
 
 impl Ui {
-    pub fn new(bb: &mut BrokerBuilder, res: UiRessources, server: &mut Server<()>) -> Self {
+    pub fn new(bb: &mut BrokerBuilder, res: UiResources, server: &mut Server<()>) -> Self {
         let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
         let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));

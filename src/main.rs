@@ -40,7 +40,7 @@ use dut_power::DutPwrThread;
 use iobus::IoBus;
 use system::System;
 use temperatures::Temperatures;
-use ui::{Ui, UiRessources};
+use ui::{Ui, UiResources};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
 use web::WebInterface;
@@ -57,7 +57,7 @@ async fn main() -> Result<(), std::io::Error> {
         .unwrap();
     let watchdog = Watchdog::new(dut_pwr.tick());
 
-    let resources = UiRessources {
+    let resources = UiResources {
         adc,
         dbus: DbusSession::new(&mut bb).await,
         dig_io: DigitalIo::new(&mut bb),
