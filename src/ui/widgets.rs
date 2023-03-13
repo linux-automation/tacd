@@ -80,19 +80,19 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         let (mut rx, sub_handle) = topic.subscribe_unbounded().await;
 
         let join_handle = spawn(async move {
-            let mut next = rx.next().await;
+            let mut prev_bb: Option<Rectangle> = None;
 
-            while let Some(val) = next {
-                let mut prev_bb = draw_fn(&val, anchor, &mut *target.lock().await);
-
-                next = rx.next().await;
+            while let Some(val) = rx.next().await {
+                let mut target = target.lock().await;
 
                 if let Some(bb) = prev_bb.take() {
                     // Clear the bounding box by painting it black
                     bb.into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
-                        .draw(&mut *target.lock().await)
+                        .draw(&mut *target)
                         .unwrap();
                 }
+
+                prev_bb = draw_fn(&val, anchor, &mut *target);
             }
         });
 
