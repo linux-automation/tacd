@@ -145,9 +145,8 @@ impl Ui {
         };
 
         let mut curr_screen_type = None;
-        let mut next_screen_type = Screen::ScreenSaver;
 
-        loop {
+        while let Some(next_screen_type) = screen_rx.next().await {
             // Only unmount / mount the shown screen if a change was requested
             let should_change = curr_screen_type
                 .map(|c| c != next_screen_type)
@@ -173,11 +172,8 @@ impl Ui {
 
                 curr_screen_type = Some(next_screen_type);
             }
-
-            match screen_rx.next().await {
-                Some(screen) => next_screen_type = screen,
-                None => break Ok(()),
-            }
         }
+
+        Ok(())
     }
 }
