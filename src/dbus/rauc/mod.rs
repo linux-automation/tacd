@@ -132,7 +132,7 @@ impl Rauc {
 
                             // Remove "." from the dictionary key to make defining a typescript
                             // type easier ("rootfs.0" -> "rootfs_0").
-                            (slot_name.replace(".", "_").to_string(), info)
+                            (slot_name.replace('.', "_"), info)
                         })
                         .collect();
 

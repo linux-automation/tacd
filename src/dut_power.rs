@@ -463,19 +463,17 @@ impl DutPwrThread {
 
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
-        let request_task = request.clone();
         let request_topic_task = request_topic.clone();
         task::spawn(async move {
             let (mut request_stream, _) = request_topic_task.subscribe_unbounded().await;
 
             while let Some(req) = request_stream.next().await {
-                request_task.store(req as u8, Ordering::Relaxed);
+                request.store(req as u8, Ordering::Relaxed);
             }
         });
 
         // State information comes from the thread in the form of an atomic
         // variable and is forwarded to the broker framework.
-        let state_task = state.clone();
         let state_topic_task = state_topic.clone();
         task::spawn(async move {
             let mut prev_state: Option<OutputState> = None;
@@ -483,7 +481,7 @@ impl DutPwrThread {
             loop {
                 task::sleep(TASK_INTERVAL).await;
 
-                let state = state_task.load(Ordering::Relaxed).into();
+                let state = state.load(Ordering::Relaxed).into();
 
                 if prev_state.map(|prev| prev != state).unwrap_or(true) {
                     state_topic_task.set(state).await;

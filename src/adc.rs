@@ -166,7 +166,7 @@ impl Adc {
                 ),
             },
             pwr_curr: AdcChannel {
-                fast: iio_thread.clone().get_channel("pwr-curr").unwrap(),
+                fast: iio_thread.get_channel("pwr-curr").unwrap(),
                 topic: bb.topic(
                     "/v1/dut/feedback/current",
                     true,
