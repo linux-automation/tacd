@@ -300,7 +300,7 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
 
         SubscriptionHandle {
             topic: Arc::downgrade(&self),
-            token: token,
+            token,
             phantom: PhantomData,
         }
     }
@@ -394,7 +394,7 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
 
         let handle = SubscriptionHandle {
             topic: Arc::downgrade(&self),
-            token: token,
+            token,
             phantom: PhantomData,
         };
 

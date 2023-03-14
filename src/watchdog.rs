@@ -53,9 +53,7 @@ pub struct Watchdog {
 
 impl Watchdog {
     pub fn new(dut_power_tick: TickReader) -> Self {
-        Self {
-            dut_power_tick: dut_power_tick,
-        }
+        Self { dut_power_tick }
     }
 
     /// Make sure the following things are still somewhat working:

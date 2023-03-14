@@ -33,7 +33,7 @@ impl Measurement {
     pub fn now(value: f32) -> Self {
         Self {
             ts: Timestamp::now(),
-            value: value,
+            value,
         }
     }
 }

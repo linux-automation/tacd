@@ -135,8 +135,8 @@ impl<'a> LinkStream<'a> {
         Ok(Self {
             interface: interface.to_string(),
             _con: con,
-            speed: speed,
-            carrier: carrier,
+            speed,
+            carrier,
             data: info,
         })
     }
@@ -194,7 +194,7 @@ impl<'a> IpStream<'a> {
         Ok(Self {
             interface: interface.to_string(),
             _con: con,
-            ip_4_config: ip_4_config,
+            ip_4_config,
             path: path.to_string(),
         })
     }
