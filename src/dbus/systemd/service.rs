@@ -19,6 +19,8 @@
 //!
 //! …consequently `zbus-xmlgen` did not generate code for the above interfaces.
 
+#![allow(clippy::all)]
+
 use zbus::dbus_proxy;
 
 #[dbus_proxy(

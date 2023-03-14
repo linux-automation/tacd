@@ -31,6 +31,8 @@ use serde::{Deserialize, Serialize};
 
 mod devices;
 mod hostname;
+
+#[allow(clippy::module_inception)]
 mod networkmanager;
 
 use crate::broker::{BrokerBuilder, Topic};
