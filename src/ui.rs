@@ -20,115 +20,18 @@ use std::time::Duration;
 use async_std::prelude::*;
 use async_std::sync::{Arc, Mutex};
 use async_std::task::{sleep, spawn};
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use tide::{Response, Server};
-
-use embedded_graphics::{
-    mono_font::{ascii::FONT_8X13, MonoTextStyle},
-    pixelcolor::BinaryColor,
-    prelude::*,
-    primitives::{Line, PrimitiveStyle},
-    text::Text,
-};
 
 use crate::broker::{BrokerBuilder, Topic};
 
 mod buttons;
-mod dig_out_screen;
 mod draw_fb;
-mod iobus_screen;
-mod power_screen;
-mod rauc_screen;
-mod reboot_screen;
-mod screensaver_screen;
-mod system_screen;
-mod uart_screen;
-mod usb_screen;
+mod screens;
 mod widgets;
 
 use buttons::{handle_buttons, ButtonEvent};
-use dig_out_screen::DigOutScreen;
 use draw_fb::FramebufferDrawTarget;
-use iobus_screen::IoBusScreen;
-use power_screen::PowerScreen;
-use rauc_screen::RaucScreen;
-use reboot_screen::RebootConfirmScreen;
-use screensaver_screen::ScreenSaverScreen;
-use system_screen::SystemScreen;
-use uart_screen::UartScreen;
-use usb_screen::UsbScreen;
-
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
-pub enum Screen {
-    DutPower,
-    Usb,
-    DigOut,
-    System,
-    IoBus,
-    Uart,
-    ScreenSaver,
-    RebootConfirm,
-    Rauc,
-}
-
-impl Screen {
-    /// What is the next screen to transition to when e.g. the button is  pressed?
-    fn next(&self) -> Self {
-        match self {
-            Self::DutPower => Self::Usb,
-            Self::Usb => Self::DigOut,
-            Self::DigOut => Self::System,
-            Self::System => Self::IoBus,
-            Self::IoBus => Self::Uart,
-            Self::Uart => Self::ScreenSaver,
-            Self::ScreenSaver => Self::DutPower,
-            Self::RebootConfirm => Self::System,
-            Self::Rauc => Self::ScreenSaver,
-        }
-    }
-
-    /// Should screensaver be automatically enabled when in this screen?
-    fn use_screensaver(&self) -> bool {
-        !matches!(self, Self::Rauc)
-    }
-}
-
-#[async_trait]
-trait MountableScreen: Sync + Send {
-    fn is_my_type(&self, screen: Screen) -> bool;
-    async fn mount(&mut self, ui: &Ui);
-    async fn unmount(&mut self);
-}
-
-/// Draw static screen border contining a title and an indicator for the
-/// position of the screen in the list of screens.
-async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<FramebufferDrawTarget>>) {
-    let mut draw_target = draw_target.lock().await;
-
-    Text::new(
-        text,
-        Point::new(4, 13),
-        MonoTextStyle::new(&FONT_8X13, BinaryColor::On),
-    )
-    .draw(&mut *draw_target)
-    .unwrap();
-
-    Line::new(Point::new(0, 16), Point::new(118, 16))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-        .draw(&mut *draw_target)
-        .unwrap();
-
-    let screen_idx = screen as i32;
-    let num_screens = Screen::ScreenSaver as i32;
-    let x_start = screen_idx * 128 / num_screens;
-    let x_end = (screen_idx + 1) * 128 / num_screens;
-
-    Line::new(Point::new(x_start, 62), Point::new(x_end, 62))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-        .draw(&mut *draw_target)
-        .unwrap();
-}
+use screens::{MountableScreen, Screen};
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,
@@ -176,17 +79,7 @@ impl Ui {
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, None, 0);
 
         // Initialize all the screens now so they can be mounted later
-        let screens: Vec<Box<dyn MountableScreen>> = vec![
-            Box::new(DigOutScreen::new(bb)),
-            Box::new(IoBusScreen::new()),
-            Box::new(PowerScreen::new()),
-            Box::new(RaucScreen::new(&screen, &res.rauc.operation)),
-            Box::new(RebootConfirmScreen::new()),
-            Box::new(ScreenSaverScreen::new(&buttons, &screen)),
-            Box::new(SystemScreen::new()),
-            Box::new(UartScreen::new(bb)),
-            Box::new(UsbScreen::new(bb)),
-        ];
+        let screens: Vec<Box<dyn MountableScreen>> = screens::init(bb, &res, &screen, &buttons);
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",
