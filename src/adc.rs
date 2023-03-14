@@ -21,7 +21,7 @@ use async_std::sync::Arc;
 use async_std::task::{sleep, spawn};
 
 use crate::broker::{BrokerBuilder, Topic};
-use crate::measurement::Measurement;
+use crate::measurement::{Measurement, Timestamp};
 
 const HISTORY_LENGTH: usize = 200;
 
@@ -65,6 +65,7 @@ pub struct Adc {
     pub iobus_volt: AdcChannel,
     pub pwr_volt: AdcChannel,
     pub pwr_curr: AdcChannel,
+    pub time: Arc<Topic<Timestamp>>,
 }
 
 impl Adc {
@@ -172,6 +173,7 @@ impl Adc {
                     HISTORY_LENGTH,
                 ),
             },
+            time: bb.topic_ro("/v1/tac/time/now", None),
         };
 
         let adc_clone = adc.clone();
@@ -232,6 +234,8 @@ impl Adc {
                     .topic
                     .set(adc_clone.pwr_curr.fast.get())
                     .await;
+
+                adc_clone.time.set(Timestamp::now()).await;
             }
         });
 

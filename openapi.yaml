@@ -484,6 +484,17 @@ paths:
         '400':
           description: The value could not be parsed as boolean
 
+  /v1/tac/time/now:
+    get:
+      summary: Get the current time on the TAC as milliseconds since the Unix Epoch
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: number
+
   /v1/tac/update/operation:
     get:
       summary: Get the currently running system update operation
