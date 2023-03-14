@@ -124,7 +124,7 @@ impl WebInterface {
         // from sub-directories we would have to modify serve_dir().
         // Which is something we will likely want anyways as it does not
         // support compression, caching headers or directory listings.
-        if web_path.ends_with("/") {
+        if web_path.ends_with('/') {
             let index_html = fs_path.as_ref().join("index.html");
 
             if let Err(e) = self.server.at(web_path).serve_file(&index_html) {

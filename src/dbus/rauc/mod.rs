@@ -118,9 +118,7 @@ impl Rauc {
                                     let k = k
                                         .replace("type", "fs_type")
                                         .replace("class", "slot_class")
-                                        .replace(".", "_")
-                                        .replace("-", "_")
-                                        .to_string();
+                                        .replace(['.', '-'], "_");
 
                                     (k, ss.or(s32).or(s64).unwrap_or_default())
                                 })
