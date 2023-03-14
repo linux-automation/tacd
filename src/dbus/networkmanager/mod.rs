@@ -43,15 +43,6 @@ pub struct LinkInfo {
     pub carrier: bool,
 }
 
-impl Default for LinkInfo {
-    fn default() -> Self {
-        Self {
-            speed: 0,
-            carrier: false,
-        }
-    }
-}
-
 async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Result<OwnedObjectPath> {
     let proxy = networkmanager::NetworkManagerProxy::new(con).await?;
     let device_paths = proxy.get_devices().await?;
