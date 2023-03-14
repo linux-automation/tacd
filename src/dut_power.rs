@@ -354,8 +354,8 @@ impl DutPwrThread {
                             .fast
                             .try_get_multiple([&pwr_volt.fast, &pwr_curr.fast]);
 
-                        if let Some((new_ts, _)) = feedback {
-                            last_ts = Some(new_ts);
+                        if let Some(m) = feedback {
+                            last_ts = Some(m[0].ts.as_instant());
                         }
 
                         let too_old = last_ts
@@ -375,8 +375,8 @@ impl DutPwrThread {
                             tick.fetch_add(1, Ordering::Relaxed);
                         }
 
-                        if let Some((_, [volt, curr])) = feedback {
-                            break (volt, curr);
+                        if let Some(m) = feedback {
+                            break (m[0].value, m[1].value);
                         }
                     };
 

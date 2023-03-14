@@ -32,6 +32,8 @@ use industrial_io::Channel;
 use log::{debug, warn};
 use thread_priority::*;
 
+use crate::measurement::{Measurement, Timestamp};
+
 // Hard coded list of channels using the internal STM32MP1 ADC.
 // Consists of the IIO channel name, the location of the calibration data
 // in the device tree and an internal name for the channel.
@@ -154,7 +156,7 @@ impl CalibratedChannel {
     pub fn try_get_multiple<const N: usize>(
         &self,
         channels: [&Self; N],
-    ) -> Option<(Instant, [f32; N])> {
+    ) -> Option<[Measurement; N]> {
         let ts_before = self.iio_thread.timestamp.load(Ordering::Acquire);
 
         // TODO: should there be a fence() here?
@@ -178,13 +180,14 @@ impl CalibratedChannel {
                 .ref_instant
                 .checked_add(Duration::from_nanos(ts_before))
                 .unwrap();
+            let ts = Timestamp::new(ts);
 
-            let mut values = [0.0; N];
+            let mut values = [Measurement { ts, value: 0.0 }; N];
             for i in 0..N {
-                values[i] = channels[i].calibration.apply(values_raw[i] as f32);
+                values[i].value = channels[i].calibration.apply(values_raw[i] as f32);
             }
 
-            Some((ts, values))
+            Some(values)
         } else {
             None
         }
@@ -192,12 +195,12 @@ impl CalibratedChannel {
 
     /// Get the value of the channel, or None if the timestamp changed while
     /// reading the value (which should be extremely rare)
-    pub fn try_get(&self) -> Option<(Instant, f32)> {
-        self.try_get_multiple([self]).map(|(ts, [val])| (ts, val))
+    pub fn try_get(&self) -> Option<Measurement> {
+        self.try_get_multiple([self]).map(|res| res[0])
     }
 
     // Get the current value of the channel
-    pub fn get(&self) -> (Instant, f32) {
+    pub fn get(&self) -> Measurement {
         loop {
             if let Some(r) = self.try_get() {
                 break r;

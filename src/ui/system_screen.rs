@@ -21,13 +21,12 @@ use async_trait::async_trait;
 
 use embedded_graphics::prelude::*;
 
-use crate::adc::Measurement;
-use crate::broker::{Native, SubscriptionHandle};
-use crate::dbus::LinkInfo;
-
 use super::buttons::*;
 use super::widgets::*;
 use super::{draw_border, MountableScreen, Screen, Ui};
+use crate::broker::{Native, SubscriptionHandle};
+use crate::dbus::LinkInfo;
+use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::System;
 

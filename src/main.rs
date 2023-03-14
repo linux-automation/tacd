@@ -24,6 +24,7 @@ mod digital_io;
 mod dut_power;
 mod iobus;
 mod journal;
+mod measurement;
 mod system;
 mod temperatures;
 mod ui;

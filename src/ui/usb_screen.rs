@@ -22,12 +22,11 @@ use async_trait::async_trait;
 
 use embedded_graphics::prelude::*;
 
-use crate::adc::Measurement;
-use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
-
 use super::buttons::*;
 use super::widgets::*;
 use super::{draw_border, MountableScreen, Screen, Ui};
+use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
+use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::Usb;
 

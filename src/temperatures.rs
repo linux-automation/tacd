@@ -17,10 +17,13 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn_blocking};
+
+use crate::broker::{BrokerBuilder, Topic};
+use crate::measurement::Measurement;
 
 #[cfg(feature = "stub_out_hwmon")]
 mod hw {
@@ -55,9 +58,6 @@ mod hw {
 
 use hw::{HwMon, SysClass};
 
-use crate::adc::Measurement;
-use crate::broker::{BrokerBuilder, Topic};
-
 const UPDATE_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct Temperatures {
@@ -82,11 +82,7 @@ impl Temperatures {
                     .input()
                     .unwrap();
 
-                let meas = Measurement {
-                    ts: Instant::now(),
-                    value: val as f32 / 1000.0,
-                };
-
+                let meas = Measurement::now(val as f32 / 1000.0);
                 block_on(soc_temperature_thread.set(meas));
 
                 sleep(UPDATE_INTERVAL);
