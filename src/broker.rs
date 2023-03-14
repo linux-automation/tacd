@@ -15,10 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::collections::VecDeque;
-
-use async_std::sync::{Arc, Mutex};
-
+use async_std::sync::Arc;
 use serde::{de::DeserializeOwned, Serialize};
 
 mod mqtt_conn;
@@ -26,7 +23,6 @@ mod rest;
 mod topic;
 
 pub use mqtt_conn::TopicName;
-use topic::RetainedValue;
 pub use topic::{AnySubscriptionHandle, AnyTopic, Native, SubscriptionHandle, Topic};
 
 pub struct BrokerBuilder {
@@ -40,7 +36,7 @@ impl BrokerBuilder {
 
     /// Register a new topic
     ///
-    /// Please not that you can build topics that perform some kind of
+    /// Please note that you can build topics that perform some kind of
     /// validation by registering a read only topic and a write only topic
     /// with the same path.
     /// This way your application can subscribe to events on the wo topic,
@@ -54,6 +50,9 @@ impl BrokerBuilder {
     /// * `web_writable` - Should this resource be externally writable?
     /// * `initial` - Retained value to return before set() was called the
     ///    first time. Or None
+    /// * `retained_length` - Number of previously set values to retain
+    ///    and push out when subscribing to the serialized stream.
+    ///    Used to pre-fill charts in the web interface.
     pub fn topic<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
@@ -62,26 +61,13 @@ impl BrokerBuilder {
         initial: Option<E>,
         retained_length: usize,
     ) -> Arc<Topic<E>> {
-        let path = TopicName::new(path).unwrap();
-        let retained = {
-            let mut retained = VecDeque::with_capacity(retained_length + 1);
-
-            if let Some(v) = initial {
-                retained.push_back(RetainedValue::new(v))
-            }
-
-            Mutex::new(retained)
-        };
-
-        let topic = Arc::new(Topic {
+        let topic = Arc::new(Topic::new(
             path,
             web_readable,
             web_writable,
-            senders: Mutex::new(Vec::new()),
-            retained,
+            initial,
             retained_length,
-            senders_serialized: Mutex::new(Vec::new()),
-        });
+        ));
 
         self.topics.push(topic.clone());
 
