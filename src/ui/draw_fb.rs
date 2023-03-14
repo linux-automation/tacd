@@ -22,8 +22,37 @@ use png::{BitDepth, ColorType, Encoder};
 
 #[cfg(feature = "demo_mode")]
 mod backend {
-    mod stub;
-    pub use stub::*;
+    use framebuffer::{FixScreeninfo, VarScreeninfo};
+
+    pub struct Framebuffer {
+        pub device: (),
+        pub var_screen_info: VarScreeninfo,
+        pub fix_screen_info: FixScreeninfo,
+        pub frame: [u8; 128 * 64 * 2],
+    }
+
+    impl Framebuffer {
+        pub fn new(_: &str) -> Result<Self, ()> {
+            Ok(Self {
+                device: (),
+                var_screen_info: VarScreeninfo {
+                    bits_per_pixel: 16,
+                    xres: 128,
+                    yres: 64,
+                    ..Default::default()
+                },
+                fix_screen_info: FixScreeninfo {
+                    line_length: 256,
+                    ..Default::default()
+                },
+                frame: [0; 128 * 64 * 2],
+            })
+        }
+
+        pub fn put_var_screeninfo(_: &(), _: &VarScreeninfo) -> Result<(), ()> {
+            Ok(())
+        }
+    }
 }
 
 #[cfg(not(feature = "demo_mode"))]
