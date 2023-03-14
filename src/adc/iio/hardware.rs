@@ -159,8 +159,6 @@ impl CalibratedChannel {
     ) -> Option<[Measurement; N]> {
         let ts_before = self.iio_thread.timestamp.load(Ordering::Acquire);
 
-        // TODO: should there be a fence() here?
-
         let mut values_raw = [0; N];
         for (d, ch) in values_raw.iter_mut().zip(channels.iter()) {
             assert!(
@@ -169,8 +167,6 @@ impl CalibratedChannel {
             );
             *d = self.iio_thread.values[ch.index].load(Ordering::Relaxed);
         }
-
-        // TODO: should there be a fence() here?
 
         let ts_after = self.iio_thread.timestamp.load(Ordering::Acquire);
 
