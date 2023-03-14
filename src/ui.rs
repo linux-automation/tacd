@@ -188,12 +188,7 @@ impl Ui {
             s.push(Box::new(PowerScreen::new()));
             s.push(Box::new(RaucScreen::new(&screen, &res.dbus.rauc.operation)));
             s.push(Box::new(RebootConfirmScreen::new()));
-            s.push(Box::new(ScreenSaverScreen::new(
-                bb,
-                &buttons,
-                &screen,
-                &res.dbus.network.hostname,
-            )));
+            s.push(Box::new(ScreenSaverScreen::new(&buttons, &screen)));
             s.push(Box::new(SystemScreen::new()));
             s.push(Box::new(UartScreen::new(bb)));
             s.push(Box::new(UsbScreen::new(bb)));
