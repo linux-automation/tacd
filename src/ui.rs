@@ -199,7 +199,7 @@ impl Ui {
         };
 
         handle_buttons(
-            &"/dev/input/by-path/platform-gpio-keys-event",
+            "/dev/input/by-path/platform-gpio-keys-event",
             buttons.clone(),
         );
 

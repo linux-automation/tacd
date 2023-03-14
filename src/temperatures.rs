@@ -75,7 +75,7 @@ impl Temperatures {
 
         spawn_blocking(move || {
             while run_thread.load(Ordering::Relaxed) {
-                let val = HwMon::new(&"hwmon0")
+                let val = HwMon::new("hwmon0")
                     .unwrap()
                     .temp(1)
                     .unwrap()

@@ -281,7 +281,7 @@ async fn handle_connection(
                     let matcher = filter.get_matcher();
                     let sub_topics = topics
                         .iter()
-                        .filter(|topic| topic.web_readable() && matcher.is_match(&topic.path()));
+                        .filter(|topic| topic.web_readable() && matcher.is_match(topic.path()));
 
                     let mut new_subscribes = Vec::new();
 

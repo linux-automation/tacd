@@ -106,7 +106,7 @@ impl BrokerBuilder {
         &mut self,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(&"/hidden", false, false, initial, 1)
+        self.topic("/hidden", false, false, initial, 1)
     }
 
     /// Finish building the broker

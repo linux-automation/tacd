@@ -127,7 +127,7 @@ impl WebInterface {
         if web_path.ends_with("/") {
             let index_html = fs_path.as_ref().join("index.html");
 
-            if let Err(e) = self.server.at(&web_path).serve_file(&index_html) {
+            if let Err(e) = self.server.at(web_path).serve_file(&index_html) {
                 // Don't crash if the directory does not exist. Just print a
                 // warning.
                 match e.kind() {
@@ -155,7 +155,7 @@ impl WebInterface {
 
             async move {
                 let content = req.body_bytes().await?;
-                write(&fs_path, &content)?;
+                write(&fs_path, content)?;
 
                 Ok(Response::new(204))
             }

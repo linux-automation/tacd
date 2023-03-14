@@ -51,11 +51,11 @@ impl Default for LinkInfo {
 }
 
 async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Result<OwnedObjectPath> {
-    let proxy = networkmanager::NetworkManagerProxy::new(&con).await?;
+    let proxy = networkmanager::NetworkManagerProxy::new(con).await?;
     let device_paths = proxy.get_devices().await?;
 
     for path in device_paths {
-        let device_proxy = devices::DeviceProxy::builder(&con)
+        let device_proxy = devices::DeviceProxy::builder(con)
             .path(&path)?
             .build()
             .await?;
@@ -71,7 +71,7 @@ async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Resul
 }
 
 async fn get_link_info(con: &Connection, path: &str) -> anyhow::Result<LinkInfo> {
-    let eth_proxy = devices::WiredProxy::builder(&con)
+    let eth_proxy = devices::WiredProxy::builder(con)
         .path(path)?
         .build()
         .await?;
@@ -89,7 +89,7 @@ where
     P: TryInto<ObjectPath<'a>>,
     P::Error: Into<zbus::Error>,
 {
-    let ip_4_proxy = devices::ip4::IP4ConfigProxy::builder(&con)
+    let ip_4_proxy = devices::ip4::IP4ConfigProxy::builder(con)
         .path(path)?
         .build()
         .await?;
@@ -198,7 +198,7 @@ impl<'a> IpStream<'a> {
     }
 
     pub async fn now(&mut self, con: &Connection) -> anyhow::Result<Vec<String>> {
-        let device_proxy = devices::DeviceProxy::builder(&con)
+        let device_proxy = devices::DeviceProxy::builder(con)
             .path(self.path.as_str())?
             .build()
             .await?;
@@ -270,7 +270,7 @@ impl Network {
 
     #[cfg(not(feature = "stub_out_dbus"))]
     pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
-        let hostname = hostname::HostnameProxy::new(&conn)
+        let hostname = hostname::HostnameProxy::new(conn)
             .await
             .unwrap()
             .hostname()
