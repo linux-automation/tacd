@@ -18,7 +18,6 @@
 use std::io::{Error, ErrorKind, Result};
 use std::time::Duration;
 
-use async_std::future::pending;
 use async_std::task::sleep;
 
 use crate::dut_power::TickReader;
@@ -48,12 +47,25 @@ mod sd {
 use sd::{notify, watchdog_enabled, STATE_READY, STATE_WATCHDOG};
 
 pub struct Watchdog {
+    interval: Duration,
     dut_power_tick: TickReader,
 }
 
 impl Watchdog {
-    pub fn new(dut_power_tick: TickReader) -> Self {
-        Self { dut_power_tick }
+    pub fn new(dut_power_tick: TickReader) -> Option<Self> {
+        let micros = watchdog_enabled(false).unwrap_or(0);
+
+        if micros != 0 {
+            let interval = Duration::from_micros(micros) / 2;
+
+            Some(Self {
+                interval,
+                dut_power_tick,
+            })
+        } else {
+            log::info!("Watchdog not requested. Disabling");
+            None
+        }
     }
 
     /// Make sure the following things are still somewhat working:
@@ -63,23 +75,10 @@ impl Watchdog {
     /// - adc thread - if the adc values are too old dut_pwr_thread will
     ///   not increment the tick.
     pub async fn keep_fed(mut self) -> Result<()> {
-        let interval = {
-            let micros = watchdog_enabled(false).unwrap_or(0);
-
-            if micros == 0 {
-                eprintln!("Watchdog not requested. Disabling");
-
-                // Wait forever, as returning from this function terminated the program
-                pending::<()>().await;
-            }
-
-            Duration::from_micros(micros) / 2
-        };
-
         notify(false, [(STATE_READY, "1")].iter())?;
 
         loop {
-            sleep(interval).await;
+            sleep(self.interval).await;
 
             if self.dut_power_tick.is_stale() {
                 eprintln!("Power Thread has stalled. Will trigger watchdog.");

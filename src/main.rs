@@ -15,7 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use futures_lite::future::race;
+use futures::{select, FutureExt};
 
 mod adc;
 mod broker;
@@ -89,5 +89,16 @@ async fn main() -> Result<(), std::io::Error> {
 
     log::info!("Setup complete. Handling requests");
 
-    race(race(ui.run(), web_interface.serve()), watchdog.keep_fed()).await
+    if let Some(watchdog) = watchdog {
+        select! {
+            ui_err = ui.run().fuse() => ui_err,
+            wi_err = web_interface.serve().fuse() => wi_err,
+            wd_err = watchdog.keep_fed().fuse() => wd_err,
+        }
+    } else {
+        select! {
+            ui_err = ui.run().fuse() => ui_err,
+            wi_err = web_interface.serve().fuse() => wi_err,
+        }
+    }
 }
