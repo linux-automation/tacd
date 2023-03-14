@@ -216,8 +216,8 @@ async fn handle_connection(
     // - the tx task exiting for some reason
     'connection: loop {
         let ev = race(
-            stream_rx.next().map(|m| Either::Left(m)),
-            tx_done.next().map(|d| Either::Right(d)),
+            stream_rx.next().map(Either::Left),
+            tx_done.next().map(Either::Right),
         )
         .await;
 
@@ -334,8 +334,8 @@ async fn handle_connection(
             }
             VariablePacket::PublishPacket(pub_pkg) => {
                 if pub_pkg.qos() != QoSWithPacketIdentifier::Level0
-                    || pub_pkg.dup() != false
-                    || pub_pkg.retain() != true
+                    || pub_pkg.dup()
+                    || !pub_pkg.retain()
                 {
                     res = Err(anyhow!("QoS, DUP or Retain has non-allowed value"));
                     break 'connection;
@@ -343,8 +343,7 @@ async fn handle_connection(
 
                 let topic = topics
                     .iter()
-                    .filter(|t| t.web_writable() && &t.path()[..] == pub_pkg.topic_name())
-                    .next();
+                    .find(|t| t.web_writable() && &t.path()[..] == pub_pkg.topic_name());
 
                 if let Some(topic) = topic {
                     if let Err(e) = topic.set_from_bytes(pub_pkg.payload()).await {

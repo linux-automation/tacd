@@ -93,10 +93,7 @@ impl Screen {
 
     /// Should screensaver be automatically enabled when in this screen?
     fn use_screensaver(&self) -> bool {
-        match self {
-            Self::Rauc => false,
-            _ => true,
-        }
+        !matches!(self, Self::Rauc)
     }
 }
 
@@ -182,21 +179,17 @@ impl Ui {
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, None, 0);
 
         // Initialize all the screens now so they can be mounted later
-        let screens = {
-            let mut s: Vec<Box<dyn MountableScreen>> = Vec::new();
-
-            s.push(Box::new(DigOutScreen::new(bb)));
-            s.push(Box::new(IoBusScreen::new()));
-            s.push(Box::new(PowerScreen::new()));
-            s.push(Box::new(RaucScreen::new(&screen, &res.rauc.operation)));
-            s.push(Box::new(RebootConfirmScreen::new()));
-            s.push(Box::new(ScreenSaverScreen::new(&buttons, &screen)));
-            s.push(Box::new(SystemScreen::new()));
-            s.push(Box::new(UartScreen::new(bb)));
-            s.push(Box::new(UsbScreen::new(bb)));
-
-            s
-        };
+        let screens: Vec<Box<dyn MountableScreen>> = vec![
+            Box::new(DigOutScreen::new(bb)),
+            Box::new(IoBusScreen::new()),
+            Box::new(PowerScreen::new()),
+            Box::new(RaucScreen::new(&screen, &res.rauc.operation)),
+            Box::new(RebootConfirmScreen::new()),
+            Box::new(ScreenSaverScreen::new(&buttons, &screen)),
+            Box::new(SystemScreen::new()),
+            Box::new(UartScreen::new(bb)),
+            Box::new(UsbScreen::new(bb)),
+        ];
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",

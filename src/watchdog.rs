@@ -72,7 +72,7 @@ impl Watchdog {
                 eprintln!("Watchdog not requested. Disabling");
 
                 // Wait forever, as returning from this function terminated the program
-                let () = pending().await;
+                pending::<()>().await;
             }
 
             Duration::from_micros(micros) / 2

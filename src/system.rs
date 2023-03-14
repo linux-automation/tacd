@@ -47,7 +47,7 @@ mod read_dt_props {
     }
 
     pub fn read_dt_property_u32(path: &str) -> u32 {
-        u32::from_str_radix(&read_dt_property(path), 10).unwrap()
+        read_dt_property(path).parse().unwrap()
     }
 }
 

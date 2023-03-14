@@ -238,7 +238,7 @@ impl IioThread {
             .map(|(iio_name, _, _)| {
                 let ch = stm32_adc
                     .find_channel(iio_name, false)
-                    .expect(&format!("Failed to open iio channel {iio_name}"));
+                    .unwrap_or_else(|| panic!("Failed to open iio channel {}", iio_name));
 
                 ch.enable();
                 ch
@@ -250,7 +250,7 @@ impl IioThread {
             .map(|(iio_name, _, _)| {
                 pwr_adc
                     .find_channel(iio_name, false)
-                    .expect(&format!("Failed to open iio channel {iio_name}"))
+                    .unwrap_or_else(|| panic!("Failed to open iio channel {}", iio_name))
             })
             .collect();
 
@@ -371,8 +371,7 @@ impl IioThread {
             .iter()
             .chain(CHANNELS_PWR)
             .enumerate()
-            .filter(|(_, (_, _, name))| name == &ch_name)
-            .next()
+            .find(|(_, (_, _, name))| name == &ch_name)
             .ok_or(anyhow!("Could not get adc channel {}", ch_name))
             .and_then(|(idx, (_, calib_name, _))| {
                 CalibratedChannel::from_name(self.clone(), idx, calib_name)

@@ -102,7 +102,7 @@ where
         .get(0)
         .and_then(|e| e.get("address"))
         .and_then(|e| e.downcast_ref::<zvariant::Str>())
-        .and_then(|e| Some(e.as_str()))
+        .map(|e| e.as_str())
         .ok_or(anyhow::anyhow!("IP not found"))?;
     Ok(Vec::from([ip_address.to_string()]))
 }
@@ -207,11 +207,9 @@ impl<'a> IpStream<'a> {
 
         let ip_4_config = device_proxy.ip4_config().await?;
 
-        if let Ok(ips) = get_ip4_address(con, ip_4_config).await {
-            return Ok(ips);
-        } else {
-            return Ok(Vec::new());
-        }
+        Ok(get_ip4_address(con, ip_4_config)
+            .await
+            .unwrap_or_else(|_e| Vec::new()))
     }
 
     pub async fn next(&mut self, con: &Connection) -> anyhow::Result<Vec<String>> {

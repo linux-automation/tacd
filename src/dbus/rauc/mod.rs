@@ -122,7 +122,7 @@ impl Rauc {
                                         .replace("-", "_")
                                         .to_string();
 
-                                    (k, ss.or(s32).or(s64).unwrap_or_else(|| String::new()))
+                                    (k, ss.or(s32).or(s64).unwrap_or_default())
                                 })
                                 .collect();
 
