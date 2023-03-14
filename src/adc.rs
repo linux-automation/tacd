@@ -24,6 +24,7 @@ use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::{Measurement, Timestamp};
 
 const HISTORY_LENGTH: usize = 200;
+const SLOW_INTERVAL: Duration = Duration::from_millis(100);
 
 #[cfg(any(test, feature = "stub_out_adc"))]
 mod iio {
@@ -182,7 +183,7 @@ impl Adc {
         // "fast" interface to the broker based "slow" interface.
         spawn(async move {
             loop {
-                sleep(Duration::from_millis(100)).await;
+                sleep(SLOW_INTERVAL).await;
 
                 adc_clone
                     .usb_host_curr
