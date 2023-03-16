@@ -30,7 +30,6 @@ mod sd {
     pub const STATE_WATCHDOG: () = ();
 
     pub fn notify<I>(_: bool, _: I) -> Result<bool> {
-        println!("Watchdog tick");
         Ok(true)
     }
 
