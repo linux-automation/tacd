@@ -53,12 +53,12 @@ const EXPOSED_FILES_RW: &[(&str, &str)] = &[
     ("/etc/labgrid/userconfig.yaml", "/v1/labgrid/userconfig"),
 ];
 
-pub struct WebInterface {
+pub struct HttpServer {
     listeners: Vec<TcpListener>,
     pub server: Server<()>,
 }
 
-impl WebInterface {
+impl HttpServer {
     pub fn new() -> Self {
         let mut this = Self {
             listeners: Vec::new(),
