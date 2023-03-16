@@ -15,28 +15,31 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#[cfg(not(feature = "demo_mode"))]
-use std::convert::TryInto;
-
-#[cfg(not(feature = "demo_mode"))]
-use anyhow;
 use async_std;
-#[cfg(not(feature = "demo_mode"))]
-use async_std::stream::StreamExt;
 use async_std::sync::Arc;
-#[cfg(not(feature = "demo_mode"))]
-use futures::{future::FutureExt, pin_mut, select};
-#[cfg(not(feature = "demo_mode"))]
-use zbus::{Connection, PropertyStream};
-#[cfg(not(feature = "demo_mode"))]
-use zvariant::{ObjectPath, OwnedObjectPath};
 
-#[cfg(not(feature = "demo_mode"))]
-use log::trace;
 use serde::{Deserialize, Serialize};
 
 mod devices;
 mod hostname;
+
+// All of the following includes are not used in demo_mode.
+// Put them inside a mod so we do not have to decorate each one with
+// a #[cfg(not(feature = "demo_mode"))].
+mod optional_includes {
+    pub use anyhow::{anyhow, Result};
+    pub use async_std::stream::StreamExt;
+    pub use async_std::task::sleep;
+    pub use futures::{future::FutureExt, pin_mut, select};
+    pub use log::trace;
+    pub use std::convert::TryInto;
+    pub use std::time::Duration;
+    pub use zbus::{Connection, PropertyStream};
+    pub use zvariant::{ObjectPath, OwnedObjectPath};
+}
+
+#[cfg(not(feature = "demo_mode"))]
+use optional_includes::*;
 
 #[allow(clippy::module_inception)]
 mod networkmanager;
@@ -50,7 +53,7 @@ pub struct LinkInfo {
 }
 
 #[cfg(not(feature = "demo_mode"))]
-async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Result<OwnedObjectPath> {
+async fn path_from_interface(con: &Connection, interface: &str) -> Result<OwnedObjectPath> {
     let proxy = networkmanager::NetworkManagerProxy::new(con).await?;
     let device_paths = proxy.get_devices().await?;
 
@@ -67,11 +70,11 @@ async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Resul
             return Ok(path);
         }
     }
-    Err(anyhow::anyhow!("No interface found: {}", interface))
+    Err(anyhow!("No interface found: {}", interface))
 }
 
 #[cfg(not(feature = "demo_mode"))]
-async fn get_link_info(con: &Connection, path: &str) -> anyhow::Result<LinkInfo> {
+async fn get_link_info(con: &Connection, path: &str) -> Result<LinkInfo> {
     let eth_proxy = devices::WiredProxy::builder(con)
         .path(path)?
         .build()
@@ -86,7 +89,7 @@ async fn get_link_info(con: &Connection, path: &str) -> anyhow::Result<LinkInfo>
 }
 
 #[cfg(not(feature = "demo_mode"))]
-pub async fn get_ip4_address<'a, P>(con: &Connection, path: P) -> anyhow::Result<Vec<String>>
+pub async fn get_ip4_address<'a, P>(con: &Connection, path: P) -> Result<Vec<String>>
 where
     P: TryInto<ObjectPath<'a>>,
     P::Error: Into<zbus::Error>,
@@ -103,7 +106,7 @@ where
         .and_then(|e| e.get("address"))
         .and_then(|e| e.downcast_ref::<zvariant::Str>())
         .map(|e| e.as_str())
-        .ok_or(anyhow::anyhow!("IP not found"))?;
+        .ok_or(anyhow!("IP not found"))?;
     Ok(Vec::from([ip_address.to_string()]))
 }
 
@@ -118,7 +121,7 @@ pub struct LinkStream<'a> {
 
 #[cfg(not(feature = "demo_mode"))]
 impl<'a> LinkStream<'a> {
-    pub async fn new(con: Arc<Connection>, interface: &str) -> anyhow::Result<LinkStream<'a>> {
+    pub async fn new(con: Arc<Connection>, interface: &str) -> Result<LinkStream<'a>> {
         let path = path_from_interface(&con, interface)
             .await?
             .as_str()
@@ -147,7 +150,7 @@ impl<'a> LinkStream<'a> {
         self.data.clone()
     }
 
-    pub async fn next(&mut self) -> anyhow::Result<LinkInfo> {
+    pub async fn next(&mut self) -> Result<LinkInfo> {
         let speed = StreamExt::next(&mut self.speed).fuse();
         let carrier = StreamExt::next(&mut self.carrier).fuse();
 
@@ -182,7 +185,7 @@ pub struct IpStream<'a> {
 
 #[cfg(not(feature = "demo_mode"))]
 impl<'a> IpStream<'a> {
-    pub async fn new(con: Arc<Connection>, interface: &str) -> anyhow::Result<IpStream<'a>> {
+    pub async fn new(con: Arc<Connection>, interface: &str) -> Result<IpStream<'a>> {
         let path = path_from_interface(&con, interface)
             .await?
             .as_str()
@@ -203,7 +206,7 @@ impl<'a> IpStream<'a> {
         })
     }
 
-    pub async fn now(&mut self, con: &Connection) -> anyhow::Result<Vec<String>> {
+    pub async fn now(&mut self, con: &Connection) -> Result<Vec<String>> {
         let device_proxy = devices::DeviceProxy::builder(con)
             .path(self.path.as_str())?
             .build()
@@ -216,7 +219,7 @@ impl<'a> IpStream<'a> {
             .unwrap_or_else(|_e| Vec::new()))
     }
 
-    pub async fn next(&mut self, con: &Connection) -> anyhow::Result<Vec<String>> {
+    pub async fn next(&mut self, con: &Connection) -> Result<Vec<String>> {
         let ip_4_config = StreamExt::next(&mut self.ip_4_config).await;
 
         if let Some(path) = ip_4_config {
@@ -228,7 +231,7 @@ impl<'a> IpStream<'a> {
                 return Ok(Vec::new());
             }
         }
-        Err(anyhow::anyhow!("No IP found"))
+        Err(anyhow!("No IP found"))
     }
 }
 
