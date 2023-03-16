@@ -284,16 +284,23 @@ impl Network {
             .await
             .unwrap();
 
-        let this = Self::setup_topics(bb, hostname.to_string());
+        let this = Self::setup_topics(bb, hostname);
 
         {
             let conn = conn.clone();
-            let mut nm_interface = LinkStream::new(conn, "dut").await.unwrap();
             let dut_interface = this.dut_interface.clone();
             async_std::task::spawn(async move {
-                dut_interface.set(nm_interface.now()).await;
+                let mut link_stream = loop {
+                    if let Ok(ls) = LinkStream::new(conn.clone(), "dut").await {
+                        break ls;
+                    }
 
-                while let Ok(info) = nm_interface.next().await {
+                    sleep(Duration::from_secs(1)).await;
+                };
+
+                dut_interface.set(link_stream.now()).await;
+
+                while let Ok(info) = link_stream.next().await {
                     dut_interface.set(info).await;
                 }
             });
@@ -301,12 +308,19 @@ impl Network {
 
         {
             let conn = conn.clone();
-            let mut nm_interface = LinkStream::new(conn, "uplink").await.unwrap();
             let uplink_interface = this.uplink_interface.clone();
             async_std::task::spawn(async move {
-                uplink_interface.set(nm_interface.now()).await;
+                let mut link_stream = loop {
+                    if let Ok(ls) = LinkStream::new(conn.clone(), "uplink").await {
+                        break ls;
+                    }
 
-                while let Ok(info) = nm_interface.next().await {
+                    sleep(Duration::from_secs(1)).await;
+                };
+
+                uplink_interface.set(link_stream.now()).await;
+
+                while let Ok(info) = link_stream.next().await {
                     uplink_interface.set(info).await;
                 }
             });
@@ -314,14 +328,21 @@ impl Network {
 
         {
             let conn = conn.clone();
-            let mut nm_interface = IpStream::new(conn.clone(), "tac-bridge").await.unwrap();
             let bridge_interface = this.bridge_interface.clone();
             async_std::task::spawn(async move {
+                let mut ip_stream = loop {
+                    if let Ok(ips) = IpStream::new(conn.clone(), "tac-bridge").await {
+                        break ips;
+                    }
+
+                    sleep(Duration::from_secs(1)).await;
+                };
+
                 bridge_interface
-                    .set(nm_interface.now(&conn).await.unwrap())
+                    .set(ip_stream.now(&conn).await.unwrap())
                     .await;
 
-                while let Ok(info) = nm_interface.next(&conn).await {
+                while let Ok(info) = ip_stream.next(&conn).await {
                     bridge_interface.set(info).await;
                 }
             });
