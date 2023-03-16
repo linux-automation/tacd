@@ -25,35 +25,22 @@ use log::warn;
 use tide::{Body, Response, Server};
 
 #[cfg(feature = "demo_mode")]
-mod shim {
-    use std::io::Result;
-    use std::net::TcpListener;
-
+mod consts {
     pub const WEBUI_DIR: &str = "web/build";
     pub const USER_DIR: &str = "srv/www";
     pub const FS_PREFIX: &str = "demo_files";
     pub const FALLBACK_PORT: &str = "[::]:8080";
-
-    pub fn listen_fds(_: bool) -> Result<[(); 0]> {
-        Ok([])
-    }
-
-    pub fn tcp_listener<E>(_: E) -> Result<TcpListener> {
-        unimplemented!()
-    }
 }
 
 #[cfg(not(feature = "demo_mode"))]
-mod shim {
-    pub use systemd::daemon::*;
-
+mod consts {
     pub const WEBUI_DIR: &str = "/usr/share/tacd/webui";
     pub const USER_DIR: &str = "/srv/www";
     pub const FS_PREFIX: &str = "";
     pub const FALLBACK_PORT: &str = "[::]:80";
 }
 
-use shim::{listen_fds, tcp_listener, FALLBACK_PORT, FS_PREFIX, USER_DIR, WEBUI_DIR};
+use consts::{FALLBACK_PORT, FS_PREFIX, USER_DIR, WEBUI_DIR};
 
 const OPENAPI_JSON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/openapi.json"));
 
@@ -69,20 +56,13 @@ impl WebInterface {
             server: tide::new(),
         };
 
-        // Use sockets provided by systemd (if any) to make socket activation
-        // work
-        if let Ok(fds) = listen_fds(true) {
-            this.listeners
-                .extend(fds.iter().filter_map(|fd| tcp_listener(fd).ok()));
-        }
-
-        // Open [::]:80 / [::]:8080 ourselves if systemd did not provide anything.
-        // This, somewhat confusingly also listens on 0.0.0.0.
-        if this.listeners.is_empty() {
-            this.listeners.push(TcpListener::bind(FALLBACK_PORT).expect(
+        // Open [::]:80 / [::]:8080. This, somewhat confusingly also listens on
+        // 0.0.0.0 and not only on IPv6.
+        this.listeners.push(
+            TcpListener::bind(FALLBACK_PORT).expect(
                 "Could not bind web API to port, is there already another service running?",
-            ));
-        }
+            ),
+        );
 
         this.expose_openapi_json();
         this.expose_dir(WEBUI_DIR, "/");
