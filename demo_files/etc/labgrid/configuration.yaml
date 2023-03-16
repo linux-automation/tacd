@@ -1,0 +1,92 @@
+## This file is overridden on update
+## Add your own exports and config to 'userconfig.yaml'
+
+## Setup defaults
+## ==============
+
+## Use 115220 Baud as default DUT baud rate
+{% set serial = namespace(baud=115200) %}
+
+## External USB Ports of the LXA TAC
+{% set usb = namespace(ports=[
+        ('1',   'platform-5800d000.usb-usb-0:1.1'),
+        ('2',   'platform-5800d000.usb-usb-0:1.2'),
+        ('3',   'platform-5800d000.usb-usb-0:1.3')]) %}
+
+## Include user configuration
+## ==========================
+
+{% include 'userconfig.yaml' %}
+
+## Setup resources
+## ===============
+
+## UART available via the box connector on the TAC
+serial:
+  RawSerialPort:
+    port: /dev/ttySTM1
+    speed: {{serial.baud}}
+
+## FIXME: These should be accessed via the REST API at
+## - /v1/output/out_0/asserted
+## - /v1/output/out_1/asserted
+## gpio0:
+##   SysfsGPIO:
+##     index: 115
+##
+## gpio1:
+##   SysfsGPIO:
+##     index: 114
+
+dut_power:
+  NetworkPowerPort:
+    model: rest
+    host: 'http://{{ hostname }}/v1/dut/powered/compat'
+    index: '0'   # this is 'don't care'
+
+## Set up USB ports after including user configuration to allow
+## e.g. hub configuration
+{% for idx, sysfs in usb.ports %}
+
+lxatac-usb-ports-p{{idx}}:
+  AlteraUSBBlaster:
+    match:
+      'ID_PATH': '{{sysfs}}'
+  AndroidUSBFastboot:
+    match:
+      'ID_PATH': '{{sysfs}}'
+  DFUDevice:
+    match:
+      'ID_PATH': '{{sysfs}}'
+  IMXUSBLoader:
+    match:
+      'ID_PATH': '{{sysfs}}'
+  LXAUSBMux:
+    match:
+      '@ID_PATH': '{{sysfs}}'
+  USBAudioInput:
+    match:
+      '@ID_PATH': '{{sysfs}}'
+  USBDebugger:
+    match:
+      'ID_PATH': '{{sysfs}}'
+  USBMassStorage:
+    match:
+      '@ID_PATH': '{{sysfs}}'
+  USBSDMuxDevice:
+    match:
+      '@ID_PATH': '{{sysfs}}'
+  USBSerialPort:
+    match:
+      '@ID_PATH': '{{sysfs}}'
+  USBVideo:
+    match:
+      '@ID_PATH': '{{sysfs}}'
+## Extra USB Ports exported as separate interfaces on the same USB port
+{% for if in [ '1', '2', '3'] %}
+lxatac-usb-ports-p{{idx}}.{{if}}:
+   USBSerialPort:
+     match:
+       '@ID_PATH': '{{sysfs}}:1.{{if}}'
+{% endfor %}
+{% endfor %}

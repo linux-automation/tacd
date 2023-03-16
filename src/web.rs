@@ -16,7 +16,6 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use std::convert::AsRef;
-#[cfg(not(feature = "demo_mode"))]
 use std::fs::write;
 use std::io::ErrorKind;
 use std::net::TcpListener;
@@ -26,12 +25,13 @@ use log::warn;
 use tide::{Body, Response, Server};
 
 #[cfg(feature = "demo_mode")]
-mod sd {
+mod shim {
     use std::io::Result;
     use std::net::TcpListener;
 
     pub const WEBUI_DIR: &str = "web/build";
     pub const USER_DIR: &str = "srv/www";
+    pub const FS_PREFIX: &str = "demo_files";
     pub const FALLBACK_PORT: &str = "[::]:8080";
 
     pub fn listen_fds(_: bool) -> Result<[(); 0]> {
@@ -44,15 +44,16 @@ mod sd {
 }
 
 #[cfg(not(feature = "demo_mode"))]
-mod sd {
+mod shim {
     pub use systemd::daemon::*;
 
     pub const WEBUI_DIR: &str = "/usr/share/tacd/webui";
     pub const USER_DIR: &str = "/srv/www";
+    pub const FS_PREFIX: &str = "";
     pub const FALLBACK_PORT: &str = "[::]:80";
 }
 
-use sd::{listen_fds, tcp_listener, FALLBACK_PORT, USER_DIR, WEBUI_DIR};
+use shim::{listen_fds, tcp_listener, FALLBACK_PORT, FS_PREFIX, USER_DIR, WEBUI_DIR};
 
 const OPENAPI_JSON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/openapi.json"));
 
@@ -146,11 +147,10 @@ impl WebInterface {
     }
 
     /// Serve a file from disk for reading and writing
-    #[cfg(not(feature = "demo_mode"))]
     pub fn expose_file_rw(&mut self, fs_path: &str, web_path: &str) {
-        self.server.at(web_path).serve_file(fs_path).unwrap();
+        let fs_path = FS_PREFIX.to_owned() + fs_path;
 
-        let fs_path = fs_path.to_string();
+        self.server.at(web_path).serve_file(&fs_path).unwrap();
 
         self.server
             .at(web_path)

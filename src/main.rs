@@ -77,15 +77,12 @@ async fn main() -> Result<(), std::io::Error> {
     bb.build(&mut web_interface.server);
     journal::serve(&mut web_interface.server);
 
-    #[cfg(not(feature = "demo_mode"))]
-    {
-        web_interface.expose_file_rw(
-            "/etc/labgrid/configuration.yaml",
-            "/v1/labgrid/configuration",
-        );
-        web_interface.expose_file_rw("/etc/labgrid/environment", "/v1/labgrid/environment");
-        web_interface.expose_file_rw("/etc/labgrid/userconfig.yaml", "/v1/labgrid/userconfig");
-    }
+    web_interface.expose_file_rw(
+        "/etc/labgrid/configuration.yaml",
+        "/v1/labgrid/configuration",
+    );
+    web_interface.expose_file_rw("/etc/labgrid/environment", "/v1/labgrid/environment");
+    web_interface.expose_file_rw("/etc/labgrid/userconfig.yaml", "/v1/labgrid/userconfig");
 
     log::info!("Setup complete. Handling requests");
 
