@@ -27,7 +27,6 @@ use tide::{Body, Response, Server};
 #[cfg(feature = "demo_mode")]
 mod consts {
     pub const WEBUI_DIR: &str = "web/build";
-    pub const USER_DIR: &str = "srv/www";
     pub const FS_PREFIX: &str = "demo_files";
     pub const FALLBACK_PORT: &str = "[::]:8080";
 }
@@ -35,12 +34,11 @@ mod consts {
 #[cfg(not(feature = "demo_mode"))]
 mod consts {
     pub const WEBUI_DIR: &str = "/usr/share/tacd/webui";
-    pub const USER_DIR: &str = "/srv/www";
     pub const FS_PREFIX: &str = "";
     pub const FALLBACK_PORT: &str = "[::]:80";
 }
 
-use consts::{FALLBACK_PORT, FS_PREFIX, USER_DIR, WEBUI_DIR};
+use consts::{FALLBACK_PORT, FS_PREFIX, WEBUI_DIR};
 
 const OPENAPI_JSON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/openapi.json"));
 
@@ -66,7 +64,7 @@ impl WebInterface {
 
         this.expose_openapi_json();
         this.expose_dir(WEBUI_DIR, "/");
-        this.expose_dir(USER_DIR, "/srv/");
+        this.expose_dir(FS_PREFIX.to_owned() + "/srv/www", "/srv/");
 
         this
     }
