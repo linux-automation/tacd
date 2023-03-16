@@ -52,7 +52,13 @@ impl BrokerBuilder {
     ///    first time. Or None
     /// * `retained_length` - Number of previously set values to retain
     ///    and push out when subscribing to the serialized stream.
-    ///    Used to pre-fill charts in the web interface.
+    ///    This will usually be 1 so that the most recent value is available
+    ///    when doing a GET request to the topic via the REST API.
+    ///    It can also be 0 for topics that are purely transient events like
+    ///    button presses that go away as soon as they happen.
+    ///    It can also be a larger value to store up some history that should
+    ///    be pushed out to new (outside) subscribers as soon as they subscribe,
+    ///    to e.g. pre-populate a graph in the web interface.
     pub fn topic<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
