@@ -73,16 +73,10 @@ async fn main() -> Result<(), std::io::Error> {
     };
 
     let mut web_interface = WebInterface::new();
+
+    journal::serve(&mut web_interface.server);
     let ui = Ui::new(&mut bb, resources, &mut web_interface.server);
     bb.build(&mut web_interface.server);
-    journal::serve(&mut web_interface.server);
-
-    web_interface.expose_file_rw(
-        "/etc/labgrid/configuration.yaml",
-        "/v1/labgrid/configuration",
-    );
-    web_interface.expose_file_rw("/etc/labgrid/environment", "/v1/labgrid/environment");
-    web_interface.expose_file_rw("/etc/labgrid/userconfig.yaml", "/v1/labgrid/userconfig");
 
     log::info!("Setup complete. Handling requests");
 
