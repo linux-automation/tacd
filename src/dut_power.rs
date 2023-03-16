@@ -224,8 +224,8 @@ impl<const N: usize> MedianFilter<N> {
     }
 }
 
-/// Bring the outputs into a fail safe mode
-fn fail(
+/// Turn the output off and set an appropriate reason
+fn turn_off_with_reason(
     reason: OutputState,
     pwr_line: &LineHandle,
     discharge_line: &LineHandle,
@@ -355,7 +355,7 @@ impl DutPwrThread {
                             .unwrap_or(false);
 
                         if too_old {
-                            fail(
+                            turn_off_with_reason(
                                 OutputState::RealtimeViolation,
                                 &pwr_line,
                                 &discharge_line,
@@ -392,7 +392,12 @@ impl DutPwrThread {
                     // overvoltage condition. Instead turn the output off and
                     // go back to measuring.
                     if volt > MAX_VOLTAGE {
-                        fail(OutputState::OverVoltage, &pwr_line, &discharge_line, &state);
+                        turn_off_with_reason(
+                            OutputState::OverVoltage,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
 
                         continue;
                     }
@@ -401,7 +406,7 @@ impl DutPwrThread {
                     // polarity inversion. Turn off, go back to start, do not
                     // collect $200.
                     if volt < MIN_VOLTAGE {
-                        fail(
+                        turn_off_with_reason(
                             OutputState::InvertedPolarity,
                             &pwr_line,
                             &discharge_line,
@@ -414,7 +419,12 @@ impl DutPwrThread {
                     // Don't even look at the requests if there is an ongoin
                     // overcurrent condition.
                     if curr > MAX_CURRENT {
-                        fail(OutputState::OverCurrent, &pwr_line, &discharge_line, &state);
+                        turn_off_with_reason(
+                            OutputState::OverCurrent,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
 
                         continue;
                     }
@@ -446,7 +456,7 @@ impl DutPwrThread {
                 }
 
                 // Make sure to enter fail safe mode before leaving the thread
-                fail(OutputState::Off, &pwr_line, &discharge_line, &state);
+                turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
             })?;
 
         let (tick, request, state) = thread_res_rx.next().await.unwrap()?;
