@@ -20,6 +20,9 @@ use async_std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::broker::{BrokerBuilder, Topic};
+use crate::led::BlinkPattern;
+
 mod devices;
 mod hostname;
 
@@ -43,8 +46,6 @@ use optional_includes::*;
 
 #[allow(clippy::module_inception)]
 mod networkmanager;
-
-use crate::broker::{BrokerBuilder, Topic};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LinkInfo {
@@ -253,7 +254,12 @@ impl Network {
     }
 
     #[cfg(feature = "demo_mode")]
-    pub async fn new<C>(bb: &mut BrokerBuilder, _conn: C) -> Self {
+    pub async fn new<C>(
+        bb: &mut BrokerBuilder,
+        _conn: C,
+        _led_dut: Arc<Topic<BlinkPattern>>,
+        _led_uplink: Arc<Topic<BlinkPattern>>,
+    ) -> Self {
         let this = Self::setup_topics(bb);
 
         this.hostname.set("lxatac".to_string()).await;
@@ -277,7 +283,12 @@ impl Network {
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
+    pub async fn new(
+        bb: &mut BrokerBuilder,
+        conn: &Arc<Connection>,
+        led_dut: Arc<Topic<BlinkPattern>>,
+        led_uplink: Arc<Topic<BlinkPattern>>,
+    ) -> Self {
         let this = Self::setup_topics(bb);
 
         {
@@ -315,6 +326,14 @@ impl Network {
                 dut_interface.set(link_stream.now()).await;
 
                 while let Ok(info) = link_stream.next().await {
+                    // The two color LED on the DUT interface is under the control of
+                    // the switch IC. For 100MBit/s and 1GBit/s it lights in distinct
+                    // colors, but for 10MBit/s it is just off.
+                    // Build the most round-about link speed indicator ever so that we
+                    // have speed indication for 10MBit/s.
+                    let led_brightness = if info.speed == 10 { 1.0 } else { 0.0 };
+                    led_dut.set(BlinkPattern::solid(led_brightness)).await;
+
                     dut_interface.set(info).await;
                 }
             });
@@ -335,6 +354,11 @@ impl Network {
                 uplink_interface.set(link_stream.now()).await;
 
                 while let Ok(info) = link_stream.next().await {
+                    // See the equivalent section on the uplink interface on why
+                    // this is here.
+                    let led_brightness = if info.speed == 10 { 1.0 } else { 0.0 };
+                    led_uplink.set(BlinkPattern::solid(led_brightness)).await;
+
                     uplink_interface.set(info).await;
                 }
             });

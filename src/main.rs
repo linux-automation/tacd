@@ -78,7 +78,7 @@ async fn main() -> Result<(), std::io::Error> {
     // to them via HTTP / DBus APIs.
     let iobus = IoBus::new(&mut bb);
     let (network, rauc, systemd) = {
-        let dbus = DbusSession::new(&mut bb).await;
+        let dbus = DbusSession::new(&mut bb, led.eth_dut.clone(), led.eth_lab.clone()).await;
 
         (dbus.network, dbus.rauc, dbus.systemd)
     };
