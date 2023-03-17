@@ -63,6 +63,21 @@ impl BlinkPattern {
             ],
         }
     }
+
+    #[cfg(test)]
+    pub fn is_on(&self) -> bool {
+        self.steps.iter().all(|(brightness, _)| *brightness >= 0.5)
+    }
+
+    #[cfg(test)]
+    pub fn is_off(&self) -> bool {
+        self.steps.iter().all(|(brightness, _)| *brightness < 0.5)
+    }
+
+    #[cfg(test)]
+    pub fn is_blinking(&self) -> bool {
+        !(self.is_on() || self.is_off())
+    }
 }
 
 pub struct BlinkPatternBuilder {
@@ -87,7 +102,6 @@ impl BlinkPatternBuilder {
         self
     }
 
-    #[allow(dead_code)]
     pub fn step_to(self, brightness: f32) -> Self {
         self.fade_to(brightness, Duration::ZERO)
     }

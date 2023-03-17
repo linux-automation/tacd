@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use crate::adc::AdcChannel;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::digital_io::{find_line, LineHandle, LineRequestFlags};
+use crate::led::{BlinkPattern, BlinkPatternBuilder};
 
 #[cfg(any(test, feature = "demo_mode"))]
 mod prio {
@@ -284,6 +285,7 @@ impl DutPwrThread {
         bb: &mut BrokerBuilder,
         pwr_volt: AdcChannel,
         pwr_curr: AdcChannel,
+        pwr_led: Arc<Topic<BlinkPattern>>,
     ) -> Result<Self> {
         let pwr_line = find_line("DUT_PWR_EN").unwrap().request(
             LineRequestFlags::OUTPUT,
@@ -509,6 +511,41 @@ impl DutPwrThread {
             }
         });
 
+        // Forward the state information to the DUT Power LED
+        let state_topic_task = state_topic.clone();
+        task::spawn(async move {
+            let pattern_on = BlinkPattern::solid(1.0);
+            let pattern_off = BlinkPattern::solid(0.0);
+            let pattern_error = {
+                let mut pb = BlinkPatternBuilder::new(1.0);
+
+                // Three angry blinks ...
+                for _ in 0..3 {
+                    pb = pb
+                        .step_to(1.0)
+                        .stay_for(Duration::from_millis(50))
+                        .step_to(0.0)
+                        .stay_for(Duration::from_millis(50));
+                }
+
+                // ... followed by a pause and repetition
+                pb.stay_for(Duration::from_millis(400)).forever()
+            };
+
+            let (mut state_stream, _) = state_topic_task.subscribe_unbounded().await;
+
+            while let Some(state) = state_stream.next().await {
+                match state {
+                    OutputState::On => pwr_led.set(pattern_on.clone()).await,
+                    OutputState::Off | OutputState::OffFloating => {
+                        pwr_led.set(pattern_off.clone()).await
+                    }
+                    OutputState::Changing => {}
+                    _ => pwr_led.set(pattern_error.clone()).await,
+                }
+            }
+        });
+
         Ok(Self {
             request: request_topic,
             state: state_topic,
@@ -541,18 +578,20 @@ mod tests {
         let pwr_line = find_line("DUT_PWR_EN").unwrap();
         let discharge_line = find_line("DUT_PWR_DISCH").unwrap();
 
-        let (adc, dut_pwr) = {
+        let (adc, dut_pwr, led) = {
             let mut bb = BrokerBuilder::new();
             let adc = block_on(Adc::new(&mut bb)).unwrap();
+            let led = bb.topic_hidden(None);
 
             let dut_pwr = block_on(DutPwrThread::new(
                 &mut bb,
                 adc.pwr_volt.clone(),
                 adc.pwr_curr.clone(),
+                led.clone(),
             ))
             .unwrap();
 
-            (adc, dut_pwr)
+            (adc, dut_pwr, led)
         };
 
         println!("Test with acceptable voltage/current");
@@ -567,6 +606,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::Off);
+        assert!(block_on(led.get()).is_off());
 
         println!("Turn Off Floating");
         block_on(dut_pwr.request.set(OutputRequest::OffFloating));
@@ -574,6 +614,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::OffFloating);
+        assert!(block_on(led.get()).is_off());
 
         println!("Turn on");
         block_on(dut_pwr.request.set(OutputRequest::On));
@@ -581,6 +622,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+        assert!(block_on(led.get()).is_on());
 
         println!("Trigger transient inverted polarity (Output should stay on)");
         adc.pwr_volt.fast.transient(MIN_VOLTAGE * 1.01);
@@ -588,6 +630,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+        assert!(block_on(led.get()).is_on());
 
         println!("Trigger inverted polarity");
         adc.pwr_volt.fast.set(MIN_VOLTAGE * 1.01);
@@ -597,6 +640,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::InvertedPolarity);
+        assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
@@ -604,6 +648,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+        assert!(block_on(led.get()).is_on());
 
         println!("Trigger transient overcurrent (Output should stay on)");
         adc.pwr_curr.fast.transient(MAX_CURRENT * 1.01);
@@ -611,6 +656,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+        assert!(block_on(led.get()).is_on());
 
         println!("Trigger overcurrent");
         adc.pwr_curr.fast.set(MAX_CURRENT * 1.01);
@@ -620,6 +666,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::OverCurrent);
+        assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
@@ -627,6 +674,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+        assert!(block_on(led.get()).is_on());
 
         println!("Trigger transient overvoltage (Output should stay on)");
         adc.pwr_volt.fast.transient(MAX_VOLTAGE * 1.01);
@@ -634,6 +682,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+        assert!(block_on(led.get()).is_on());
 
         println!("Trigger overvoltage");
         adc.pwr_volt.fast.set(MAX_VOLTAGE * 1.01);
@@ -643,6 +692,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::OverVoltage);
+        assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
@@ -650,6 +700,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+        assert!(block_on(led.get()).is_on());
 
         println!("Trigger realtime violation");
         adc.pwr_volt.fast.stall(true);
@@ -662,6 +713,7 @@ mod tests {
             block_on(dut_pwr.state.get()),
             OutputState::RealtimeViolation
         );
+        assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
@@ -669,6 +721,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
         assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+        assert!(block_on(led.get()).is_on());
 
         println!("Drop DutPwrThread");
         std::mem::drop(dut_pwr);

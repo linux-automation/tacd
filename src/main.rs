@@ -61,9 +61,14 @@ async fn main() -> Result<(), std::io::Error> {
     // Expose hardware on the TAC via the broker framework.
     let led = Led::new(&mut bb);
     let adc = Adc::new(&mut bb).await.unwrap();
-    let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone())
-        .await
-        .unwrap();
+    let dut_pwr = DutPwrThread::new(
+        &mut bb,
+        adc.pwr_volt.clone(),
+        adc.pwr_curr.clone(),
+        led.dut_pwr.clone(),
+    )
+    .await
+    .unwrap();
     let dig_io = DigitalIo::new(&mut bb, led.out_0.clone(), led.out_1.clone());
     let regulators = Regulators::new(&mut bb);
     let temperatures = Temperatures::new(&mut bb);
