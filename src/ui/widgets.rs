@@ -23,7 +23,7 @@ use embedded_graphics::{
     mono_font::{ascii::FONT_6X9, MonoFont, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
+    primitives::{Circle, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
     text::{Alignment, Text},
 };
 use serde::de::DeserializeOwned;
@@ -38,6 +38,7 @@ pub enum IndicatorState {
     On,
     Off,
     Error,
+    Unkown,
 }
 
 pub trait DrawFn<T>: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
@@ -148,42 +149,57 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
         Self::new(
             topic,
             target,
-            Box::new(move |msg, target| match format_fn(msg) {
-                IndicatorState::On => {
-                    let circle = Circle::new(anchor, 10);
-                    let style = PrimitiveStyleBuilder::new()
-                        .stroke_color(BinaryColor::On)
-                        .stroke_width(2)
-                        .fill_color(BinaryColor::On)
-                        .build();
+            Box::new(move |msg, target| {
+                let ui_text_style: MonoTextStyle<BinaryColor> =
+                    MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-                    circle.into_styled(style).draw(target).unwrap();
+                match format_fn(msg) {
+                    IndicatorState::On => {
+                        let circle = Circle::new(anchor, 10);
+                        let style = PrimitiveStyleBuilder::new()
+                            .stroke_color(BinaryColor::On)
+                            .stroke_width(2)
+                            .fill_color(BinaryColor::On)
+                            .build();
 
-                    Some(circle.bounding_box())
-                }
-                IndicatorState::Off => {
-                    let circle = Circle::new(anchor, 10);
+                        circle.into_styled(style).draw(target).unwrap();
 
-                    circle
-                        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-                        .draw(target)
-                        .unwrap();
+                        Some(circle.bounding_box())
+                    }
+                    IndicatorState::Off => {
+                        let circle = Circle::new(anchor, 10);
 
-                    Some(circle.bounding_box())
-                }
-                IndicatorState::Error => {
-                    let lines = [
-                        Line::new(Point::new(0, 0), Point::new(10, 10)).translate(anchor),
-                        Line::new(Point::new(0, 10), Point::new(10, 0)).translate(anchor),
-                    ];
-
-                    for line in &lines {
-                        line.into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
+                        circle
+                            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
                             .draw(target)
                             .unwrap();
-                    }
 
-                    Some(lines[0].bounding_box())
+                        Some(circle.bounding_box())
+                    }
+                    IndicatorState::Error => {
+                        let text = Text::with_alignment(
+                            "!",
+                            anchor + Point::new(5, 10),
+                            ui_text_style,
+                            Alignment::Center,
+                        );
+
+                        text.draw(target).unwrap();
+
+                        Some(text.bounding_box())
+                    }
+                    IndicatorState::Unkown => {
+                        let text = Text::with_alignment(
+                            "?",
+                            anchor + Point::new(5, 10),
+                            ui_text_style,
+                            Alignment::Center,
+                        );
+
+                        text.draw(target).unwrap();
+
+                        Some(text.bounding_box())
+                    }
                 }
             }),
         )

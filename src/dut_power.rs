@@ -103,6 +103,7 @@ pub enum OutputState {
     On,
     Off,
     OffFloating,
+    Changing,
     InvertedPolarity,
     OverCurrent,
     OverVoltage,
@@ -111,6 +112,10 @@ pub enum OutputState {
 
 impl From<u8> for OutputState {
     fn from(val: u8) -> Self {
+        if val == (OutputState::On as u8) {
+            return OutputState::On;
+        }
+
         if val == (OutputState::Off as u8) {
             return OutputState::Off;
         }
@@ -119,8 +124,8 @@ impl From<u8> for OutputState {
             return OutputState::OffFloating;
         }
 
-        if val == (OutputState::On as u8) {
-            return OutputState::On;
+        if val == (OutputState::Changing as u8) {
+            return OutputState::Changing;
         }
 
         if val == (OutputState::InvertedPolarity as u8) {
@@ -267,6 +272,7 @@ fn setup_labgrid_compat(
         while let Some(state) = state_stream.next().await {
             match state {
                 OutputState::On => compat_response.set(1).await,
+                OutputState::Changing => {}
                 _ => compat_response.set(0).await,
             }
         }
@@ -474,10 +480,12 @@ impl DutPwrThread {
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
         let request_topic_task = request_topic.clone();
+        let state_topic_task = state_topic.clone();
         task::spawn(async move {
             let (mut request_stream, _) = request_topic_task.subscribe_unbounded().await;
 
             while let Some(req) = request_stream.next().await {
+                state_topic_task.set(OutputState::Changing).await;
                 request.store(req as u8, Ordering::Relaxed);
             }
         });
@@ -486,17 +494,18 @@ impl DutPwrThread {
         // variable and is forwarded to the broker framework.
         let state_topic_task = state_topic.clone();
         task::spawn(async move {
-            let mut prev_state: Option<OutputState> = None;
-
             loop {
                 task::sleep(TASK_INTERVAL).await;
 
-                let state = state.load(Ordering::Relaxed).into();
+                let curr_state = Some(state.load(Ordering::Relaxed).into());
 
-                if prev_state.map(|prev| prev != state).unwrap_or(true) {
-                    state_topic_task.set(state).await;
-                    prev_state = Some(state);
-                }
+                // Only send publish events if the state changed
+                state_topic_task
+                    .modify(|prev_state| match prev_state != curr_state {
+                        true => curr_state,
+                        false => None,
+                    })
+                    .await;
             }
         });
 

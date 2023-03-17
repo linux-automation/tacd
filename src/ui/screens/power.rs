@@ -109,6 +109,7 @@ impl MountableScreen for PowerScreen {
                 Box::new(|state: &OutputState| match state {
                     OutputState::On => "On".into(),
                     OutputState::Off => "Off".into(),
+                    OutputState::Changing => "Changing".into(),
                     OutputState::OffFloating => "Off (Float.)".into(),
                     OutputState::InvertedPolarity => "Inv. Pol.".into(),
                     OutputState::OverCurrent => "Ov. Curr.".into(),
@@ -127,6 +128,7 @@ impl MountableScreen for PowerScreen {
                 Box::new(|state: &OutputState| match state {
                     OutputState::On => IndicatorState::On,
                     OutputState::Off | OutputState::OffFloating => IndicatorState::Off,
+                    OutputState::Changing => IndicatorState::Unkown,
                     _ => IndicatorState::Error,
                 }),
             )
