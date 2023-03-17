@@ -54,7 +54,6 @@ pub struct BlinkPattern {
 }
 
 impl BlinkPattern {
-    #[allow(dead_code)]
     pub fn solid(val: f32) -> Self {
         Self {
             repetitions: 1,
@@ -67,13 +66,11 @@ impl BlinkPattern {
 }
 
 pub struct BlinkPatternBuilder {
-    #[allow(dead_code)]
     value: f32,
     pattern: BlinkPattern,
 }
 
 impl BlinkPatternBuilder {
-    #[allow(dead_code)]
     pub fn new(initial: f32) -> Self {
         Self {
             value: initial,
@@ -84,7 +81,6 @@ impl BlinkPatternBuilder {
         }
     }
 
-    #[allow(dead_code)]
     pub fn fade_to(mut self, brightness: f32, duration: Duration) -> Self {
         self.value = brightness;
         self.pattern.steps.push((brightness, duration));
@@ -96,13 +92,11 @@ impl BlinkPatternBuilder {
         self.fade_to(brightness, Duration::ZERO)
     }
 
-    #[allow(dead_code)]
     pub fn stay_for(self, duration: Duration) -> Self {
         let value = self.value;
         self.fade_to(value, duration)
     }
 
-    #[allow(dead_code)]
     pub fn repeat(mut self, repetitions: i32) -> BlinkPattern {
         self.pattern.repetitions = repetitions;
         self.pattern
@@ -113,7 +107,6 @@ impl BlinkPatternBuilder {
         self.repeat(1)
     }
 
-    #[allow(dead_code)]
     pub fn forever(self) -> BlinkPattern {
         self.repeat(-1)
     }
