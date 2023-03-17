@@ -64,7 +64,7 @@ async fn main() -> Result<(), std::io::Error> {
     let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone())
         .await
         .unwrap();
-    let dig_io = DigitalIo::new(&mut bb);
+    let dig_io = DigitalIo::new(&mut bb, led.out_0.clone(), led.out_1.clone());
     let regulators = Regulators::new(&mut bb);
     let temperatures = Temperatures::new(&mut bb);
     let usb_hub = UsbHub::new(&mut bb);
