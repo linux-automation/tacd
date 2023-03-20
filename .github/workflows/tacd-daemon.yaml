@@ -15,6 +15,12 @@ env:
 
 jobs:
   check:
+    strategy:
+      matrix:
+        features:
+          - ""
+          - "--features=demo_mode --no-default-features"
+          - "--tests"
     name: cargo check
     runs-on: ubuntu-latest
     steps:
@@ -30,22 +36,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
-
-  check-demo:
-    name: cargo check demo_mode
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --features=demo_mode --no-default-features
+          args: ${{ matrix.features }}
 
   fmt:
     name: cargo fmt
@@ -64,6 +55,12 @@ jobs:
           args: --all -- --check
 
   clippy:
+    strategy:
+      matrix:
+        features:
+          - ""
+          - "--features=demo_mode --no-default-features"
+          - "--tests"
     name: cargo clippy
     runs-on: ubuntu-latest
     steps:
@@ -79,7 +76,7 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
+          args: ${{ matrix.features }}
           name: Clippy Output
 
   deny:
