@@ -8,6 +8,11 @@ on:
     branches:
       - main
 
+env:
+  # Make sure cargo commands not only fail on hard errors but also on warnings
+  # so we do not accidentially miss newly introduced warnings.
+  RUSTFLAGS: -D warnings
+
 jobs:
   check:
     name: cargo check
