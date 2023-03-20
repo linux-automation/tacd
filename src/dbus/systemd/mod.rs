@@ -129,21 +129,22 @@ impl Service {
             .await
             .unwrap();
 
-        let mut active_state_stream = unit.receive_active_state_changed().await.map(|_| ());
-        let mut sub_state_stream = unit.receive_sub_state_changed().await.map(|_| ());
-        let mut active_enter_stream = unit
-            .receive_active_enter_timestamp_changed()
-            .await
-            .map(|_| ());
-        let mut active_exit_stream = unit
-            .receive_active_exit_timestamp_changed()
-            .await
-            .map(|_| ());
-
         let unit_task = unit.clone();
         let status_topic = this.status.clone();
 
         spawn(async move {
+            let mut active_state_stream =
+                unit_task.receive_active_state_changed().await.map(|_| ());
+            let mut sub_state_stream = unit_task.receive_sub_state_changed().await.map(|_| ());
+            let mut active_enter_stream = unit_task
+                .receive_active_enter_timestamp_changed()
+                .await
+                .map(|_| ());
+            let mut active_exit_stream = unit_task
+                .receive_active_exit_timestamp_changed()
+                .await
+                .map(|_| ());
+
             loop {
                 let status = ServiceStatus::get(&unit_task).await.unwrap();
                 status_topic.set(status).await;

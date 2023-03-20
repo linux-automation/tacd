@@ -243,9 +243,9 @@ pub struct Network {
 }
 
 impl Network {
-    fn setup_topics(bb: &mut BrokerBuilder, hostname: String) -> Self {
+    fn setup_topics(bb: &mut BrokerBuilder) -> Self {
         Self {
-            hostname: bb.topic_ro("/v1/tac/network/hostname", Some(hostname)),
+            hostname: bb.topic_ro("/v1/tac/network/hostname", None),
             bridge_interface: bb.topic_ro("/v1/tac/network/interface/tac-bridge", None),
             dut_interface: bb.topic_ro("/v1/tac/network/interface/dut", None),
             uplink_interface: bb.topic_ro("/v1/tac/network/interface/uplink", None),
@@ -254,8 +254,9 @@ impl Network {
 
     #[cfg(feature = "demo_mode")]
     pub async fn new<C>(bb: &mut BrokerBuilder, _conn: C) -> Self {
-        let this = Self::setup_topics(bb, "lxatac".to_string());
+        let this = Self::setup_topics(bb);
 
+        this.hostname.set("lxatac".to_string()).await;
         this.bridge_interface
             .set(vec![String::from("192.168.1.1")])
             .await;
@@ -277,14 +278,27 @@ impl Network {
 
     #[cfg(not(feature = "demo_mode"))]
     pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
-        let hostname = hostname::HostnameProxy::new(conn)
-            .await
-            .unwrap()
-            .hostname()
-            .await
-            .unwrap();
+        let this = Self::setup_topics(bb);
 
-        let this = Self::setup_topics(bb, hostname);
+        {
+            let conn = conn.clone();
+            let hostname_topic = this.hostname.clone();
+            async_std::task::spawn(async move {
+                let proxy = hostname::HostnameProxy::new(&conn).await.unwrap();
+
+                let mut stream = proxy.receive_hostname_changed().await;
+
+                if let Ok(h) = proxy.hostname().await {
+                    hostname_topic.set(h).await;
+                }
+
+                while let Some(v) = stream.next().await {
+                    if let Ok(h) = v.get().await {
+                        hostname_topic.set(h).await;
+                    }
+                }
+            });
+        }
 
         {
             let conn = conn.clone();
