@@ -242,7 +242,7 @@ paths:
             - out_1
     get:
       summary: Get the current asserted/deasserted status of the output
-      tags: [Input/Output] 
+      tags: [Input/Output]
       responses:
         '200':
           content:
