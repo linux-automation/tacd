@@ -98,6 +98,7 @@ impl MountableScreen for RebootConfirmScreen {
                         reboot.set(true).await;
                         break;
                     }
+                    ButtonEvent::Press { btn: _ } => {}
                     _ => screen.set(SCREEN_TYPE.next()).await,
                 }
             }
