@@ -104,12 +104,14 @@ impl MountableScreen for SystemScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
+                        src: _,
                     } => screen.set(Screen::RebootConfirm),
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
+                        src: _,
                     } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Press { btn: _ } => {}
+                    ButtonEvent::Press { btn: _, src: _ } => {}
                 }
             }
         });

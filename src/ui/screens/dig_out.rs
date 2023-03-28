@@ -127,6 +127,7 @@ impl MountableScreen for DigOutScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Long,
+                        src: _,
                     } => {
                         let port = &port_enables[highlighted as usize];
 
@@ -135,12 +136,14 @@ impl MountableScreen for DigOutScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Short,
+                        src: _,
                     } => {
                         port_highlight.set((highlighted + 1) % 2);
                     }
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
+                        src: _,
                     } => {
                         screen.set(SCREEN_TYPE.next());
                     }

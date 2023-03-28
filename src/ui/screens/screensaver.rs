@@ -98,7 +98,6 @@ impl ScreenSaverScreen {
         // Activate screensaver if no button is pressed for some time
         let (mut buttons_events, _) = buttons.clone().subscribe_unbounded();
         let screen_task = screen.clone();
-
         spawn(async move {
             loop {
                 let ev = timeout(SCREENSAVER_TIMEOUT, buttons_events.next()).await;
@@ -173,10 +172,12 @@ impl MountableScreen for ScreenSaverScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
+                        src: _,
                     } => locator.modify(|prev| Some(!prev.unwrap_or(false))),
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
+                        src: _,
                     } => screen.set(SCREEN_TYPE.next()),
                     _ => {}
                 }

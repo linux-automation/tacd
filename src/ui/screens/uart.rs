@@ -107,18 +107,21 @@ impl MountableScreen for UartScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Long,
+                        src: _,
                     } => port.modify(|prev| Some(!prev.unwrap_or(false))),
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Short,
+                        src: _,
                     } => {
                         dir_highlight.set((highlighted + 1) % 2);
                     }
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
+                        src: _,
                     } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Press { btn: _ } => {}
+                    ButtonEvent::Press { btn: _, src: _ } => {}
                 }
             }
         });

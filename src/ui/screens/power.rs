@@ -129,6 +129,7 @@ impl MountableScreen for PowerScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
+                        src: _,
                     } => {
                         let req = match power_state.get().await {
                             OutputState::On => OutputRequest::Off,
@@ -140,8 +141,9 @@ impl MountableScreen for PowerScreen {
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
+                        src: _,
                     } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Press { btn: _ } => {}
+                    ButtonEvent::Press { btn: _, src: _ } => {}
                 }
             }
         });

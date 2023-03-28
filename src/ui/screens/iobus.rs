@@ -132,12 +132,14 @@ impl MountableScreen for IoBusScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
+                        src: _,
                     } => iobus_pwr_en.modify(|prev| Some(!prev.unwrap_or(true))),
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
+                        src: _,
                     } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Press { btn: _ } => {}
+                    ButtonEvent::Press { btn: _, src: _ } => {}
                 }
             }
         });
