@@ -283,7 +283,7 @@ async fn handle_connection(
                     let new_subscribes: Vec<_> = topics
                         .iter()
                         .filter(|topic| topic.web_readable() && matcher.is_match(topic.path()))
-                        .map(|topic| topic.clone().subscribe_as_bytes(to_websocket.clone()))
+                        .map(|topic| topic.clone().subscribe_as_bytes(to_websocket.clone(), true))
                         .collect();
 
                     // Only allow one subscribe with the same match per

@@ -19,6 +19,7 @@ use async_std::sync::Arc;
 use serde::{de::DeserializeOwned, Serialize};
 
 mod mqtt_conn;
+mod persistence;
 mod rest;
 mod topic;
 
@@ -64,6 +65,7 @@ impl BrokerBuilder {
         path: &str,
         web_readable: bool,
         web_writable: bool,
+        persistent: bool,
         initial: Option<E>,
         retained_length: usize,
     ) -> Arc<Topic<E>> {
@@ -71,6 +73,7 @@ impl BrokerBuilder {
             path,
             web_readable,
             web_writable,
+            persistent,
             initial,
             retained_length,
         ));
@@ -86,7 +89,7 @@ impl BrokerBuilder {
         path: &str,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, true, false, initial, 1)
+        self.topic(path, true, false, false, initial, 1)
     }
 
     /// Register a new topic that is both readable and writable from the outside
@@ -95,7 +98,7 @@ impl BrokerBuilder {
         path: &str,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, true, true, initial, 1)
+        self.topic(path, true, true, false, initial, 1)
     }
 
     /// Register a new topic that is only writable from the outside
@@ -104,7 +107,7 @@ impl BrokerBuilder {
         path: &str,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, false, true, initial, 1)
+        self.topic(path, false, true, false, initial, 1)
     }
 
     /// Finish building the broker
@@ -113,7 +116,8 @@ impl BrokerBuilder {
     pub fn build(self, server: &mut tide::Server<()>) {
         let topics = Arc::new(self.topics);
 
+        persistence::register(topics.clone());
         rest::register(server, topics.clone());
-        mqtt_conn::register(server, topics.clone());
+        mqtt_conn::register(server, topics);
     }
 }

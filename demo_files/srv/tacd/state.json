@@ -1,0 +1,6 @@
+{
+  "format_version": 1,
+  "persistent_topics": {
+    "/v1/tac/setup_mode": false
+  }
+}
