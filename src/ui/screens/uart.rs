@@ -22,7 +22,7 @@ use async_trait::async_trait;
 
 use embedded_graphics::prelude::*;
 
-use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
+use crate::broker::{Native, SubscriptionHandle, Topic};
 
 use super::buttons::*;
 use super::widgets::*;
@@ -37,9 +37,9 @@ pub struct UartScreen {
 }
 
 impl UartScreen {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
+    pub fn new() -> Self {
         Self {
-            highlighted: bb.topic_hidden(Some(0)),
+            highlighted: Topic::anonymous(Some(0)),
             widgets: Vec::new(),
             buttons_handle: None,
         }

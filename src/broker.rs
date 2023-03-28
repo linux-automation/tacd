@@ -107,14 +107,6 @@ impl BrokerBuilder {
         self.topic(path, false, true, initial, 1)
     }
 
-    /// Register a new topic that can only be used internally
-    pub fn topic_hidden<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
-        &mut self,
-        initial: Option<E>,
-    ) -> Arc<Topic<E>> {
-        self.topic("/hidden", false, false, initial, 1)
-    }
-
     /// Finish building the broker
     ///
     /// This consumes the builder so that no new topics can be registered

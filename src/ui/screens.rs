@@ -49,7 +49,7 @@ use usb::UsbScreen;
 use super::buttons;
 use super::widgets;
 use super::{FramebufferDrawTarget, Ui, UiResources};
-use crate::broker::{BrokerBuilder, Topic};
+use crate::broker::Topic;
 use buttons::ButtonEvent;
 use widgets::UI_TEXT_FONT;
 
@@ -131,20 +131,19 @@ const fn row_anchor(row_num: u8) -> Point {
 }
 
 pub(super) fn init(
-    bb: &mut BrokerBuilder,
     res: &UiResources,
     screen: &Arc<Topic<Screen>>,
     buttons: &Arc<Topic<ButtonEvent>>,
 ) -> Vec<Box<dyn MountableScreen>> {
     vec![
-        Box::new(DigOutScreen::new(bb)),
+        Box::new(DigOutScreen::new()),
         Box::new(IoBusScreen::new()),
         Box::new(PowerScreen::new()),
         Box::new(RaucScreen::new(screen, &res.rauc.operation)),
         Box::new(RebootConfirmScreen::new()),
         Box::new(ScreenSaverScreen::new(buttons, screen)),
         Box::new(SystemScreen::new()),
-        Box::new(UartScreen::new(bb)),
-        Box::new(UsbScreen::new(bb)),
+        Box::new(UartScreen::new()),
+        Box::new(UsbScreen::new()),
     ]
 }

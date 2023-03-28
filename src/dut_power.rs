@@ -565,7 +565,7 @@ mod tests {
     use async_std::task::{block_on, sleep};
 
     use crate::adc::Adc;
-    use crate::broker::BrokerBuilder;
+    use crate::broker::{BrokerBuilder, Topic};
     use crate::digital_io::find_line;
 
     use super::{
@@ -581,7 +581,7 @@ mod tests {
         let (adc, dut_pwr, led) = {
             let mut bb = BrokerBuilder::new();
             let adc = block_on(Adc::new(&mut bb)).unwrap();
-            let led = bb.topic_hidden(None);
+            let led = Topic::anonymous(None);
 
             let dut_pwr = block_on(DutPwrThread::new(
                 &mut bb,

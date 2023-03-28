@@ -25,7 +25,7 @@ use embedded_graphics::prelude::*;
 use super::buttons::*;
 use super::widgets::*;
 use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
-use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
+use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::DigOut;
@@ -42,9 +42,9 @@ pub struct DigOutScreen {
 }
 
 impl DigOutScreen {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
+    pub fn new() -> Self {
         Self {
-            highlighted: bb.topic_hidden(Some(0)),
+            highlighted: Topic::anonymous(Some(0)),
             widgets: Vec::new(),
             buttons_handle: None,
         }

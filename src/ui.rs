@@ -82,7 +82,7 @@ impl Ui {
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, None, 0);
 
         // Initialize all the screens now so they can be mounted later
-        let screens: Vec<Box<dyn MountableScreen>> = screens::init(bb, &res, &screen, &buttons);
+        let screens: Vec<Box<dyn MountableScreen>> = screens::init(&res, &screen, &buttons);
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",

@@ -171,6 +171,10 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
         }
     }
 
+    pub fn anonymous(initial: Option<E>) -> Arc<Self> {
+        Arc::new(Self::new("/hidden", false, false, initial, 1))
+    }
+
     /// Set a new value for the topic and notify subscribers with the inner
     /// lock held to allow atomic read-modify-write cycles.
     ///
