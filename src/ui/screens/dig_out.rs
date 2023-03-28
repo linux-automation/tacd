@@ -24,11 +24,16 @@ use embedded_graphics::prelude::*;
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
 use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
 use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::DigOut;
+const VOLTAGE_MAX: f32 = 5.0;
+const OFFSET_INDICATOR: Point = Point::new(92, -10);
+const OFFSET_BAR: Point = Point::new(122, -14);
+const WIDTH_BAR: u32 = 90;
+const HEIGHT_BAR: u32 = 18;
 
 pub struct DigOutScreen {
     highlighted: Arc<Topic<u8>>,
@@ -63,31 +68,29 @@ impl MountableScreen for DigOutScreen {
             (
                 0,
                 "OUT 0",
-                52,
                 &ui.res.dig_io.out_0,
                 &ui.res.adc.out0_volt.topic,
             ),
             (
                 1,
                 "OUT 1",
-                72,
                 &ui.res.dig_io.out_1,
                 &ui.res.adc.out1_volt.topic,
             ),
         ];
 
-        for (idx, name, y, status, voltage) in ports {
+        for (idx, name, status, voltage) in ports {
+            let anchor_text = row_anchor(idx);
+            let anchor_indicator = anchor_text + OFFSET_INDICATOR;
+            let anchor_bar = anchor_text + OFFSET_BAR;
+
             self.widgets.push(Box::new(
                 DynamicWidget::text(
                     self.highlighted.clone(),
                     ui.draw_target.clone(),
-                    Point::new(8, y),
+                    anchor_text,
                     Box::new(move |highlight: &u8| {
-                        format!(
-                            "{} {}",
-                            if *highlight as usize == idx { ">" } else { " " },
-                            name,
-                        )
+                        format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
                     }),
                 )
                 .await,
@@ -97,7 +100,7 @@ impl MountableScreen for DigOutScreen {
                 DynamicWidget::indicator(
                     status.clone(),
                     ui.draw_target.clone(),
-                    Point::new(100, y - 10),
+                    anchor_indicator,
                     Box::new(|state: &bool| match *state {
                         true => IndicatorState::On,
                         false => IndicatorState::Off,
@@ -110,10 +113,10 @@ impl MountableScreen for DigOutScreen {
                 DynamicWidget::bar(
                     voltage.clone(),
                     ui.draw_target.clone(),
-                    Point::new(130, y - 14),
-                    90,
-                    18,
-                    Box::new(|meas: &Measurement| meas.value.abs() / 5.0),
+                    anchor_bar,
+                    WIDTH_BAR,
+                    HEIGHT_BAR,
+                    Box::new(|meas: &Measurement| meas.value.abs() / VOLTAGE_MAX),
                 )
                 .await,
             ));
