@@ -26,13 +26,17 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
 use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
 use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::Usb;
 const CURRENT_LIMIT_PER_PORT: f32 = 0.5;
 const CURRENT_LIMIT_TOTAL: f32 = 0.7;
+const OFFSET_INDICATOR: Point = Point::new(92, -10);
+const OFFSET_BAR: Point = Point::new(122, -14);
+const WIDTH_BAR: u32 = 90;
+const HEIGHT_BAR: u32 = 18;
 
 pub struct UsbScreen {
     highlighted: Arc<Topic<u8>>,
@@ -67,21 +71,18 @@ impl MountableScreen for UsbScreen {
             (
                 0,
                 "Port 1",
-                92,
                 &ui.res.usb_hub.port1.powered,
                 &ui.res.adc.usb_host1_curr.topic,
             ),
             (
                 1,
                 "Port 2",
-                112,
                 &ui.res.usb_hub.port2.powered,
                 &ui.res.adc.usb_host2_curr.topic,
             ),
             (
                 2,
                 "Port 3",
-                132,
                 &ui.res.usb_hub.port3.powered,
                 &ui.res.adc.usb_host3_curr.topic,
             ),
@@ -93,7 +94,7 @@ impl MountableScreen for UsbScreen {
             let ui_text_style: MonoTextStyle<BinaryColor> =
                 MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-            Text::new("Total", Point::new(8, 52), ui_text_style)
+            Text::new("Total", row_anchor(0), ui_text_style)
                 .draw(&mut *draw_target)
                 .unwrap();
         }
@@ -102,25 +103,26 @@ impl MountableScreen for UsbScreen {
             DynamicWidget::bar(
                 ui.res.adc.usb_host_curr.topic.clone(),
                 ui.draw_target.clone(),
-                Point::new(130, 52 - 14),
-                90,
-                18,
+                row_anchor(0) + OFFSET_BAR,
+                WIDTH_BAR,
+                HEIGHT_BAR,
                 Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_TOTAL),
             )
             .await,
         ));
-        for (idx, name, y, status, current) in ports {
+
+        for (idx, name, status, current) in ports {
+            let anchor_text = row_anchor(idx + 2);
+            let anchor_indicator = anchor_text + OFFSET_INDICATOR;
+            let anchor_bar = anchor_text + OFFSET_BAR;
+
             self.widgets.push(Box::new(
                 DynamicWidget::text(
                     self.highlighted.clone(),
                     ui.draw_target.clone(),
-                    Point::new(8, y),
+                    anchor_text,
                     Box::new(move |highlight: &u8| {
-                        format!(
-                            "{} {}",
-                            if *highlight as usize == idx { ">" } else { " " },
-                            name,
-                        )
+                        format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
                     }),
                 )
                 .await,
@@ -130,7 +132,7 @@ impl MountableScreen for UsbScreen {
                 DynamicWidget::indicator(
                     status.clone(),
                     ui.draw_target.clone(),
-                    Point::new(100, y - 10),
+                    anchor_indicator,
                     Box::new(|state: &bool| match *state {
                         true => IndicatorState::On,
                         false => IndicatorState::Off,
@@ -143,9 +145,9 @@ impl MountableScreen for UsbScreen {
                 DynamicWidget::bar(
                     current.clone(),
                     ui.draw_target.clone(),
-                    Point::new(130, y - 14),
-                    90,
-                    18,
+                    anchor_bar,
+                    WIDTH_BAR,
+                    HEIGHT_BAR,
                     Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_PER_PORT),
                 )
                 .await,
