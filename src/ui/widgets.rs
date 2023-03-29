@@ -154,14 +154,14 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
 
                 match format_fn(msg) {
                     IndicatorState::On => {
-                        let circle = Circle::new(anchor, 10);
                         let style = PrimitiveStyleBuilder::new()
                             .stroke_color(BinaryColor::On)
                             .stroke_width(2)
                             .fill_color(BinaryColor::On)
                             .build();
+                        let circle = Circle::new(anchor, 10).into_styled(style);
 
-                        circle.into_styled(style).draw(target).unwrap();
+                        circle.draw(target).unwrap();
 
                         Some(circle.bounding_box())
                     }
@@ -178,7 +178,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
                     IndicatorState::Error => {
                         let text = Text::with_alignment(
                             "!",
-                            anchor + Point::new(5, 10),
+                            anchor + Point::new(4, 10),
                             ui_text_style,
                             Alignment::Center,
                         );
@@ -190,7 +190,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
                     IndicatorState::Unkown => {
                         let text = Text::with_alignment(
                             "?",
-                            anchor + Point::new(5, 10),
+                            anchor + Point::new(4, 10),
                             ui_text_style,
                             Alignment::Center,
                         );
