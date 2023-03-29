@@ -20,7 +20,9 @@ use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
 
-use embedded_graphics::prelude::*;
+use embedded_graphics::{
+    mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
+};
 
 use super::buttons::*;
 use super::widgets::*;
@@ -30,9 +32,9 @@ use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::DigOut;
 const VOLTAGE_MAX: f32 = 5.0;
-const OFFSET_INDICATOR: Point = Point::new(92, -10);
-const OFFSET_BAR: Point = Point::new(122, -14);
-const WIDTH_BAR: u32 = 90;
+const OFFSET_INDICATOR: Point = Point::new(170, -10);
+const OFFSET_BAR: Point = Point::new(140, -14);
+const WIDTH_BAR: u32 = 72;
 const HEIGHT_BAR: u32 = 18;
 
 pub struct DigOutScreen {
@@ -68,29 +70,47 @@ impl MountableScreen for DigOutScreen {
         let ports = [
             (
                 0,
-                "OUT 0",
+                "OUT 0:",
                 &ui.res.dig_io.out_0,
                 &ui.res.adc.out0_volt.topic,
             ),
             (
                 1,
-                "OUT 1",
+                "OUT 1:",
                 &ui.res.dig_io.out_1,
                 &ui.res.adc.out1_volt.topic,
             ),
         ];
 
         for (idx, name, status, voltage) in ports {
-            let anchor_text = row_anchor(idx);
-            let anchor_indicator = anchor_text + OFFSET_INDICATOR;
-            let anchor_bar = anchor_text + OFFSET_BAR;
+            let anchor_name = row_anchor(idx * 4);
+            let anchor_assert = row_anchor(idx * 4 + 1);
+            let anchor_indicator = anchor_assert + OFFSET_INDICATOR;
+
+            let anchor_voltage = row_anchor(idx * 4 + 2);
+            let anchor_bar = anchor_voltage + OFFSET_BAR;
+
+            {
+                let mut draw_target = ui.draw_target.lock().await;
+
+                let ui_text_style: MonoTextStyle<BinaryColor> =
+                    MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+                Text::new(name, anchor_name, ui_text_style)
+                    .draw(&mut *draw_target)
+                    .unwrap();
+            }
 
             self.widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
                 ui.draw_target.clone(),
-                anchor_text,
+                anchor_assert,
                 Box::new(move |highlight: &u8| {
-                    format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
+                    if *highlight == idx {
+                        "> Asserted:".into()
+                    } else {
+                        "  Asserted:".into()
+                    }
                 }),
             )));
 
@@ -102,6 +122,13 @@ impl MountableScreen for DigOutScreen {
                     true => IndicatorState::On,
                     false => IndicatorState::Off,
                 }),
+            )));
+
+            self.widgets.push(Box::new(DynamicWidget::text(
+                voltage.clone(),
+                ui.draw_target.clone(),
+                anchor_voltage,
+                Box::new(|meas: &Measurement| format!("  Volt: {:>4.1}V", meas.value)),
             )));
 
             self.widgets.push(Box::new(DynamicWidget::bar(
