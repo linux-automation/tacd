@@ -83,7 +83,7 @@ impl MountableScreen for RebootConfirmScreen {
         let draw_target = ui.draw_target.clone();
         rly(&mut *draw_target.lock().await);
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
+        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let screen = ui.screen.clone();
         let reboot = ui.res.systemd.reboot.clone();
 
@@ -95,11 +95,11 @@ impl MountableScreen for RebootConfirmScreen {
                         dur: PressDuration::Long,
                     } => {
                         brb(&mut *draw_target.lock().await);
-                        reboot.set(true).await;
+                        reboot.set(true);
                         break;
                     }
                     ButtonEvent::Press { btn: _ } => {}
-                    _ => screen.set(SCREEN_TYPE.next()).await,
+                    _ => screen.set(SCREEN_TYPE.next()),
                 }
             }
         });
@@ -109,7 +109,7 @@ impl MountableScreen for RebootConfirmScreen {
 
     async fn unmount(&mut self) {
         if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe().await;
+            handle.unsubscribe();
         }
     }
 }

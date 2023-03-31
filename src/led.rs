@@ -76,7 +76,7 @@ fn handle_pattern(
         let topic_task = topic.clone();
 
         spawn(async move {
-            let (mut rx, _) = topic_task.subscribe_unbounded().await;
+            let (mut rx, _) = topic_task.subscribe_unbounded();
 
             while let Some(pattern) = rx.next().await {
                 if let Err(e) = led.set_pattern(pattern) {
@@ -100,7 +100,7 @@ fn handle_color(
         let topic_task = topic.clone();
 
         spawn(async move {
-            let (mut rx, _) = topic_task.subscribe_unbounded().await;
+            let (mut rx, _) = topic_task.subscribe_unbounded();
 
             while let Some((r, g, b)) = rx.next().await {
                 let max = led.max_brightness().unwrap();

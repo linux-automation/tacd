@@ -99,7 +99,7 @@ impl ScreenSaverScreen {
         let buttons_task = buttons.clone();
         let screen_task = screen.clone();
         spawn(async move {
-            let (mut buttons_events, _) = buttons_task.subscribe_unbounded().await;
+            let (mut buttons_events, _) = buttons_task.subscribe_unbounded();
 
             loop {
                 let ev = timeout(SCREENSAVER_TIMEOUT, buttons_events.next()).await;
@@ -110,17 +110,15 @@ impl ScreenSaverScreen {
                 };
 
                 if activate_screensaver {
-                    screen_task
-                        .modify(|screen| {
-                            screen.and_then(|s| {
-                                if s.use_screensaver() {
-                                    Some(Screen::ScreenSaver)
-                                } else {
-                                    None
-                                }
-                            })
+                    screen_task.modify(|screen| {
+                        screen.and_then(|s| {
+                            if s.use_screensaver() {
+                                Some(Screen::ScreenSaver)
+                            } else {
+                                None
+                            }
                         })
-                        .await;
+                    });
                 }
             }
         });
@@ -145,30 +143,28 @@ impl MountableScreen for ScreenSaverScreen {
             Point::new(230, 240),
         ));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::locator(ui.locator_dance.clone(), ui.draw_target.clone()).await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::locator(
+            ui.locator_dance.clone(),
+            ui.draw_target.clone(),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::new(
-                ui.res.adc.time.clone(),
-                ui.draw_target.clone(),
-                Box::new(move |_, target| {
-                    let ui_text_style: MonoTextStyle<BinaryColor> =
-                        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+        self.widgets.push(Box::new(DynamicWidget::new(
+            ui.res.adc.time.clone(),
+            ui.draw_target.clone(),
+            Box::new(move |_, target| {
+                let ui_text_style: MonoTextStyle<BinaryColor> =
+                    MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-                    let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
-                    let text = bounce.bounce(text);
+                let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
+                let text = bounce.bounce(text);
 
-                    text.draw(target).unwrap();
+                text.draw(target).unwrap();
 
-                    Some(text.bounding_box())
-                }),
-            )
-            .await,
-        ));
+                Some(text.bounding_box())
+            }),
+        )));
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
+        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let locator = ui.locator.clone();
         let screen = ui.screen.clone();
 
@@ -178,11 +174,11 @@ impl MountableScreen for ScreenSaverScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
-                    } => locator.modify(|prev| Some(!prev.unwrap_or(false))).await,
+                    } => locator.modify(|prev| Some(!prev.unwrap_or(false))),
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
-                    } => screen.set(SCREEN_TYPE.next()).await,
+                    } => screen.set(SCREEN_TYPE.next()),
                     _ => {}
                 }
             }
@@ -193,7 +189,7 @@ impl MountableScreen for ScreenSaverScreen {
 
     async fn unmount(&mut self) {
         if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe().await;
+            handle.unsubscribe();
         }
 
         for mut widget in self.widgets.drain(..) {

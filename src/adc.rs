@@ -195,55 +195,39 @@ impl Adc {
                 adc_clone
                     .usb_host_curr
                     .topic
-                    .set(adc_clone.usb_host_curr.fast.get())
-                    .await;
+                    .set(adc_clone.usb_host_curr.fast.get());
                 adc_clone
                     .usb_host1_curr
                     .topic
-                    .set(adc_clone.usb_host1_curr.fast.get())
-                    .await;
+                    .set(adc_clone.usb_host1_curr.fast.get());
                 adc_clone
                     .usb_host2_curr
                     .topic
-                    .set(adc_clone.usb_host2_curr.fast.get())
-                    .await;
+                    .set(adc_clone.usb_host2_curr.fast.get());
                 adc_clone
                     .usb_host3_curr
                     .topic
-                    .set(adc_clone.usb_host3_curr.fast.get())
-                    .await;
+                    .set(adc_clone.usb_host3_curr.fast.get());
                 adc_clone
                     .out0_volt
                     .topic
-                    .set(adc_clone.out0_volt.fast.get())
-                    .await;
+                    .set(adc_clone.out0_volt.fast.get());
                 adc_clone
                     .out1_volt
                     .topic
-                    .set(adc_clone.out1_volt.fast.get())
-                    .await;
+                    .set(adc_clone.out1_volt.fast.get());
                 adc_clone
                     .iobus_curr
                     .topic
-                    .set(adc_clone.iobus_curr.fast.get())
-                    .await;
+                    .set(adc_clone.iobus_curr.fast.get());
                 adc_clone
                     .iobus_volt
                     .topic
-                    .set(adc_clone.iobus_volt.fast.get())
-                    .await;
-                adc_clone
-                    .pwr_volt
-                    .topic
-                    .set(adc_clone.pwr_volt.fast.get())
-                    .await;
-                adc_clone
-                    .pwr_curr
-                    .topic
-                    .set(adc_clone.pwr_curr.fast.get())
-                    .await;
+                    .set(adc_clone.iobus_volt.fast.get());
+                adc_clone.pwr_volt.topic.set(adc_clone.pwr_volt.fast.get());
+                adc_clone.pwr_curr.topic.set(adc_clone.pwr_curr.fast.get());
 
-                adc_clone.time.set(Timestamp::now()).await;
+                adc_clone.time.set(Timestamp::now());
             }
         });
 

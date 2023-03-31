@@ -64,7 +64,7 @@ fn handle_regulator(
     let topic_task = topic.clone();
 
     spawn(async move {
-        let (mut src, _) = topic_task.subscribe_unbounded().await;
+        let (mut src, _) = topic_task.subscribe_unbounded();
 
         while let Some(ev) = src.next().await {
             regulator_set(regulator_name, ev).unwrap();

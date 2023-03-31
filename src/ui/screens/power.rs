@@ -53,89 +53,72 @@ impl MountableScreen for PowerScreen {
     async fn mount(&mut self, ui: &Ui) {
         draw_border("DUT Power", SCREEN_TYPE, &ui.draw_target).await;
 
-        self.widgets.push(Box::new(
-            DynamicWidget::locator(ui.locator_dance.clone(), ui.draw_target.clone()).await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::locator(
+            ui.locator_dance.clone(),
+            ui.draw_target.clone(),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::text(
-                ui.res.adc.pwr_volt.topic.clone(),
-                ui.draw_target.clone(),
-                Point::new(8, 52),
-                Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::text(
+            ui.res.adc.pwr_volt.topic.clone(),
+            ui.draw_target.clone(),
+            Point::new(8, 52),
+            Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::bar(
-                ui.res.adc.pwr_volt.topic.clone(),
-                ui.draw_target.clone(),
-                Point::new(120, 52 - 14),
-                100,
-                18,
-                Box::new(|meas: &Measurement| meas.value / 48.0),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::bar(
+            ui.res.adc.pwr_volt.topic.clone(),
+            ui.draw_target.clone(),
+            Point::new(120, 52 - 14),
+            100,
+            18,
+            Box::new(|meas: &Measurement| meas.value / 48.0),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::text(
-                ui.res.adc.pwr_curr.topic.clone(),
-                ui.draw_target.clone(),
-                Point::new(8, 72),
-                Box::new(|meas: &Measurement| format!("I: {:-6.3}A", meas.value)),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::text(
+            ui.res.adc.pwr_curr.topic.clone(),
+            ui.draw_target.clone(),
+            Point::new(8, 72),
+            Box::new(|meas: &Measurement| format!("I: {:-6.3}A", meas.value)),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::bar(
-                ui.res.adc.pwr_curr.topic.clone(),
-                ui.draw_target.clone(),
-                Point::new(120, 72 - 14),
-                100,
-                18,
-                Box::new(|meas: &Measurement| meas.value / 48.0),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::bar(
+            ui.res.adc.pwr_curr.topic.clone(),
+            ui.draw_target.clone(),
+            Point::new(120, 72 - 14),
+            100,
+            18,
+            Box::new(|meas: &Measurement| meas.value / 48.0),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::text(
-                ui.res.dut_pwr.state.clone(),
-                ui.draw_target.clone(),
-                Point::new(8, 92),
-                Box::new(|state: &OutputState| match state {
-                    OutputState::On => "On".into(),
-                    OutputState::Off => "Off".into(),
-                    OutputState::Changing => "Changing".into(),
-                    OutputState::OffFloating => "Off (Float.)".into(),
-                    OutputState::InvertedPolarity => "Inv. Pol.".into(),
-                    OutputState::OverCurrent => "Ov. Curr.".into(),
-                    OutputState::OverVoltage => "Ov. Volt.".into(),
-                    OutputState::RealtimeViolation => "Rt Err.".into(),
-                }),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::text(
+            ui.res.dut_pwr.state.clone(),
+            ui.draw_target.clone(),
+            Point::new(8, 92),
+            Box::new(|state: &OutputState| match state {
+                OutputState::On => "On".into(),
+                OutputState::Off => "Off".into(),
+                OutputState::Changing => "Changing".into(),
+                OutputState::OffFloating => "Off (Float.)".into(),
+                OutputState::InvertedPolarity => "Inv. Pol.".into(),
+                OutputState::OverCurrent => "Ov. Curr.".into(),
+                OutputState::OverVoltage => "Ov. Volt.".into(),
+                OutputState::RealtimeViolation => "Rt Err.".into(),
+            }),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::indicator(
-                ui.res.dut_pwr.state.clone(),
-                ui.draw_target.clone(),
-                Point::new(120, 92 - 10),
-                Box::new(|state: &OutputState| match state {
-                    OutputState::On => IndicatorState::On,
-                    OutputState::Off | OutputState::OffFloating => IndicatorState::Off,
-                    OutputState::Changing => IndicatorState::Unkown,
-                    _ => IndicatorState::Error,
-                }),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::indicator(
+            ui.res.dut_pwr.state.clone(),
+            ui.draw_target.clone(),
+            Point::new(120, 92 - 10),
+            Box::new(|state: &OutputState| match state {
+                OutputState::On => IndicatorState::On,
+                OutputState::Off | OutputState::OffFloating => IndicatorState::Off,
+                OutputState::Changing => IndicatorState::Unkown,
+                _ => IndicatorState::Error,
+            }),
+        )));
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
+        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let power_state = ui.res.dut_pwr.state.clone();
         let power_request = ui.res.dut_pwr.request.clone();
         let screen = ui.screen.clone();
@@ -152,12 +135,12 @@ impl MountableScreen for PowerScreen {
                             _ => OutputRequest::On,
                         };
 
-                        power_request.set(req).await;
+                        power_request.set(req);
                     }
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
-                    } => screen.set(SCREEN_TYPE.next()).await,
+                    } => screen.set(SCREEN_TYPE.next()),
                     ButtonEvent::Press { btn: _ } => {}
                 }
             }
@@ -168,7 +151,7 @@ impl MountableScreen for PowerScreen {
 
     async fn unmount(&mut self) {
         if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe().await;
+            handle.unsubscribe();
         }
 
         for mut widget in self.widgets.drain(..) {

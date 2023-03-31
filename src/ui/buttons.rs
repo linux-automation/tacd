@@ -18,7 +18,7 @@
 use std::time::Duration;
 
 use async_std::sync::Arc;
-use async_std::task::{block_on, spawn_blocking};
+use async_std::task::spawn_blocking;
 use serde::{Deserialize, Serialize};
 
 use crate::broker::Topic;
@@ -131,13 +131,13 @@ pub fn handle_buttons(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
                     if let Some(start) = start_time[id].take() {
                         if let Ok(duration) = ev.timestamp().duration_since(start) {
                             let button_event = ButtonEvent::release_from_id_duration(id, duration);
-                            block_on(topic.set(button_event));
+                            topic.set(button_event);
                         }
                     }
                 } else {
                     // Button press -> register start time and send event
                     start_time[id] = Some(ev.timestamp());
-                    block_on(topic.set(ButtonEvent::press_from_id(id)));
+                    topic.set(ButtonEvent::press_from_id(id));
                 }
             }
         }

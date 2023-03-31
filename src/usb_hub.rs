@@ -169,13 +169,13 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     // Also clears the device info upon power off so it does not contain stale
     // information until the next poll.
     spawn(async move {
-        let (mut src, _) = powered.subscribe_unbounded().await;
+        let (mut src, _) = powered.subscribe_unbounded();
 
         while let Some(ev) = src.next().await {
             write(&disable_path, if ev { b"0" } else { b"1" }).unwrap();
 
             if !ev {
-                device.set(None).await;
+                device.set(None);
             }
         }
     });
@@ -204,18 +204,16 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                     _ => panic!("Read unexpected value for USB port disable state"),
                 };
 
-                powered
-                    .modify(|prev| {
-                        let should_set = prev
-                            .map(|prev_powered| prev_powered != is_powered)
-                            .unwrap_or(true);
+                powered.modify(|prev| {
+                    let should_set = prev
+                        .map(|prev_powered| prev_powered != is_powered)
+                        .unwrap_or(true);
 
-                        match should_set {
-                            true => Some(is_powered),
-                            false => None,
-                        }
-                    })
-                    .await;
+                    match should_set {
+                        true => Some(is_powered),
+                        false => None,
+                    }
+                });
             }
 
             let id_product = read_to_string(&id_product_path).ok();
@@ -233,18 +231,16 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                 product: pro.trim().to_string(),
             });
 
-            device
-                .modify(|prev| {
-                    let should_set = prev
-                        .map(|prev_dev_info| prev_dev_info != dev_info)
-                        .unwrap_or(true);
+            device.modify(|prev| {
+                let should_set = prev
+                    .map(|prev_dev_info| prev_dev_info != dev_info)
+                    .unwrap_or(true);
 
-                    match should_set {
-                        true => Some(dev_info),
-                        false => None,
-                    }
-                })
-                .await;
+                match should_set {
+                    true => Some(dev_info),
+                    false => None,
+                }
+            });
 
             sleep(POLL_INTERVAL).await;
         }

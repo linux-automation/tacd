@@ -43,12 +43,12 @@ impl RaucScreen {
 
         spawn(async move {
             let mut operation_prev = operation.get().await;
-            let (mut operation_events, _) = operation.subscribe_unbounded().await;
+            let (mut operation_events, _) = operation.subscribe_unbounded();
 
             while let Some(ev) = operation_events.next().await {
                 match (operation_prev.as_str(), ev.as_str()) {
-                    (_, "installing") => screen.set(SCREEN_TYPE).await,
-                    ("installing", _) => screen.set(SCREEN_TYPE.next()).await,
+                    (_, "installing") => screen.set(SCREEN_TYPE),
+                    ("installing", _) => screen.set(SCREEN_TYPE.next()),
                     _ => {}
                 };
 
@@ -69,53 +69,48 @@ impl MountableScreen for RaucScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        self.widgets.push(Box::new(
-            DynamicWidget::locator(ui.locator_dance.clone(), ui.draw_target.clone()).await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::locator(
+            ui.locator_dance.clone(),
+            ui.draw_target.clone(),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::text_center(
-                ui.res.rauc.progress.clone(),
-                ui.draw_target.clone(),
-                Point::new(120, 100),
-                Box::new(|progress: &Progress| {
-                    let (_, text) = progress.message.split_whitespace().fold(
-                        (0, String::new()),
-                        move |(mut ll, mut text), word| {
-                            let word_len = word.len();
+        self.widgets.push(Box::new(DynamicWidget::text_center(
+            ui.res.rauc.progress.clone(),
+            ui.draw_target.clone(),
+            Point::new(120, 100),
+            Box::new(|progress: &Progress| {
+                let (_, text) = progress.message.split_whitespace().fold(
+                    (0, String::new()),
+                    move |(mut ll, mut text), word| {
+                        let word_len = word.len();
 
-                            if (ll + word_len) > 15 {
-                                text.push('\n');
-                                ll = 0;
-                            } else {
-                                text.push(' ');
-                                ll += 1;
-                            }
+                        if (ll + word_len) > 15 {
+                            text.push('\n');
+                            ll = 0;
+                        } else {
+                            text.push(' ');
+                            ll += 1;
+                        }
 
-                            text.push_str(word);
-                            ll += word_len;
+                        text.push_str(word);
+                        ll += word_len;
 
-                            (ll, text)
-                        },
-                    );
+                        (ll, text)
+                    },
+                );
 
-                    text
-                }),
-            )
-            .await,
-        ));
+                text
+            }),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::bar(
-                ui.res.rauc.progress.clone(),
-                ui.draw_target.clone(),
-                Point::new(20, 180),
-                200,
-                18,
-                Box::new(|progress: &Progress| progress.percentage as f32 / 100.0),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::bar(
+            ui.res.rauc.progress.clone(),
+            ui.draw_target.clone(),
+            Point::new(20, 180),
+            200,
+            18,
+            Box::new(|progress: &Progress| progress.percentage as f32 / 100.0),
+        )));
     }
 
     async fn unmount(&mut self) {

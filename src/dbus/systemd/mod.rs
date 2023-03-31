@@ -103,7 +103,7 @@ impl Service {
     ) -> Self {
         let this = Self::setup_topics(bb, topic_name);
 
-        this.status.set(ServiceStatus::get().await.unwrap()).await;
+        this.status.set(ServiceStatus::get().await.unwrap());
 
         this
     }
@@ -147,7 +147,7 @@ impl Service {
 
             loop {
                 let status = ServiceStatus::get(&unit_task).await.unwrap();
-                status_topic.set(status).await;
+                status_topic.set(status);
 
                 race(
                     race(active_state_stream.next(), sub_state_stream.next()),
@@ -158,7 +158,7 @@ impl Service {
             }
         });
 
-        let (mut action_reqs, _) = this.action.clone().subscribe_unbounded().await;
+        let (mut action_reqs, _) = this.action.clone().subscribe_unbounded();
 
         spawn(async move {
             while let Some(action) = action_reqs.next().await {
@@ -184,7 +184,7 @@ impl Service {
 impl Systemd {
     #[cfg(feature = "demo_mode")]
     pub async fn handle_reboot(reboot: Arc<Topic<bool>>, _conn: Arc<Connection>) {
-        let (mut reboot_reqs, _) = reboot.subscribe_unbounded().await;
+        let (mut reboot_reqs, _) = reboot.subscribe_unbounded();
 
         spawn(async move {
             while let Some(req) = reboot_reqs.next().await {
@@ -197,7 +197,7 @@ impl Systemd {
 
     #[cfg(not(feature = "demo_mode"))]
     pub async fn handle_reboot(reboot: Arc<Topic<bool>>, conn: Arc<Connection>) {
-        let (mut reboot_reqs, _) = reboot.subscribe_unbounded().await;
+        let (mut reboot_reqs, _) = reboot.subscribe_unbounded();
 
         spawn(async move {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();

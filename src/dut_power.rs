@@ -256,25 +256,25 @@ fn setup_labgrid_compat(
     let compat_response = bb.topic_ro::<u8>("/v1/dut/powered/compat", None);
 
     task::spawn(async move {
-        let (mut request_stream, _) = compat_request.subscribe_unbounded().await;
+        let (mut request_stream, _) = compat_request.subscribe_unbounded();
 
         while let Some(req) = request_stream.next().await {
             match req {
-                0 => request.set(OutputRequest::Off).await,
-                1 => request.set(OutputRequest::On).await,
+                0 => request.set(OutputRequest::Off),
+                1 => request.set(OutputRequest::On),
                 _ => {}
             }
         }
     });
 
     task::spawn(async move {
-        let (mut state_stream, _) = state.subscribe_unbounded().await;
+        let (mut state_stream, _) = state.subscribe_unbounded();
 
         while let Some(state) = state_stream.next().await {
             match state {
-                OutputState::On => compat_response.set(1).await,
+                OutputState::On => compat_response.set(1),
                 OutputState::Changing => {}
-                _ => compat_response.set(0).await,
+                _ => compat_response.set(0),
             }
         }
     });
@@ -484,10 +484,10 @@ impl DutPwrThread {
         let request_topic_task = request_topic.clone();
         let state_topic_task = state_topic.clone();
         task::spawn(async move {
-            let (mut request_stream, _) = request_topic_task.subscribe_unbounded().await;
+            let (mut request_stream, _) = request_topic_task.subscribe_unbounded();
 
             while let Some(req) = request_stream.next().await {
-                state_topic_task.set(OutputState::Changing).await;
+                state_topic_task.set(OutputState::Changing);
                 request.store(req as u8, Ordering::Relaxed);
             }
         });
@@ -502,12 +502,10 @@ impl DutPwrThread {
                 let curr_state = Some(state.load(Ordering::Relaxed).into());
 
                 // Only send publish events if the state changed
-                state_topic_task
-                    .modify(|prev_state| match prev_state != curr_state {
-                        true => curr_state,
-                        false => None,
-                    })
-                    .await;
+                state_topic_task.modify(|prev_state| match prev_state != curr_state {
+                    true => curr_state,
+                    false => None,
+                });
             }
         });
 
@@ -532,16 +530,14 @@ impl DutPwrThread {
                 pb.stay_for(Duration::from_millis(400)).forever()
             };
 
-            let (mut state_stream, _) = state_topic_task.subscribe_unbounded().await;
+            let (mut state_stream, _) = state_topic_task.subscribe_unbounded();
 
             while let Some(state) = state_stream.next().await {
                 match state {
-                    OutputState::On => pwr_led.set(pattern_on.clone()).await,
-                    OutputState::Off | OutputState::OffFloating => {
-                        pwr_led.set(pattern_off.clone()).await
-                    }
+                    OutputState::On => pwr_led.set(pattern_on.clone()),
+                    OutputState::Off | OutputState::OffFloating => pwr_led.set(pattern_off.clone()),
                     OutputState::Changing => {}
-                    _ => pwr_led.set(pattern_error.clone()).await,
+                    _ => pwr_led.set(pattern_error.clone()),
                 }
             }
         });
@@ -609,7 +605,7 @@ mod tests {
         assert!(block_on(led.get()).is_off());
 
         println!("Turn Off Floating");
-        block_on(dut_pwr.request.set(OutputRequest::OffFloating));
+        dut_pwr.request.set(OutputRequest::OffFloating);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -617,7 +613,7 @@ mod tests {
         assert!(block_on(led.get()).is_off());
 
         println!("Turn on");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -643,7 +639,7 @@ mod tests {
         assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -669,7 +665,7 @@ mod tests {
         assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -695,7 +691,7 @@ mod tests {
         assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -716,7 +712,7 @@ mod tests {
         assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);

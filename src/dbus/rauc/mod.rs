@@ -77,11 +77,9 @@ impl Rauc {
     pub async fn new(bb: &mut BrokerBuilder, _conn: &Arc<Connection>) -> Self {
         let inst = Self::setup_topics(bb);
 
-        inst.operation.set("idle".to_string()).await;
-        inst.slot_status
-            .set(Arc::new(demo_mode::slot_status()))
-            .await;
-        inst.last_error.set("".to_string()).await;
+        inst.operation.set("idle".to_string());
+        inst.slot_status.set(Arc::new(demo_mode::slot_status()));
+        inst.last_error.set("".to_string());
 
         inst
     }
@@ -100,7 +98,7 @@ impl Rauc {
             let mut stream = proxy.receive_operation_changed().await;
 
             if let Ok(v) = proxy.operation().await {
-                operation.set(v).await;
+                operation.set(v);
             }
 
             loop {
@@ -148,13 +146,13 @@ impl Rauc {
                     // In the RAUC API the slot status is a list of (name, info) tuples.
                     // It is once again easier in typescript to represent it as a dict with
                     // the names as keys, so that is what's exposed here.
-                    slot_status.set(Arc::new(slots)).await;
+                    slot_status.set(Arc::new(slots));
                 }
 
                 // Wait for the current operation to change
                 if let Some(v) = stream.next().await {
                     if let Ok(v) = v.get().await {
-                        operation.set(v).await;
+                        operation.set(v);
                     }
                 } else {
                     break;
@@ -172,12 +170,12 @@ impl Rauc {
             let mut stream = proxy.receive_progress_changed().await;
 
             if let Ok(p) = proxy.progress().await {
-                progress.set(p.into()).await;
+                progress.set(p.into());
             }
 
             while let Some(v) = stream.next().await {
                 if let Ok(p) = v.get().await {
-                    progress.set(p.into()).await;
+                    progress.set(p.into());
                 }
             }
         });
@@ -192,12 +190,12 @@ impl Rauc {
             let mut stream = proxy.receive_last_error_changed().await;
 
             if let Ok(e) = proxy.last_error().await {
-                last_error.set(e).await;
+                last_error.set(e);
             }
 
             while let Some(v) = stream.next().await {
                 if let Ok(e) = v.get().await {
-                    last_error.set(e).await;
+                    last_error.set(e);
                 }
             }
         });
@@ -208,7 +206,7 @@ impl Rauc {
         // Forward the "install" topic from the broker framework to RAUC
         spawn(async move {
             let proxy = installer::InstallerProxy::new(&conn_task).await.unwrap();
-            let (mut stream, _) = install.subscribe_unbounded().await;
+            let (mut stream, _) = install.subscribe_unbounded();
 
             while let Some(url) = stream.next().await {
                 // Poor-mans validation. It feels wrong to let someone point to any

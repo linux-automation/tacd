@@ -72,12 +72,12 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     ///   redrawn. The `draw_fn` should return a rectangle corresponding to the
     ///   bounding box it has drawn to.
     ///   The widget system takes care of clearing this area before redrawing.
-    pub async fn new(
+    pub fn new(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
         draw_fn: Box<dyn DrawFn<T> + Sync + Send>,
     ) -> Self {
-        let (mut rx, sub_handle) = topic.subscribe_unbounded().await;
+        let (mut rx, sub_handle) = topic.subscribe_unbounded();
 
         let join_handle = spawn(async move {
             let mut prev_bb: Option<Rectangle> = None;
@@ -105,7 +105,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     ///
     /// The `format_fn` should return a value between 0.0 and 1.0 indicating
     /// the fraction of the graph to fill.
-    pub async fn bar(
+    pub fn bar(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
         anchor: Point,
@@ -136,11 +136,10 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
                 Some(bounding)
             }),
         )
-        .await
     }
 
     /// Draw an indicator bubble in an "On", "Off" or "Error" state
-    pub async fn indicator(
+    pub fn indicator(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
         anchor: Point,
@@ -203,11 +202,10 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
                 }
             }),
         )
-        .await
     }
 
     /// Draw self-updating text with configurable alignment
-    pub async fn text_aligned(
+    pub fn text_aligned(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
         anchor: Point,
@@ -232,37 +230,33 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
                 }
             }),
         )
-        .await
     }
 
     /// Draw self-updating left aligned text
-    pub async fn text(
+    pub fn text(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
     ) -> Self {
-        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Left).await
+        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Left)
     }
 
     /// Draw self-updating centered text
-    pub async fn text_center(
+    pub fn text_center(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
     ) -> Self {
-        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Center).await
+        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Center)
     }
 }
 
 impl DynamicWidget<i32> {
     /// Draw an animated locator widget at the side of the screen
     /// (if the locator is active).
-    pub async fn locator(
-        topic: Arc<Topic<i32>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
-    ) -> Self {
+    pub fn locator(topic: Arc<Topic<i32>>, target: Arc<Mutex<FramebufferDrawTarget>>) -> Self {
         Self::new(
             topic,
             target,
@@ -286,7 +280,6 @@ impl DynamicWidget<i32> {
                 }
             }),
         )
-        .await
     }
 }
 
@@ -303,7 +296,7 @@ impl<T: Sync + Send + Serialize + DeserializeOwned + 'static> AnyWidget for Dyna
     /// implementing the Drop trait.
     async fn unmount(&mut self) {
         if let Some((sh, jh)) = self.handles.take() {
-            sh.unsubscribe().await;
+            sh.unsubscribe();
             jh.await;
         }
     }
