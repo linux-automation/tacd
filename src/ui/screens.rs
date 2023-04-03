@@ -33,6 +33,7 @@ mod power;
 mod rauc;
 mod reboot;
 mod screensaver;
+mod setup;
 mod system;
 mod uart;
 mod usb;
@@ -44,6 +45,7 @@ use power::PowerScreen;
 use rauc::RaucScreen;
 use reboot::RebootConfirmScreen;
 use screensaver::ScreenSaverScreen;
+use setup::SetupScreen;
 use system::SystemScreen;
 use uart::UartScreen;
 use usb::UsbScreen;
@@ -66,6 +68,7 @@ pub enum Screen {
     ScreenSaver,
     RebootConfirm,
     Rauc,
+    Setup,
     Help,
 }
 
@@ -82,13 +85,14 @@ impl Screen {
             Self::ScreenSaver => Self::DutPower,
             Self::RebootConfirm => Self::System,
             Self::Rauc => Self::ScreenSaver,
+            Self::Setup => Self::ScreenSaver,
             Self::Help => Self::ScreenSaver,
         }
     }
 
     /// Should screensaver be automatically enabled when in this screen?
     fn use_screensaver(&self) -> bool {
-        !matches!(self, Self::Rauc | Self::Help)
+        !matches!(self, Self::Rauc | Self::Setup | Self::Help)
     }
 }
 
@@ -147,6 +151,7 @@ pub(super) fn init(
         Box::new(RaucScreen::new(screen, &res.rauc.operation)),
         Box::new(RebootConfirmScreen::new()),
         Box::new(ScreenSaverScreen::new(buttons, screen)),
+        Box::new(SetupScreen::new(screen, &res.setup_mode.setup_mode)),
         Box::new(SystemScreen::new()),
         Box::new(UartScreen::new()),
         Box::new(UsbScreen::new()),

@@ -99,7 +99,7 @@ async fn main() -> Result<(), std::io::Error> {
     let mut http_server = HttpServer::new();
 
     // Allow editing some aspects of the TAC configuration when in "setup mode".
-    let _setup_mode = SetupMode::new(&mut bb, &mut http_server.server);
+    let setup_mode = SetupMode::new(&mut bb, &mut http_server.server);
 
     // Expose a live log of the TAC's systemd journal so it can be viewed
     // in the web interface.
@@ -118,6 +118,7 @@ async fn main() -> Result<(), std::io::Error> {
             network,
             rauc,
             regulators,
+            setup_mode,
             system,
             systemd,
             temperatures,
