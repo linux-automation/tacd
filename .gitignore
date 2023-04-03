@@ -1,5 +1,6 @@
 /target
 /.cargo
+/demo_files/home/root/.ssh/authorized_keys
 /web/npm-shrinkwrap.json
 /web/oe-logs
 /web/oe-workdir
