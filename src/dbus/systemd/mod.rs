@@ -68,7 +68,7 @@ impl ServiceStatus {
     #[cfg(feature = "demo_mode")]
     async fn get() -> Result<Self> {
         Ok(Self {
-            active_state: "actvive".to_string(),
+            active_state: "active".to_string(),
             sub_state: "running".to_string(),
             active_enter_ts: 0,
             active_exit_ts: 0,
