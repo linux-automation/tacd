@@ -27,6 +27,7 @@ use embedded_graphics::{
 use serde::{Deserialize, Serialize};
 
 mod dig_out;
+mod help;
 mod iobus;
 mod power;
 mod rauc;
@@ -37,6 +38,7 @@ mod uart;
 mod usb;
 
 use dig_out::DigOutScreen;
+use help::HelpScreen;
 use iobus::IoBusScreen;
 use power::PowerScreen;
 use rauc::RaucScreen;
@@ -64,6 +66,7 @@ pub enum Screen {
     ScreenSaver,
     RebootConfirm,
     Rauc,
+    Help,
 }
 
 impl Screen {
@@ -79,12 +82,13 @@ impl Screen {
             Self::ScreenSaver => Self::DutPower,
             Self::RebootConfirm => Self::System,
             Self::Rauc => Self::ScreenSaver,
+            Self::Help => Self::ScreenSaver,
         }
     }
 
     /// Should screensaver be automatically enabled when in this screen?
     fn use_screensaver(&self) -> bool {
-        !matches!(self, Self::Rauc)
+        !matches!(self, Self::Rauc | Self::Help)
     }
 }
 
@@ -137,6 +141,7 @@ pub(super) fn init(
 ) -> Vec<Box<dyn MountableScreen>> {
     vec![
         Box::new(DigOutScreen::new()),
+        Box::new(HelpScreen::new()),
         Box::new(IoBusScreen::new()),
         Box::new(PowerScreen::new()),
         Box::new(RaucScreen::new(screen, &res.rauc.operation)),
