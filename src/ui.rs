@@ -119,12 +119,10 @@ impl Ui {
         });
 
         // Blink the status LED when locator is active
-        let locator_task = locator.clone();
         let led_status_pattern = res.led.status.clone();
         let led_status_color = res.led.status_color.clone();
+        let (mut locator_stream, _) = locator.clone().subscribe_unbounded();
         spawn(async move {
-            let (mut rx, _) = locator_task.subscribe_unbounded();
-
             let pattern_locator_on = BlinkPatternBuilder::new(0.0)
                 .fade_to(1.0, Duration::from_millis(100))
                 .stay_for(Duration::from_millis(300))
@@ -134,7 +132,7 @@ impl Ui {
 
             let pattern_locator_off = BlinkPattern::solid(1.0);
 
-            while let Some(ev) = rx.next().await {
+            while let Some(ev) = locator_stream.next().await {
                 if ev {
                     // White blinking when locator is on
                     led_status_color.set((1.0, 1.0, 1.0));

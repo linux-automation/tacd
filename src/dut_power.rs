@@ -255,10 +255,11 @@ fn setup_labgrid_compat(
     let compat_request = bb.topic_wo::<u8>("/v1/dut/powered/compat", None);
     let compat_response = bb.topic_ro::<u8>("/v1/dut/powered/compat", None);
 
-    task::spawn(async move {
-        let (mut request_stream, _) = compat_request.subscribe_unbounded();
+    let (mut state_stream, _) = state.subscribe_unbounded();
+    let (mut compat_request_stream, _) = compat_request.subscribe_unbounded();
 
-        while let Some(req) = request_stream.next().await {
+    task::spawn(async move {
+        while let Some(req) = compat_request_stream.next().await {
             match req {
                 0 => request.set(OutputRequest::Off),
                 1 => request.set(OutputRequest::On),
@@ -268,8 +269,6 @@ fn setup_labgrid_compat(
     });
 
     task::spawn(async move {
-        let (mut state_stream, _) = state.subscribe_unbounded();
-
         while let Some(state) = state_stream.next().await {
             match state {
                 OutputState::On => compat_response.set(1),
@@ -481,11 +480,9 @@ impl DutPwrThread {
 
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
-        let request_topic_task = request_topic.clone();
         let state_topic_task = state_topic.clone();
+        let (mut request_stream, _) = request_topic.clone().subscribe_unbounded();
         task::spawn(async move {
-            let (mut request_stream, _) = request_topic_task.subscribe_unbounded();
-
             while let Some(req) = request_stream.next().await {
                 state_topic_task.set(OutputState::Changing);
                 request.store(req as u8, Ordering::Relaxed);
@@ -510,7 +507,7 @@ impl DutPwrThread {
         });
 
         // Forward the state information to the DUT Power LED
-        let state_topic_task = state_topic.clone();
+        let (mut state_stream, _) = state_topic.clone().subscribe_unbounded();
         task::spawn(async move {
             let pattern_on = BlinkPattern::solid(1.0);
             let pattern_off = BlinkPattern::solid(0.0);
@@ -529,8 +526,6 @@ impl DutPwrThread {
                 // ... followed by a pause and repetition
                 pb.stay_for(Duration::from_millis(400)).forever()
             };
-
-            let (mut state_stream, _) = state_topic_task.subscribe_unbounded();
 
             while let Some(state) = state_stream.next().await {
                 match state {

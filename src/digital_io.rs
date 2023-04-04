@@ -66,11 +66,9 @@ fn handle_line_wo(
         .request(LineRequestFlags::OUTPUT, (initial ^ inverted) as _, "tacd")
         .unwrap();
 
-    let topic_task = topic.clone();
+    let (mut src, _) = topic.clone().subscribe_unbounded();
 
     spawn(async move {
-        let (mut src, _) = topic_task.subscribe_unbounded();
-
         while let Some(ev) = src.next().await {
             dst.set_value((ev ^ inverted) as _).unwrap();
 

@@ -96,11 +96,10 @@ pub struct ScreenSaverScreen {
 impl ScreenSaverScreen {
     pub fn new(buttons: &Arc<Topic<ButtonEvent>>, screen: &Arc<Topic<Screen>>) -> Self {
         // Activate screensaver if no button is pressed for some time
-        let buttons_task = buttons.clone();
+        let (mut buttons_events, _) = buttons.clone().subscribe_unbounded();
         let screen_task = screen.clone();
-        spawn(async move {
-            let (mut buttons_events, _) = buttons_task.subscribe_unbounded();
 
+        spawn(async move {
             loop {
                 let ev = timeout(SCREENSAVER_TIMEOUT, buttons_events.next()).await;
                 let activate_screensaver = match ev {

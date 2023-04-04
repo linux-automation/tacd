@@ -61,11 +61,9 @@ fn handle_regulator(
     initial: bool,
 ) -> Arc<Topic<bool>> {
     let topic = bb.topic_rw(path, Some(initial));
-    let topic_task = topic.clone();
+    let (mut src, _) = topic.clone().subscribe_unbounded();
 
     spawn(async move {
-        let (mut src, _) = topic_task.subscribe_unbounded();
-
         while let Some(ev) = src.next().await {
             regulator_set(regulator_name, ev).unwrap();
         }

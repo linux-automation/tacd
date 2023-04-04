@@ -39,11 +39,10 @@ impl RaucScreen {
         // Activate the rauc screen if an update is started and deactivate
         // if it is done
         let screen = screen.clone();
-        let operation = operation.clone();
+        let (mut operation_events, _) = operation.clone().subscribe_unbounded();
 
         spawn(async move {
-            let mut operation_prev = operation.get().await;
-            let (mut operation_events, _) = operation.subscribe_unbounded();
+            let mut operation_prev = operation_events.next().await.unwrap();
 
             while let Some(ev) = operation_events.next().await {
                 match (operation_prev.as_str(), ev.as_str()) {

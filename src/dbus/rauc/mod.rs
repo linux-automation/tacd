@@ -201,14 +201,13 @@ impl Rauc {
         });
 
         let conn_task = conn.clone();
-        let install = inst.install.clone();
+        let (mut install_stream, _) = inst.install.clone().subscribe_unbounded();
 
         // Forward the "install" topic from the broker framework to RAUC
         spawn(async move {
             let proxy = installer::InstallerProxy::new(&conn_task).await.unwrap();
-            let (mut stream, _) = install.subscribe_unbounded();
 
-            while let Some(url) = stream.next().await {
+            while let Some(url) = install_stream.next().await {
                 // Poor-mans validation. It feels wrong to let someone point to any
                 // file on the TAC from the web interface.
                 if url.starts_with("http://") || url.starts_with("https://") {
