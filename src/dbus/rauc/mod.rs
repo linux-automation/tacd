@@ -74,7 +74,7 @@ impl Rauc {
     }
 
     #[cfg(feature = "demo_mode")]
-    pub async fn new(bb: &mut BrokerBuilder, _conn: &Arc<Connection>) -> Self {
+    pub fn new(bb: &mut BrokerBuilder, _conn: &Arc<Connection>) -> Self {
         let inst = Self::setup_topics(bb);
 
         inst.operation.set("idle".to_string());
@@ -85,7 +85,7 @@ impl Rauc {
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
+    pub fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
         let inst = Self::setup_topics(bb);
 
         let conn_task = conn.clone();

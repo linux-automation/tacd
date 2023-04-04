@@ -88,7 +88,7 @@ impl DbusSession {
 
         Self {
             network: Network::new(bb, &conn, led_dut, led_uplink),
-            rauc: Rauc::new(bb, &conn).await,
+            rauc: Rauc::new(bb, &conn),
             systemd: Systemd::new(bb, &conn).await,
         }
     }
