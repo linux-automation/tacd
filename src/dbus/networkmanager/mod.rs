@@ -254,7 +254,7 @@ impl Network {
     }
 
     #[cfg(feature = "demo_mode")]
-    pub async fn new<C>(
+    pub fn new<C>(
         bb: &mut BrokerBuilder,
         _conn: C,
         _led_dut: Arc<Topic<BlinkPattern>>,
@@ -277,7 +277,7 @@ impl Network {
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    pub async fn new(
+    pub fn new(
         bb: &mut BrokerBuilder,
         conn: &Arc<Connection>,
         led_dut: Arc<Topic<BlinkPattern>>,
