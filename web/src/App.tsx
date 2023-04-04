@@ -98,6 +98,7 @@ function Navigation() {
 export default function App() {
   const [runningVersion, setRunningVersion] = useState<string | undefined>();
   const hostname = useMqttSubscription("/v1/tac/network/hostname");
+  const setup_mode = useMqttSubscription("/v1/tac/setup_mode");
   const tacd_version = useMqttSubscription<string>("/v1/tac/info/tacd/version");
 
   useEffect(() => {
@@ -106,6 +107,14 @@ export default function App() {
         ? "LXA TAC (connecting …)"
         : `LXA TAC (${hostname})`;
   }, [hostname]);
+
+  useEffect(() => {
+    // Redirect to the setup wizard if the TAC has not gone through initial
+    // setup yet.
+    if (setup_mode === true) {
+      window.location.replace("/#/setup");
+    }
+  }, [setup_mode]);
 
   useEffect(() => {
     if (tacd_version !== undefined) {

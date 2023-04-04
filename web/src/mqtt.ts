@@ -135,6 +135,12 @@ export function useMqttSubscription<T>(topic: string, initial?: T) {
   return payload;
 }
 
+export function useMqttAction<T>(topic: string) {
+  // eslint-disable-next-line
+  const [settled, payload, setPayload] = useMqttState<T>(topic);
+  return setPayload;
+}
+
 type History<M> = {
   current: Array<M>;
 };
