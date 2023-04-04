@@ -280,20 +280,11 @@ async fn handle_connection(
                     // subscribe request matches. This should make sure that
                     // wildcard subscriptions work.
                     let matcher = filter.get_matcher();
-                    let sub_topics = topics
+                    let new_subscribes: Vec<_> = topics
                         .iter()
-                        .filter(|topic| topic.web_readable() && matcher.is_match(topic.path()));
-
-                    let mut new_subscribes = Vec::new();
-
-                    for topic in sub_topics {
-                        // Subscribe to the serialized messages via the broker
-                        // framework. This uses a single queue per connection for
-                        // all topics.
-                        let sub_handle = topic.clone().subscribe_as_bytes(to_websocket.clone());
-
-                        new_subscribes.push(sub_handle);
-                    }
+                        .filter(|topic| topic.web_readable() && matcher.is_match(topic.path()))
+                        .map(|topic| topic.clone().subscribe_as_bytes(to_websocket.clone()))
+                        .collect();
 
                     // Only allow one subscribe with the same match per
                     // connection, so if there is an existing one it should
