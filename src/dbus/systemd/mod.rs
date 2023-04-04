@@ -18,10 +18,11 @@
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
+use futures::join;
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(feature = "demo_mode"))]
-pub use futures_lite::future::race;
+use futures_lite::future::race;
 
 #[cfg(not(feature = "demo_mode"))]
 pub use log::warn;
@@ -87,7 +88,7 @@ impl ServiceStatus {
 }
 
 impl Service {
-    fn setup_topics(bb: &mut BrokerBuilder, topic_name: &'static str) -> Self {
+    fn new(bb: &mut BrokerBuilder, topic_name: &'static str) -> Self {
         Self {
             action: bb.topic_wo(&format!("/v1/tac/service/{topic_name}/action"), None),
             status: bb.topic_ro(&format!("/v1/tac/service/{topic_name}/status"), None),
@@ -95,28 +96,12 @@ impl Service {
     }
 
     #[cfg(feature = "demo_mode")]
-    async fn new(
-        bb: &mut BrokerBuilder,
-        _conn: Arc<Connection>,
-        topic_name: &'static str,
-        _unit_name: &'static str,
-    ) -> Self {
-        let this = Self::setup_topics(bb, topic_name);
-
-        this.status.set(ServiceStatus::get().await.unwrap());
-
-        this
+    async fn connect(&self, _conn: Arc<Connection>, _unit_name: &'static str) {
+        self.status.set(ServiceStatus::get().await.unwrap());
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    async fn new(
-        bb: &mut BrokerBuilder,
-        conn: Arc<Connection>,
-        topic_name: &'static str,
-        unit_name: &'static str,
-    ) -> Self {
-        let this = Self::setup_topics(bb, topic_name);
-
+    async fn connect(&self, conn: Arc<Connection>, unit_name: &'static str) {
         let unit_path = {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();
             manager.get_unit(unit_name).await.unwrap()
@@ -130,7 +115,7 @@ impl Service {
             .unwrap();
 
         let unit_task = unit.clone();
-        let status_topic = this.status.clone();
+        let status_topic = self.status.clone();
 
         spawn(async move {
             let mut active_state_stream =
@@ -158,7 +143,7 @@ impl Service {
             }
         });
 
-        let (mut action_reqs, _) = this.action.clone().subscribe_unbounded();
+        let (mut action_reqs, _) = self.action.clone().subscribe_unbounded();
 
         spawn(async move {
             while let Some(action) = action_reqs.next().await {
@@ -176,14 +161,12 @@ impl Service {
                 }
             }
         });
-
-        this
     }
 }
 
 impl Systemd {
     #[cfg(feature = "demo_mode")]
-    pub async fn handle_reboot(reboot: Arc<Topic<bool>>, _conn: Arc<Connection>) {
+    pub fn handle_reboot(reboot: Arc<Topic<bool>>, _conn: Arc<Connection>) {
         let (mut reboot_reqs, _) = reboot.subscribe_unbounded();
 
         spawn(async move {
@@ -196,7 +179,7 @@ impl Systemd {
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    pub async fn handle_reboot(reboot: Arc<Topic<bool>>, conn: Arc<Connection>) {
+    pub fn handle_reboot(reboot: Arc<Topic<bool>>, conn: Arc<Connection>) {
         let (mut reboot_reqs, _) = reboot.subscribe_unbounded();
 
         spawn(async move {
@@ -215,25 +198,23 @@ impl Systemd {
     pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
         let reboot = bb.topic_rw("/v1/tac/reboot", Some(false));
 
-        Self::handle_reboot(reboot.clone(), conn.clone()).await;
+        Self::handle_reboot(reboot.clone(), conn.clone());
+
+        let networkmanager = Service::new(bb, "network-manager");
+        let labgrid = Service::new(bb, "labgrid-exporter");
+        let iobus = Service::new(bb, "lxa-iobus");
+
+        join!(
+            networkmanager.connect(conn.clone(), "NetworkManager.service"),
+            labgrid.connect(conn.clone(), "labgrid-exporter.service"),
+            iobus.connect(conn.clone(), "lxa-iobus.service"),
+        );
 
         Self {
             reboot,
-            networkmanager: Service::new(
-                bb,
-                conn.clone(),
-                "network-manager",
-                "NetworkManager.service",
-            )
-            .await,
-            labgrid: Service::new(
-                bb,
-                conn.clone(),
-                "labgrid-exporter",
-                "labgrid-exporter.service",
-            )
-            .await,
-            iobus: Service::new(bb, conn.clone(), "lxa-iobus", "lxa-iobus.service").await,
+            networkmanager,
+            labgrid,
+            iobus,
         }
     }
 }
