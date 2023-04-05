@@ -257,6 +257,90 @@ paths:
               schema:
                 type: string
 
+  /v1/tac/setup_mode:
+    get:
+      summary: Check if the TAC has completed the set up or still in setup mode
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+    put:
+      summary: Leave setup mode by writing false
+      tags: [System]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: Setup mode left (when false was sent)
+        '400':
+          description: The request could not be parsed as boolean
+
+  /v1/labgrid/{file}:
+    parameters:
+      - name: file
+        description: The name of the file to read/write
+        required: true
+        schema:
+          type: string
+          enum:
+            - configuration
+            - environment
+            - userconfig
+    get:
+      summary: Get the current content of a labgrid config file
+      tags: [System]
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+
+    put:
+      summary: Set a new content for the labgrid config file
+      tags: [System]
+      requestBody:
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '204':
+          description: New config set
+
+  /v1/tac/ssh/authorized_keys:
+    get:
+      summary: Get the current content of roots authorized_keys file
+      tags: [System]
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: The device is not in setup mode
+
+    put:
+      summary: Set a new content for roots authorized_keys file
+      tags: [System]
+      requestBody:
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '204':
+          description: New ssh keys set
+        '403':
+          description: The device is not in setup mode
+
   /v1/iobus/server/info:
     get:
       summary: Get (cached) info from the local IOBus server
