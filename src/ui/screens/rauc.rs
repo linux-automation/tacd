@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use embedded_graphics::prelude::*;
 
 use crate::broker::Topic;
-use crate::dbus::Progress;
+use crate::dbus::rauc::Progress;
 
 use super::widgets::*;
 use super::{MountableScreen, Screen, Ui};
@@ -42,7 +42,7 @@ impl RaucScreen {
         let operation = operation.clone();
 
         spawn(async move {
-            let mut operation_prev: Arc<String> = operation.get().await;
+            let mut operation_prev = operation.get().await;
             let (mut operation_events, _) = operation.subscribe_unbounded().await;
 
             while let Some(ev) = operation_events.next().await {
@@ -75,7 +75,7 @@ impl MountableScreen for RaucScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::text_center(
-                ui.res.dbus.rauc.progress.clone(),
+                ui.res.rauc.progress.clone(),
                 ui.draw_target.clone(),
                 Point::new(64, 15),
                 Box::new(|progress: &Progress| {
@@ -107,7 +107,7 @@ impl MountableScreen for RaucScreen {
 
         self.widgets.push(Box::new(
             DynamicWidget::bar(
-                ui.res.dbus.rauc.progress.clone(),
+                ui.res.rauc.progress.clone(),
                 ui.draw_target.clone(),
                 Point::new(14, 40),
                 100,

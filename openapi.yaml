@@ -30,6 +30,21 @@ paths:
         '400':
           description: The value could not be parsed into a screen name
 
+  /v1/tac/display/buttons:
+    put:
+      summary: Simulate a button press/release on the device
+      tags: [User Interface]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ButtonEvent'
+      responses:
+        '204':
+          description: The button event will be simulated
+        '400':
+          description: The value could not be parsed as button event
+
   /v1/tac/display/content:
     get:
       summary: The current screen content rendered into a PNG
@@ -227,7 +242,7 @@ paths:
             - out_1
     get:
       summary: Get the current asserted/deasserted status of the output
-      tags: [Input/Output] 
+      tags: [Input/Output]
       responses:
         '200':
           content:
@@ -469,6 +484,17 @@ paths:
         '400':
           description: The value could not be parsed as boolean
 
+  /v1/tac/time/now:
+    get:
+      summary: Get the current time on the TAC as milliseconds since the Unix Epoch
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: number
+
   /v1/tac/update/operation:
     get:
       summary: Get the currently running system update operation
@@ -593,12 +619,41 @@ components:
         - RebootConfirm
         - Rauc
 
+    ButtonEvent:
+      type: object
+      properties:
+        Press:
+          type: object
+          properties:
+            btn:
+              type: string
+              enum:
+                - Upper
+                - Lower
+        Release:
+          type: object
+          properties:
+            btn:
+              type: string
+              enum:
+                - Upper
+                - Lower
+            dur:
+              type: string
+              enum:
+                - Short
+                - Long
+      oneOf:
+        - required: [Press]
+        - required: [Release]
+
     DutPwrStatus:
       type: string
       enum:
         - On
         - Off
         - OffFloating
+        - Changing
         - InvertedPolarity
         - OverCurrent
         - OverVoltage

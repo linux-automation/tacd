@@ -16,12 +16,12 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use std::convert::TryInto;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_std::future::timeout;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::{sleep, spawn};
+use async_std::task::spawn;
 
 use async_trait::async_trait;
 
@@ -29,43 +29,72 @@ use embedded_graphics::{
     mono_font::{ascii::FONT_6X9, MonoFont, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
+    primitives::Rectangle,
     text::Text,
 };
 
-use super::widgets::{AnyWidget, DynamicWidget};
-use super::{ButtonEvent, MountableScreen, Screen, Ui};
+use super::buttons::*;
+use super::widgets::*;
+use super::{MountableScreen, Screen, Ui};
 
-use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
+use crate::broker::{Native, SubscriptionHandle, Topic};
 
 const UI_TEXT_FONT: MonoFont = FONT_6X9;
 const SCREEN_TYPE: Screen = Screen::ScreenSaver;
 const SCREENSAVER_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// get the value of a sawtooth wave with max amplitude range at position i
-fn bounce(i: u32, range: i32) -> i32 {
-    if range > 0 {
-        let period = (i % (2 * (range as u32))).try_into().unwrap_or(range);
-        (period - range).abs()
-    } else {
-        0
+struct BounceAnimation {
+    bounding_box: Rectangle,
+}
+
+impl BounceAnimation {
+    pub fn new(bounding_box: Rectangle) -> Self {
+        Self { bounding_box }
+    }
+
+    fn offset(&self, obj_size: Size) -> Point {
+        let ticks = SystemTime::UNIX_EPOCH
+            .elapsed()
+            .map(|t| t.as_millis() / 100)
+            .unwrap_or(0);
+
+        let range_x = if self.bounding_box.size.width > obj_size.width {
+            self.bounding_box.size.width - obj_size.width
+        } else {
+            1
+        };
+
+        let range_y = if self.bounding_box.size.height > obj_size.height {
+            self.bounding_box.size.height - obj_size.height
+        } else {
+            1
+        };
+
+        let bx: i32 = (ticks % (2 * (range_x as u128))).try_into().unwrap_or(0);
+        let by: i32 = (ticks % (2 * (range_y as u128))).try_into().unwrap_or(0);
+
+        let range_x: i32 = range_x.try_into().unwrap_or(0);
+        let range_y: i32 = range_y.try_into().unwrap_or(0);
+
+        Point::new(
+            (bx - range_x).abs() + self.bounding_box.top_left.x,
+            (by - range_y).abs() + self.bounding_box.top_left.y,
+        )
+    }
+
+    pub fn bounce<O: Transform + Dimensions>(&self, obj: O) -> O {
+        let obj_size = obj.bounding_box().size;
+        obj.translate(self.offset(obj_size))
     }
 }
 
 pub struct ScreenSaverScreen {
-    hostname_dance: Arc<Topic<(u32, Arc<String>)>>,
     widgets: Vec<Box<dyn AnyWidget>>,
     buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
 }
 
 impl ScreenSaverScreen {
-    pub fn new(
-        bb: &mut BrokerBuilder,
-        buttons: &Arc<Topic<ButtonEvent>>,
-        screen: &Arc<Topic<Screen>>,
-        hostname: &Arc<Topic<String>>,
-    ) -> Self {
-        let hostname_dance = bb.topic_hidden(None);
-
+    pub fn new(buttons: &Arc<Topic<ButtonEvent>>, screen: &Arc<Topic<Screen>>) -> Self {
         // Activate screensaver if no button is pressed for some time
         let buttons_task = buttons.clone();
         let screen_task = screen.clone();
@@ -85,7 +114,7 @@ impl ScreenSaverScreen {
                         .modify(|screen| {
                             screen.and_then(|s| {
                                 if s.use_screensaver() {
-                                    Some(Arc::new(Screen::ScreenSaver))
+                                    Some(Screen::ScreenSaver)
                                 } else {
                                     None
                                 }
@@ -96,25 +125,7 @@ impl ScreenSaverScreen {
             }
         });
 
-        // TODO: could be moved to mount()
-        // Animated hostname for the screensaver
-        let hostname_task = hostname.clone();
-        let hostname_dance_task = hostname_dance.clone();
-        spawn(async move {
-            let mut i = 0u32;
-
-            loop {
-                let cur_hostname = hostname_task.get().await;
-
-                i = i.wrapping_add(1);
-                hostname_dance_task.set((i, cur_hostname)).await;
-
-                sleep(Duration::from_millis(100)).await;
-            }
-        });
-
         Self {
-            hostname_dance,
             widgets: Vec::new(),
             buttons_handle: None,
         }
@@ -128,33 +139,26 @@ impl MountableScreen for ScreenSaverScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
+        let hostname = ui.res.network.hostname.get().await;
+        let bounce = BounceAnimation::new(Rectangle::with_corners(
+            Point::new(0, 8),
+            Point::new(118, 64),
+        ));
+
         self.widgets.push(Box::new(
             DynamicWidget::locator(ui.locator_dance.clone(), ui.draw_target.clone()).await,
         ));
 
         self.widgets.push(Box::new(
             DynamicWidget::new(
-                self.hostname_dance.clone(),
+                ui.res.adc.time.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 0),
-                Box::new(move |msg, _, target| {
-                    let (i, hostname) = msg;
-
+                Box::new(move |_, target| {
                     let ui_text_style: MonoTextStyle<BinaryColor> =
                         MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
                     let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
-
-                    let text_dim = text
-                        .bounding_box()
-                        .bottom_right()
-                        .unwrap_or(Point::new(0, 0));
-
-                    let text = text.translate(Point::new(
-                        bounce(*i, 118 - text_dim.x),
-                        bounce(*i, 64 - text_dim.y) + text_dim.y,
-                    ));
-
+                    let text = bounce.bounce(text);
                     text.draw(target).unwrap();
 
                     Some(text.bounding_box())
@@ -169,14 +173,16 @@ impl MountableScreen for ScreenSaverScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                if let ButtonEvent::ButtonOne(_) = *ev {
-                    locator
-                        .modify(|prev| Some(Arc::new(!prev.as_deref().copied().unwrap_or(false))))
-                        .await
-                }
-
-                if let ButtonEvent::ButtonTwo(_) = *ev {
-                    screen.set(SCREEN_TYPE.next()).await
+                match ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: _,
+                    } => locator.modify(|prev| Some(!prev.unwrap_or(false))).await,
+                    ButtonEvent::Release {
+                        btn: Button::Upper,
+                        dur: _,
+                    } => screen.set(SCREEN_TYPE.next()).await,
+                    _ => {}
                 }
             }
         });

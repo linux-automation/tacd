@@ -15,22 +15,33 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::convert::TryInto;
-
-use anyhow;
 use async_std;
-use async_std::stream::StreamExt;
 use async_std::sync::Arc;
-use async_std::task::spawn;
-use futures::{future::FutureExt, pin_mut, select};
-use zbus::{Connection, PropertyStream};
-use zvariant::{ObjectPath, OwnedObjectPath};
 
-use log::trace;
 use serde::{Deserialize, Serialize};
 
 mod devices;
 mod hostname;
+
+// All of the following includes are not used in demo_mode.
+// Put them inside a mod so we do not have to decorate each one with
+// a #[cfg(not(feature = "demo_mode"))].
+mod optional_includes {
+    pub use anyhow::{anyhow, Result};
+    pub use async_std::stream::StreamExt;
+    pub use async_std::task::sleep;
+    pub use futures::{future::FutureExt, pin_mut, select};
+    pub use log::trace;
+    pub use std::convert::TryInto;
+    pub use std::time::Duration;
+    pub use zbus::{Connection, PropertyStream};
+    pub use zvariant::{ObjectPath, OwnedObjectPath};
+}
+
+#[cfg(not(feature = "demo_mode"))]
+use optional_includes::*;
+
+#[allow(clippy::module_inception)]
 mod networkmanager;
 
 use crate::broker::{BrokerBuilder, Topic};
@@ -41,21 +52,13 @@ pub struct LinkInfo {
     pub carrier: bool,
 }
 
-impl Default for LinkInfo {
-    fn default() -> Self {
-        Self {
-            speed: 0,
-            carrier: false,
-        }
-    }
-}
-
-async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Result<OwnedObjectPath> {
-    let proxy = networkmanager::NetworkManagerProxy::new(&con).await?;
+#[cfg(not(feature = "demo_mode"))]
+async fn path_from_interface(con: &Connection, interface: &str) -> Result<OwnedObjectPath> {
+    let proxy = networkmanager::NetworkManagerProxy::new(con).await?;
     let device_paths = proxy.get_devices().await?;
 
     for path in device_paths {
-        let device_proxy = devices::DeviceProxy::builder(&con)
+        let device_proxy = devices::DeviceProxy::builder(con)
             .path(&path)?
             .build()
             .await?;
@@ -67,11 +70,12 @@ async fn path_from_interface(con: &Connection, interface: &str) -> anyhow::Resul
             return Ok(path);
         }
     }
-    Err(anyhow::anyhow!("No interface found: {}", interface))
+    Err(anyhow!("No interface found: {}", interface))
 }
 
-async fn get_link_info(con: &Connection, path: &str) -> anyhow::Result<LinkInfo> {
-    let eth_proxy = devices::WiredProxy::builder(&con)
+#[cfg(not(feature = "demo_mode"))]
+async fn get_link_info(con: &Connection, path: &str) -> Result<LinkInfo> {
+    let eth_proxy = devices::WiredProxy::builder(con)
         .path(path)?
         .build()
         .await?;
@@ -84,12 +88,13 @@ async fn get_link_info(con: &Connection, path: &str) -> anyhow::Result<LinkInfo>
     Ok(info)
 }
 
-pub async fn get_ip4_address<'a, P>(con: &Connection, path: P) -> anyhow::Result<Vec<String>>
+#[cfg(not(feature = "demo_mode"))]
+pub async fn get_ip4_address<'a, P>(con: &Connection, path: P) -> Result<Vec<String>>
 where
     P: TryInto<ObjectPath<'a>>,
     P::Error: Into<zbus::Error>,
 {
-    let ip_4_proxy = devices::ip4::IP4ConfigProxy::builder(&con)
+    let ip_4_proxy = devices::ip4::IP4ConfigProxy::builder(con)
         .path(path)?
         .build()
         .await?;
@@ -100,11 +105,12 @@ where
         .get(0)
         .and_then(|e| e.get("address"))
         .and_then(|e| e.downcast_ref::<zvariant::Str>())
-        .and_then(|e| Some(e.as_str()))
-        .ok_or(anyhow::anyhow!("IP not found"))?;
+        .map(|e| e.as_str())
+        .ok_or(anyhow!("IP not found"))?;
     Ok(Vec::from([ip_address.to_string()]))
 }
 
+#[cfg(not(feature = "demo_mode"))]
 pub struct LinkStream<'a> {
     pub interface: String,
     _con: Arc<Connection>,
@@ -113,8 +119,9 @@ pub struct LinkStream<'a> {
     data: LinkInfo,
 }
 
+#[cfg(not(feature = "demo_mode"))]
 impl<'a> LinkStream<'a> {
-    pub async fn new(con: Arc<Connection>, interface: &str) -> anyhow::Result<LinkStream<'a>> {
+    pub async fn new(con: Arc<Connection>, interface: &str) -> Result<LinkStream<'a>> {
         let path = path_from_interface(&con, interface)
             .await?
             .as_str()
@@ -133,8 +140,8 @@ impl<'a> LinkStream<'a> {
         Ok(Self {
             interface: interface.to_string(),
             _con: con,
-            speed: speed,
-            carrier: carrier,
+            speed,
+            carrier,
             data: info,
         })
     }
@@ -143,7 +150,7 @@ impl<'a> LinkStream<'a> {
         self.data.clone()
     }
 
-    pub async fn next(&mut self) -> anyhow::Result<LinkInfo> {
+    pub async fn next(&mut self) -> Result<LinkInfo> {
         let speed = StreamExt::next(&mut self.speed).fuse();
         let carrier = StreamExt::next(&mut self.carrier).fuse();
 
@@ -168,6 +175,7 @@ impl<'a> LinkStream<'a> {
     }
 }
 
+#[cfg(not(feature = "demo_mode"))]
 pub struct IpStream<'a> {
     pub interface: String,
     _con: Arc<Connection>,
@@ -175,8 +183,9 @@ pub struct IpStream<'a> {
     path: String,
 }
 
+#[cfg(not(feature = "demo_mode"))]
 impl<'a> IpStream<'a> {
-    pub async fn new(con: Arc<Connection>, interface: &str) -> anyhow::Result<IpStream<'a>> {
+    pub async fn new(con: Arc<Connection>, interface: &str) -> Result<IpStream<'a>> {
         let path = path_from_interface(&con, interface)
             .await?
             .as_str()
@@ -192,27 +201,25 @@ impl<'a> IpStream<'a> {
         Ok(Self {
             interface: interface.to_string(),
             _con: con,
-            ip_4_config: ip_4_config,
+            ip_4_config,
             path: path.to_string(),
         })
     }
 
-    pub async fn now(&mut self, con: &Connection) -> anyhow::Result<Vec<String>> {
-        let device_proxy = devices::DeviceProxy::builder(&con)
+    pub async fn now(&mut self, con: &Connection) -> Result<Vec<String>> {
+        let device_proxy = devices::DeviceProxy::builder(con)
             .path(self.path.as_str())?
             .build()
             .await?;
 
         let ip_4_config = device_proxy.ip4_config().await?;
 
-        if let Ok(ips) = get_ip4_address(con, ip_4_config).await {
-            return Ok(ips);
-        } else {
-            return Ok(Vec::new());
-        }
+        Ok(get_ip4_address(con, ip_4_config)
+            .await
+            .unwrap_or_else(|_e| Vec::new()))
     }
 
-    pub async fn next(&mut self, con: &Connection) -> anyhow::Result<Vec<String>> {
+    pub async fn next(&mut self, con: &Connection) -> Result<Vec<String>> {
         let ip_4_config = StreamExt::next(&mut self.ip_4_config).await;
 
         if let Some(path) = ip_4_config {
@@ -224,7 +231,7 @@ impl<'a> IpStream<'a> {
                 return Ok(Vec::new());
             }
         }
-        Err(anyhow::anyhow!("No IP found"))
+        Err(anyhow!("No IP found"))
     }
 }
 
@@ -236,21 +243,22 @@ pub struct Network {
 }
 
 impl Network {
-    fn setup_topics(bb: &mut BrokerBuilder, hostname: String) -> Self {
+    fn setup_topics(bb: &mut BrokerBuilder) -> Self {
         Self {
-            hostname: bb.topic_ro("/v1/tac/network/hostname", Some(hostname)),
+            hostname: bb.topic_ro("/v1/tac/network/hostname", None),
             bridge_interface: bb.topic_ro("/v1/tac/network/interface/tac-bridge", None),
             dut_interface: bb.topic_ro("/v1/tac/network/interface/dut", None),
             uplink_interface: bb.topic_ro("/v1/tac/network/interface/uplink", None),
         }
     }
 
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     pub async fn new<C>(bb: &mut BrokerBuilder, _conn: C) -> Self {
-        let this = Self::setup_topics(bb, "lxatac".to_string());
+        let this = Self::setup_topics(bb);
 
+        this.hostname.set("lxatac".to_string()).await;
         this.bridge_interface
-            .set(vec![String::from("0.0.0.0")])
+            .set(vec![String::from("192.168.1.1")])
             .await;
         this.dut_interface
             .set(LinkInfo {
@@ -260,7 +268,7 @@ impl Network {
             .await;
         this.uplink_interface
             .set(LinkInfo {
-                speed: 1337,
+                speed: 1000,
                 carrier: true,
             })
             .await;
@@ -268,25 +276,45 @@ impl Network {
         this
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
-        let hostname = hostname::HostnameProxy::new(&conn)
-            .await
-            .unwrap()
-            .hostname()
-            .await
-            .unwrap();
-
-        let this = Self::setup_topics(bb, hostname.to_string());
+        let this = Self::setup_topics(bb);
 
         {
             let conn = conn.clone();
-            let mut nm_interface = LinkStream::new(conn, "dut").await.unwrap();
-            let dut_interface = this.dut_interface.clone();
-            spawn(async move {
-                dut_interface.set(nm_interface.now()).await;
+            let hostname_topic = this.hostname.clone();
+            async_std::task::spawn(async move {
+                let proxy = hostname::HostnameProxy::new(&conn).await.unwrap();
 
-                while let Ok(info) = nm_interface.next().await {
+                let mut stream = proxy.receive_hostname_changed().await;
+
+                if let Ok(h) = proxy.hostname().await {
+                    hostname_topic.set(h).await;
+                }
+
+                while let Some(v) = stream.next().await {
+                    if let Ok(h) = v.get().await {
+                        hostname_topic.set(h).await;
+                    }
+                }
+            });
+        }
+
+        {
+            let conn = conn.clone();
+            let dut_interface = this.dut_interface.clone();
+            async_std::task::spawn(async move {
+                let mut link_stream = loop {
+                    if let Ok(ls) = LinkStream::new(conn.clone(), "dut").await {
+                        break ls;
+                    }
+
+                    sleep(Duration::from_secs(1)).await;
+                };
+
+                dut_interface.set(link_stream.now()).await;
+
+                while let Ok(info) = link_stream.next().await {
                     dut_interface.set(info).await;
                 }
             });
@@ -294,12 +322,19 @@ impl Network {
 
         {
             let conn = conn.clone();
-            let mut nm_interface = LinkStream::new(conn, "uplink").await.unwrap();
             let uplink_interface = this.uplink_interface.clone();
-            spawn(async move {
-                uplink_interface.set(nm_interface.now()).await;
+            async_std::task::spawn(async move {
+                let mut link_stream = loop {
+                    if let Ok(ls) = LinkStream::new(conn.clone(), "uplink").await {
+                        break ls;
+                    }
 
-                while let Ok(info) = nm_interface.next().await {
+                    sleep(Duration::from_secs(1)).await;
+                };
+
+                uplink_interface.set(link_stream.now()).await;
+
+                while let Ok(info) = link_stream.next().await {
                     uplink_interface.set(info).await;
                 }
             });
@@ -307,14 +342,21 @@ impl Network {
 
         {
             let conn = conn.clone();
-            let mut nm_interface = IpStream::new(conn.clone(), "tac-bridge").await.unwrap();
             let bridge_interface = this.bridge_interface.clone();
-            spawn(async move {
+            async_std::task::spawn(async move {
+                let mut ip_stream = loop {
+                    if let Ok(ips) = IpStream::new(conn.clone(), "tac-bridge").await {
+                        break ips;
+                    }
+
+                    sleep(Duration::from_secs(1)).await;
+                };
+
                 bridge_interface
-                    .set(nm_interface.now(&conn).await.unwrap())
+                    .set(ip_stream.now(&conn).await.unwrap())
                     .await;
 
-                while let Ok(info) = nm_interface.next(&conn).await {
+                while let Ok(info) = ip_stream.next(&conn).await {
                     bridge_interface.set(info).await;
                 }
             });

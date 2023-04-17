@@ -21,9 +21,57 @@ use async_std::sync::Arc;
 use async_std::task::{sleep, spawn};
 
 use serde::{Deserialize, Serialize};
-use surf;
 
 use crate::broker::{BrokerBuilder, Topic};
+
+#[cfg(feature = "demo_mode")]
+mod http {
+    use super::{LSSState, Nodes, ServerInfo};
+
+    pub struct RequestDecoy {}
+
+    pub trait DemoModeDefault {
+        fn demo_get() -> Self;
+    }
+
+    impl DemoModeDefault for ServerInfo {
+        fn demo_get() -> Self {
+            Self {
+                hostname: "lxatac-1000".to_string(),
+                started: "some time ago".to_string(),
+                can_interface: "can0".to_string(),
+                can_interface_is_up: true,
+                lss_state: LSSState::Idle,
+                can_tx_error: false,
+            }
+        }
+    }
+
+    impl DemoModeDefault for Nodes {
+        fn demo_get() -> Self {
+            Self {
+                code: 0,
+                error_message: "".to_string(),
+                result: Vec::new(),
+            }
+        }
+    }
+
+    impl RequestDecoy {
+        pub async fn recv_json<T: DemoModeDefault>(&self) -> Result<T, ()> {
+            Ok(T::demo_get())
+        }
+    }
+
+    pub fn get(_: &str) -> RequestDecoy {
+        RequestDecoy {}
+    }
+}
+
+#[cfg(not(feature = "demo_mode"))]
+mod http {
+    pub use surf::get;
+}
 
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Nodes {
@@ -63,16 +111,16 @@ impl IoBus {
 
         spawn(async move {
             loop {
-                if let Ok(si) = surf::get("http://127.0.0.1:8080/server-info/")
+                if let Ok(si) = http::get("http://127.0.0.1:8080/server-info/")
                     .recv_json::<ServerInfo>()
                     .await
                 {
                     server_info_task
                         .modify(|prev| {
-                            let need_update = prev.map(|p| *p != si).unwrap_or(true);
+                            let need_update = prev.map(|p| p != si).unwrap_or(true);
 
                             if need_update {
-                                Some(Arc::new(si))
+                                Some(si)
                             } else {
                                 None
                             }
@@ -80,16 +128,16 @@ impl IoBus {
                         .await;
                 }
 
-                if let Ok(nodes) = surf::get("http://127.0.0.1:8080/nodes/")
+                if let Ok(nodes) = http::get("http://127.0.0.1:8080/nodes/")
                     .recv_json::<Nodes>()
                     .await
                 {
                     nodes_task
                         .modify(|prev| {
-                            let need_update = prev.map(|n| *n != nodes).unwrap_or(true);
+                            let need_update = prev.map(|n| n != nodes).unwrap_or(true);
 
                             if need_update {
-                                Some(Arc::new(nodes))
+                                Some(nodes)
                             } else {
                                 None
                             }

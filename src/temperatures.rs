@@ -17,12 +17,15 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn_blocking};
 
-#[cfg(feature = "stub_out_hwmon")]
+use crate::broker::{BrokerBuilder, Topic};
+use crate::measurement::Measurement;
+
+#[cfg(feature = "demo_mode")]
 mod hw {
     pub trait SysClass {
         fn input(&self) -> Result<u32, ()>;
@@ -48,15 +51,12 @@ mod hw {
     }
 }
 
-#[cfg(not(feature = "stub_out_hwmon"))]
+#[cfg(not(feature = "demo_mode"))]
 mod hw {
     pub use sysfs_class::*;
 }
 
 use hw::{HwMon, SysClass};
-
-use crate::adc::Measurement;
-use crate::broker::{BrokerBuilder, Topic};
 
 const UPDATE_INTERVAL: Duration = Duration::from_millis(500);
 
@@ -75,18 +75,14 @@ impl Temperatures {
 
         spawn_blocking(move || {
             while run_thread.load(Ordering::Relaxed) {
-                let val = HwMon::new(&"hwmon0")
+                let val = HwMon::new("hwmon0")
                     .unwrap()
                     .temp(1)
                     .unwrap()
                     .input()
                     .unwrap();
 
-                let meas = Measurement {
-                    ts: Instant::now(),
-                    value: val as f32 / 1000.0,
-                };
-
+                let meas = Measurement::now(val as f32 / 1000.0);
                 block_on(soc_temperature_thread.set(meas));
 
                 sleep(UPDATE_INTERVAL);

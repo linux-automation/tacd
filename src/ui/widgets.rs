@@ -23,7 +23,7 @@ use embedded_graphics::{
     mono_font::{ascii::FONT_6X9, MonoFont, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
+    primitives::{Circle, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
     text::{Alignment, Text},
 };
 use serde::de::DeserializeOwned;
@@ -38,10 +38,11 @@ pub enum IndicatorState {
     On,
     Off,
     Error,
+    Unkown,
 }
 
-pub trait DrawFn<T>: Fn(&T, Point, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
-impl<T, U> DrawFn<T> for U where U: Fn(&T, Point, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
+pub trait DrawFn<T>: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
+impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
 
 pub trait IndicatorFormatFn<T>: Fn(&T) -> IndicatorState {}
 impl<T, U> IndicatorFormatFn<T> for U where U: Fn(&T) -> IndicatorState {}
@@ -56,7 +57,7 @@ pub struct DynamicWidget<T: Sync + Send + 'static> {
     handles: Option<(SubscriptionHandle<T, Native>, JoinHandle<()>)>,
 }
 
-impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
+impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWidget<T> {
     /// Create a generic dynamic widget
     ///
     /// # Arguments:
@@ -74,25 +75,24 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
     pub async fn new(
         topic: Arc<Topic<T>>,
         target: Arc<Mutex<FramebufferDrawTarget>>,
-        anchor: Point,
         draw_fn: Box<dyn DrawFn<T> + Sync + Send>,
     ) -> Self {
         let (mut rx, sub_handle) = topic.subscribe_unbounded().await;
 
         let join_handle = spawn(async move {
-            let mut next = rx.next().await;
+            let mut prev_bb: Option<Rectangle> = None;
 
-            while let Some(val) = next {
-                let mut prev_bb = draw_fn(&val, anchor, &mut *target.lock().await);
-
-                next = rx.next().await;
+            while let Some(val) = rx.next().await {
+                let mut target = target.lock().await;
 
                 if let Some(bb) = prev_bb.take() {
                     // Clear the bounding box by painting it black
                     bb.into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
-                        .draw(&mut *target.lock().await)
+                        .draw(&mut *target)
                         .unwrap();
                 }
+
+                prev_bb = draw_fn(&val, &mut *target);
             }
         });
 
@@ -116,8 +116,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         Self::new(
             topic,
             target,
-            anchor,
-            Box::new(move |msg, anchor, target| {
+            Box::new(move |msg, target| {
                 let val = format_fn(msg).clamp(0.0, 1.0);
                 let fill_width = ((width as f32) * val) as u32;
 
@@ -150,43 +149,57 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         Self::new(
             topic,
             target,
-            anchor,
-            Box::new(move |msg, anchor, target| match format_fn(msg) {
-                IndicatorState::On => {
-                    let circle = Circle::new(anchor, 10);
-                    let style = PrimitiveStyleBuilder::new()
-                        .stroke_color(BinaryColor::On)
-                        .stroke_width(2)
-                        .fill_color(BinaryColor::On)
-                        .build();
+            Box::new(move |msg, target| {
+                let ui_text_style: MonoTextStyle<BinaryColor> =
+                    MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-                    circle.into_styled(style).draw(target).unwrap();
+                match format_fn(msg) {
+                    IndicatorState::On => {
+                        let circle = Circle::new(anchor, 10);
+                        let style = PrimitiveStyleBuilder::new()
+                            .stroke_color(BinaryColor::On)
+                            .stroke_width(2)
+                            .fill_color(BinaryColor::On)
+                            .build();
 
-                    Some(circle.bounding_box())
-                }
-                IndicatorState::Off => {
-                    let circle = Circle::new(anchor, 10);
+                        circle.into_styled(style).draw(target).unwrap();
 
-                    circle
-                        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-                        .draw(target)
-                        .unwrap();
+                        Some(circle.bounding_box())
+                    }
+                    IndicatorState::Off => {
+                        let circle = Circle::new(anchor, 10);
 
-                    Some(circle.bounding_box())
-                }
-                IndicatorState::Error => {
-                    let lines = [
-                        Line::new(Point::new(0, 0), Point::new(10, 10)).translate(anchor),
-                        Line::new(Point::new(0, 10), Point::new(10, 0)).translate(anchor),
-                    ];
-
-                    for line in &lines {
-                        line.into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
+                        circle
+                            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
                             .draw(target)
                             .unwrap();
-                    }
 
-                    Some(lines[0].bounding_box())
+                        Some(circle.bounding_box())
+                    }
+                    IndicatorState::Error => {
+                        let text = Text::with_alignment(
+                            "!",
+                            anchor + Point::new(5, 10),
+                            ui_text_style,
+                            Alignment::Center,
+                        );
+
+                        text.draw(target).unwrap();
+
+                        Some(text.bounding_box())
+                    }
+                    IndicatorState::Unkown => {
+                        let text = Text::with_alignment(
+                            "?",
+                            anchor + Point::new(5, 10),
+                            ui_text_style,
+                            Alignment::Center,
+                        );
+
+                        text.draw(target).unwrap();
+
+                        Some(text.bounding_box())
+                    }
                 }
             }),
         )
@@ -204,8 +217,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + 'static> DynamicWidget<T> {
         Self::new(
             topic,
             target,
-            anchor,
-            Box::new(move |msg, anchor, target| {
+            Box::new(move |msg, target| {
                 let text = format_fn(msg);
 
                 let ui_text_style: MonoTextStyle<BinaryColor> =
@@ -254,12 +266,12 @@ impl DynamicWidget<i32> {
         Self::new(
             topic,
             target,
-            Point::new(128 - 5, 32),
-            Box::new(move |val, anchor, target| {
+            Box::new(move |val, target| {
                 let size = 64 - ((*val - 32).abs() * 2);
 
                 if size != 0 {
-                    let bounding = Rectangle::with_center(anchor, Size::new(10, size as u32));
+                    let bounding =
+                        Rectangle::with_center(Point::new(128 - 5, 32), Size::new(10, size as u32));
 
                     bounding
                         .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))

@@ -19,6 +19,8 @@ use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use anyhow::Result;
+use async_std::channel::bounded;
 use async_std::prelude::*;
 use async_std::sync::{Arc, Weak};
 use async_std::task;
@@ -28,23 +30,29 @@ use crate::adc::AdcChannel;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::digital_io::{find_line, LineHandle, LineRequestFlags};
 
-#[cfg(any(test, feature = "stub_out_root"))]
+#[cfg(any(test, feature = "demo_mode"))]
 mod prio {
-    pub fn realtime_priority() {}
+    use anyhow::Result;
+
+    pub fn realtime_priority() -> Result<()> {
+        Ok(())
+    }
 }
 
-#[cfg(not(any(test, feature = "stub_out_root")))]
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod prio {
     use std::convert::TryFrom;
+
+    use anyhow::{anyhow, Result};
     use thread_priority::*;
 
-    pub fn realtime_priority() {
+    pub fn realtime_priority() -> Result<()> {
         set_thread_priority_and_policy(
             thread_native_id(),
             ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
             ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
         )
-        .unwrap();
+        .map_err(|e| anyhow!("Failed to set up realtime priority {e:?}"))
     }
 }
 
@@ -95,6 +103,7 @@ pub enum OutputState {
     On,
     Off,
     OffFloating,
+    Changing,
     InvertedPolarity,
     OverCurrent,
     OverVoltage,
@@ -103,6 +112,10 @@ pub enum OutputState {
 
 impl From<u8> for OutputState {
     fn from(val: u8) -> Self {
+        if val == (OutputState::On as u8) {
+            return OutputState::On;
+        }
+
         if val == (OutputState::Off as u8) {
             return OutputState::Off;
         }
@@ -111,8 +124,8 @@ impl From<u8> for OutputState {
             return OutputState::OffFloating;
         }
 
-        if val == (OutputState::On as u8) {
-            return OutputState::On;
+        if val == (OutputState::Changing as u8) {
+            return OutputState::Changing;
         }
 
         if val == (OutputState::InvertedPolarity as u8) {
@@ -216,8 +229,8 @@ impl<const N: usize> MedianFilter<N> {
     }
 }
 
-/// Bring the outputs into a fail safe mode
-fn fail(
+/// Turn the output off and set an appropriate reason
+fn turn_off_with_reason(
     reason: OutputState,
     pwr_line: &LineHandle,
     discharge_line: &LineHandle,
@@ -245,7 +258,7 @@ fn setup_labgrid_compat(
         let (mut request_stream, _) = compat_request.subscribe_unbounded().await;
 
         while let Some(req) = request_stream.next().await {
-            match *req {
+            match req {
                 0 => request.set(OutputRequest::Off).await,
                 1 => request.set(OutputRequest::On).await,
                 _ => {}
@@ -257,8 +270,9 @@ fn setup_labgrid_compat(
         let (mut state_stream, _) = state.subscribe_unbounded().await;
 
         while let Some(state) = state_stream.next().await {
-            match *state {
+            match state {
                 OutputState::On => compat_response.set(1).await,
+                OutputState::Changing => {}
                 _ => compat_response.set(0).await,
             }
         }
@@ -266,71 +280,35 @@ fn setup_labgrid_compat(
 }
 
 impl DutPwrThread {
-    pub fn new(bb: &mut BrokerBuilder, pwr_volt: AdcChannel, pwr_curr: AdcChannel) -> Self {
-        let tick = Arc::new(AtomicU32::new(0));
-        let tick_weak = Arc::downgrade(&tick);
+    pub async fn new(
+        bb: &mut BrokerBuilder,
+        pwr_volt: AdcChannel,
+        pwr_curr: AdcChannel,
+    ) -> Result<Self> {
+        let pwr_line = find_line("IO0").unwrap().request(
+            LineRequestFlags::OUTPUT,
+            1 - PWR_LINE_ASSERTED,
+            "tacd",
+        )?;
 
-        let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
-        let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
+        let discharge_line = find_line("IO1").unwrap().request(
+            LineRequestFlags::OUTPUT,
+            DISCHARGE_LINE_ASSERTED,
+            "tacd",
+        )?;
 
-        // The request and state topic use the same external path, this way one
-        // can e.g. publish "On" to the topic and be sure that the output is
-        // actually on once a corresponding publish is received from the broker,
-        // as it has done the full round trip through the realtime power thread
-        // and is not just a copy of the received command.
-        let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/powered", None);
-        let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", None);
-
-        setup_labgrid_compat(bb, request_topic.clone(), state_topic.clone());
-
-        // Requests come from the broker framework and are placed into an atomic
-        // request variable read by the thread.
-        let request_task = request.clone();
-        let request_topic_task = request_topic.clone();
-        task::spawn(async move {
-            let (mut request_stream, _) = request_topic_task.subscribe_unbounded().await;
-
-            while let Some(req) = request_stream.next().await {
-                request_task.store(*req as u8, Ordering::Relaxed);
-            }
-        });
-
-        // State information comes from the thread in the form of an atomic
-        // variable and is forwarded to the broker framework.
-        let state_task = state.clone();
-        let state_topic_task = state_topic.clone();
-        task::spawn(async move {
-            let mut prev_state: Option<OutputState> = None;
-
-            loop {
-                task::sleep(TASK_INTERVAL).await;
-
-                let state = state_task.load(Ordering::Relaxed).into();
-
-                if prev_state.map(|prev| prev != state).unwrap_or(true) {
-                    state_topic_task.set(state).await;
-                    prev_state = Some(state);
-                }
-            }
-        });
+        // The realtime priority must be set up inside the tread, but
+        // the operation may fail, in which case we want new() to fail
+        // as well.
+        // Use a queue to notify the calling thread if the priority setup
+        // succeeded.
+        let (thread_res_tx, mut thread_res_rx) = bounded(1);
 
         // Spawn a high priority thread that handles the power status
         // in a realtimey fashion.
         thread::Builder::new()
             .name("tacd power".into())
             .spawn(move || {
-                let pwr_line = find_line("IO0")
-                    .unwrap()
-                    .request(LineRequestFlags::OUTPUT, 1 - PWR_LINE_ASSERTED, "tacd")
-                    .unwrap();
-
-                let discharge_line = find_line("IO1")
-                    .unwrap()
-                    .request(LineRequestFlags::OUTPUT, DISCHARGE_LINE_ASSERTED, "tacd")
-                    .unwrap();
-
-                realtime_priority();
-
                 let mut last_ts: Option<Instant> = None;
 
                 // There may be transients in the measured voltage/current, e.g. due to EMI or
@@ -340,6 +318,26 @@ impl DutPwrThread {
                 // and smallest and averaging the two remaining ones.
                 let mut volt_filter = MedianFilter::<4>::new();
                 let mut curr_filter = MedianFilter::<4>::new();
+
+                let (tick_weak, request, state) = match realtime_priority() {
+                    Ok(_) => {
+                        let tick = Arc::new(AtomicU32::new(0));
+                        let tick_weak = Arc::downgrade(&tick);
+
+                        let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
+                        let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
+
+                        thread_res_tx
+                            .try_send(Ok((tick, request.clone(), state.clone())))
+                            .unwrap();
+
+                        (tick_weak, request, state)
+                    }
+                    Err(e) => {
+                        thread_res_tx.try_send(Err(e)).unwrap();
+                        panic!()
+                    }
+                };
 
                 // Run as long as there is a strong reference to `tick`.
                 // As tick is a private member of the struct this is equivalent
@@ -354,8 +352,8 @@ impl DutPwrThread {
                             .fast
                             .try_get_multiple([&pwr_volt.fast, &pwr_curr.fast]);
 
-                        if let Some((new_ts, _)) = feedback {
-                            last_ts = Some(new_ts);
+                        if let Some(m) = feedback {
+                            last_ts = Some(m[0].ts.as_instant());
                         }
 
                         let too_old = last_ts
@@ -363,7 +361,7 @@ impl DutPwrThread {
                             .unwrap_or(false);
 
                         if too_old {
-                            fail(
+                            turn_off_with_reason(
                                 OutputState::RealtimeViolation,
                                 &pwr_line,
                                 &discharge_line,
@@ -375,8 +373,8 @@ impl DutPwrThread {
                             tick.fetch_add(1, Ordering::Relaxed);
                         }
 
-                        if let Some((_, [volt, curr])) = feedback {
-                            break (volt, curr);
+                        if let Some(m) = feedback {
+                            break (m[0].value, m[1].value);
                         }
                     };
 
@@ -400,7 +398,12 @@ impl DutPwrThread {
                     // overvoltage condition. Instead turn the output off and
                     // go back to measuring.
                     if volt > MAX_VOLTAGE {
-                        fail(OutputState::OverVoltage, &pwr_line, &discharge_line, &state);
+                        turn_off_with_reason(
+                            OutputState::OverVoltage,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
 
                         continue;
                     }
@@ -409,7 +412,7 @@ impl DutPwrThread {
                     // polarity inversion. Turn off, go back to start, do not
                     // collect $200.
                     if volt < MIN_VOLTAGE {
-                        fail(
+                        turn_off_with_reason(
                             OutputState::InvertedPolarity,
                             &pwr_line,
                             &discharge_line,
@@ -422,7 +425,12 @@ impl DutPwrThread {
                     // Don't even look at the requests if there is an ongoin
                     // overcurrent condition.
                     if curr > MAX_CURRENT {
-                        fail(OutputState::OverCurrent, &pwr_line, &discharge_line, &state);
+                        turn_off_with_reason(
+                            OutputState::OverCurrent,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
 
                         continue;
                     }
@@ -454,15 +462,58 @@ impl DutPwrThread {
                 }
 
                 // Make sure to enter fail safe mode before leaving the thread
-                fail(OutputState::Off, &pwr_line, &discharge_line, &state);
-            })
-            .unwrap();
+                turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
+            })?;
 
-        Self {
+        let (tick, request, state) = thread_res_rx.next().await.unwrap()?;
+
+        // The request and state topic use the same external path, this way one
+        // can e.g. publish "On" to the topic and be sure that the output is
+        // actually on once a corresponding publish is received from the broker,
+        // as it has done the full round trip through the realtime power thread
+        // and is not just a copy of the received command.
+        let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/powered", None);
+        let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", None);
+
+        setup_labgrid_compat(bb, request_topic.clone(), state_topic.clone());
+
+        // Requests come from the broker framework and are placed into an atomic
+        // request variable read by the thread.
+        let request_topic_task = request_topic.clone();
+        let state_topic_task = state_topic.clone();
+        task::spawn(async move {
+            let (mut request_stream, _) = request_topic_task.subscribe_unbounded().await;
+
+            while let Some(req) = request_stream.next().await {
+                state_topic_task.set(OutputState::Changing).await;
+                request.store(req as u8, Ordering::Relaxed);
+            }
+        });
+
+        // State information comes from the thread in the form of an atomic
+        // variable and is forwarded to the broker framework.
+        let state_topic_task = state_topic.clone();
+        task::spawn(async move {
+            loop {
+                task::sleep(TASK_INTERVAL).await;
+
+                let curr_state = Some(state.load(Ordering::Relaxed).into());
+
+                // Only send publish events if the state changed
+                state_topic_task
+                    .modify(|prev_state| match prev_state != curr_state {
+                        true => curr_state,
+                        false => None,
+                    })
+                    .await;
+            }
+        });
+
+        Ok(Self {
             request: request_topic,
             state: state_topic,
             tick,
-        }
+        })
     }
 
     pub fn tick(&self) -> TickReader {
@@ -492,9 +543,14 @@ mod tests {
 
         let (adc, dut_pwr) = {
             let mut bb = BrokerBuilder::new();
-            let adc = Adc::new(&mut bb);
+            let adc = block_on(Adc::new(&mut bb)).unwrap();
 
-            let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone());
+            let dut_pwr = block_on(DutPwrThread::new(
+                &mut bb,
+                adc.pwr_volt.clone(),
+                adc.pwr_curr.clone(),
+            ))
+            .unwrap();
 
             (adc, dut_pwr)
         };
@@ -510,28 +566,28 @@ mod tests {
         // Make sure that the DUT power is off by default
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::Off);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::Off);
 
         println!("Turn Off Floating");
         block_on(dut_pwr.request.set(OutputRequest::OffFloating));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OffFloating);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::OffFloating);
 
         println!("Turn on");
         block_on(dut_pwr.request.set(OutputRequest::On));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger transient inverted polarity (Output should stay on)");
         adc.pwr_volt.fast.transient(MIN_VOLTAGE * 1.01);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger inverted polarity");
         adc.pwr_volt.fast.set(MIN_VOLTAGE * 1.01);
@@ -540,24 +596,21 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(
-            *block_on(dut_pwr.state.get()),
-            OutputState::InvertedPolarity
-        );
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::InvertedPolarity);
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger transient overcurrent (Output should stay on)");
         adc.pwr_curr.fast.transient(MAX_CURRENT * 1.01);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger overcurrent");
         adc.pwr_curr.fast.set(MAX_CURRENT * 1.01);
@@ -566,21 +619,21 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OverCurrent);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::OverCurrent);
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger transient overvoltage (Output should stay on)");
         adc.pwr_volt.fast.transient(MAX_VOLTAGE * 1.01);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger overvoltage");
         adc.pwr_volt.fast.set(MAX_VOLTAGE * 1.01);
@@ -589,14 +642,14 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::OverVoltage);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::OverVoltage);
 
         println!("Turn on again");
         block_on(dut_pwr.request.set(OutputRequest::On));
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Trigger realtime violation");
         adc.pwr_volt.fast.stall(true);
@@ -606,7 +659,7 @@ mod tests {
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
         assert_eq!(
-            *block_on(dut_pwr.state.get()),
+            block_on(dut_pwr.state.get()),
             OutputState::RealtimeViolation
         );
 
@@ -615,7 +668,7 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
-        assert_eq!(*block_on(dut_pwr.state.get()), OutputState::On);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
 
         println!("Drop DutPwrThread");
         std::mem::drop(dut_pwr);

@@ -19,148 +19,29 @@ use std::time::Duration;
 
 use async_std::prelude::*;
 use async_std::sync::{Arc, Mutex};
-use async_std::task::{block_on, sleep, spawn, spawn_blocking};
-
-use async_trait::async_trait;
-
-use serde::{Deserialize, Serialize};
-
+use async_std::task::{sleep, spawn};
 use tide::{Response, Server};
-
-use evdev::{EventType, InputEventKind, Key};
-
-use embedded_graphics::{
-    mono_font::{ascii::FONT_8X13, MonoTextStyle},
-    pixelcolor::BinaryColor,
-    prelude::*,
-    primitives::{Line, PrimitiveStyle},
-    text::Text,
-};
 
 use crate::broker::{BrokerBuilder, Topic};
 
-mod dig_out_screen;
+mod buttons;
 mod draw_fb;
-mod iobus_screen;
-mod power_screen;
-mod rauc_screen;
-mod reboot_screen;
-mod screensaver_screen;
-mod system_screen;
-mod uart_screen;
-mod usb_screen;
+mod screens;
 mod widgets;
 
-use dig_out_screen::DigOutScreen;
+use buttons::{handle_buttons, ButtonEvent};
 use draw_fb::FramebufferDrawTarget;
-use iobus_screen::IoBusScreen;
-use power_screen::PowerScreen;
-use rauc_screen::RaucScreen;
-use reboot_screen::RebootConfirmScreen;
-use screensaver_screen::ScreenSaverScreen;
-use system_screen::SystemScreen;
-use uart_screen::UartScreen;
-use usb_screen::UsbScreen;
+use screens::{MountableScreen, Screen};
 
-pub const LONG_PRESS: Duration = Duration::from_millis(750);
-
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
-pub enum Screen {
-    DutPower,
-    Usb,
-    DigOut,
-    System,
-    IoBus,
-    Uart,
-    ScreenSaver,
-    RebootConfirm,
-    Rauc,
-}
-
-impl Screen {
-    /// What is the next screen to transition to when e.g. the button is  pressed?
-    fn next(&self) -> Self {
-        match self {
-            Self::DutPower => Self::Usb,
-            Self::Usb => Self::DigOut,
-            Self::DigOut => Self::System,
-            Self::System => Self::IoBus,
-            Self::IoBus => Self::Uart,
-            Self::Uart => Self::ScreenSaver,
-            Self::ScreenSaver => Self::DutPower,
-            Self::RebootConfirm => Self::System,
-            Self::Rauc => Self::ScreenSaver,
-        }
-    }
-
-    /// Should screensaver be automatically enabled when in this screen?
-    fn use_screensaver(&self) -> bool {
-        match self {
-            Self::Rauc => false,
-            _ => true,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
-pub enum ButtonEvent {
-    ButtonOne(Duration),
-    ButtonTwo(Duration),
-}
-
-impl ButtonEvent {
-    fn from_id(d: Duration, id: usize) -> Self {
-        match id {
-            0 => Self::ButtonOne(d),
-            1 => Self::ButtonTwo(d),
-            _ => panic!(),
-        }
-    }
-}
-
-#[async_trait]
-trait MountableScreen: Sync + Send {
-    fn is_my_type(&self, screen: Screen) -> bool;
-    async fn mount(&mut self, ui: &Ui);
-    async fn unmount(&mut self);
-}
-
-/// Draw static screen border contining a title and an indicator for the
-/// position of the screen in the list of screens.
-async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<FramebufferDrawTarget>>) {
-    let mut draw_target = draw_target.lock().await;
-
-    Text::new(
-        text,
-        Point::new(4, 13),
-        MonoTextStyle::new(&FONT_8X13, BinaryColor::On),
-    )
-    .draw(&mut *draw_target)
-    .unwrap();
-
-    Line::new(Point::new(0, 16), Point::new(118, 16))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-        .draw(&mut *draw_target)
-        .unwrap();
-
-    let screen_idx = screen as i32;
-    let num_screens = Screen::ScreenSaver as i32;
-    let x_start = screen_idx * 128 / num_screens;
-    let x_end = (screen_idx + 1) * 128 / num_screens;
-
-    Line::new(Point::new(x_start, 62), Point::new(x_end, 62))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-        .draw(&mut *draw_target)
-        .unwrap();
-}
-
-pub struct UiRessources {
+pub struct UiResources {
     pub adc: crate::adc::Adc,
-    pub dbus: crate::dbus::DbusSession,
     pub dig_io: crate::digital_io::DigitalIo,
     pub dut_pwr: crate::dut_power::DutPwrThread,
     pub iobus: crate::iobus::IoBus,
+    pub network: crate::dbus::Network,
+    pub rauc: crate::dbus::Rauc,
     pub system: crate::system::System,
+    pub systemd: crate::dbus::Systemd,
     pub temperatures: crate::temperatures::Temperatures,
     pub usb_hub: crate::usb_hub::UsbHub,
 }
@@ -172,44 +53,7 @@ pub struct Ui {
     locator_dance: Arc<Topic<i32>>,
     buttons: Arc<Topic<ButtonEvent>>,
     screens: Vec<Box<dyn MountableScreen>>,
-    res: UiRessources,
-}
-
-/// Spawn a thread that blockingly reads user input and pushes them into
-/// a broker framework topic.
-fn handle_button(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
-    #[cfg(not(feature = "stub_out_evdev"))]
-    spawn_blocking(move || {
-        let mut device = evdev::Device::open(path).unwrap();
-
-        let mut start_time = [None, None];
-
-        loop {
-            for ev in device.fetch_events().unwrap() {
-                if ev.event_type() != EventType::KEY {
-                    continue;
-                }
-
-                let id = match ev.kind() {
-                    InputEventKind::Key(Key::KEY_HOME) => 0,
-                    InputEventKind::Key(Key::KEY_ESC) => 1,
-                    _ => continue,
-                };
-
-                if ev.value() == 0 {
-                    // Button release -> send event
-                    if let Some(start) = start_time[id].take() {
-                        if let Ok(duration) = ev.timestamp().duration_since(start) {
-                            block_on(topic.set(ButtonEvent::from_id(duration, id)))
-                        }
-                    }
-                } else {
-                    // Button press -> register start time but don't send event
-                    start_time[id] = Some(ev.timestamp())
-                }
-            }
-        }
-    });
+    res: UiResources,
 }
 
 /// Add a web endpoint that serves the current framebuffer as png
@@ -228,36 +72,17 @@ fn serve_framebuffer(server: &mut Server<()>, draw_target: Arc<Mutex<Framebuffer
 }
 
 impl Ui {
-    pub fn new(bb: &mut BrokerBuilder, res: UiRessources, server: &mut Server<()>) -> Self {
+    pub fn new(bb: &mut BrokerBuilder, res: UiResources, server: &mut Server<()>) -> Self {
         let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
         let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, None, 0);
 
         // Initialize all the screens now so they can be mounted later
-        let screens = {
-            let mut s: Vec<Box<dyn MountableScreen>> = Vec::new();
+        let screens: Vec<Box<dyn MountableScreen>> = screens::init(bb, &res, &screen, &buttons);
 
-            s.push(Box::new(DigOutScreen::new(bb)));
-            s.push(Box::new(IoBusScreen::new()));
-            s.push(Box::new(PowerScreen::new()));
-            s.push(Box::new(RaucScreen::new(&screen, &res.dbus.rauc.operation)));
-            s.push(Box::new(RebootConfirmScreen::new()));
-            s.push(Box::new(ScreenSaverScreen::new(
-                bb,
-                &buttons,
-                &screen,
-                &res.dbus.network.hostname,
-            )));
-            s.push(Box::new(SystemScreen::new()));
-            s.push(Box::new(UartScreen::new(bb)));
-            s.push(Box::new(UsbScreen::new(bb)));
-
-            s
-        };
-
-        handle_button(
-            &"/dev/input/by-path/platform-gpio-keys-event",
+        handle_buttons(
+            "/dev/input/by-path/platform-gpio-keys-event",
             buttons.clone(),
         );
 
@@ -271,21 +96,11 @@ impl Ui {
                 // As long as the locator is active:
                 // count down the value in locator_dance from 63 to 0
                 // with some pause in between in a loop.
-                while locator_task
-                    .try_get()
-                    .await
-                    .as_deref()
-                    .copied()
-                    .unwrap_or(false)
-                {
+                while locator_task.try_get().await.unwrap_or(false) {
                     locator_dance_task
-                        .modify(|v| {
-                            let v = match v.as_deref().copied() {
-                                None | Some(0) => 63,
-                                Some(v) => v - 1,
-                            };
-
-                            Some(Arc::new(v))
+                        .modify(|v| match v {
+                            None | Some(0) => Some(63),
+                            Some(v) => Some(v - 1),
                         })
                         .await;
                     sleep(Duration::from_millis(100)).await;
@@ -294,7 +109,7 @@ impl Ui {
                 // If the locator is empty stop the animation
                 locator_dance_task.set(0).await;
 
-                match rx.next().await.as_deref().as_deref() {
+                match rx.next().await {
                     Some(true) => {}
                     Some(false) => continue,
                     None => break,
@@ -330,9 +145,8 @@ impl Ui {
         };
 
         let mut curr_screen_type = None;
-        let mut next_screen_type = Screen::ScreenSaver;
 
-        loop {
+        while let Some(next_screen_type) = screen_rx.next().await {
             // Only unmount / mount the shown screen if a change was requested
             let should_change = curr_screen_type
                 .map(|c| c != next_screen_type)
@@ -358,11 +172,8 @@ impl Ui {
 
                 curr_screen_type = Some(next_screen_type);
             }
-
-            match screen_rx.next().await {
-                Some(screen) => next_screen_type = *screen,
-                None => break Ok(()),
-            }
         }
+
+        Ok(())
     }
 }

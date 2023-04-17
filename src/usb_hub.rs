@@ -25,44 +25,93 @@ use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(feature = "stub_out_usb_hub")]
+#[cfg(feature = "demo_mode")]
 mod rw {
     use std::collections::HashMap;
     use std::convert::AsRef;
-    use std::io::{Error, ErrorKind, Result};
-    use std::path::{Path, PathBuf};
+    use std::io::Result;
+    use std::path::Path;
     use std::sync::Mutex;
+
+    use async_std::task::block_on;
+
+    use crate::adc::IioThread;
+
+    const DEVICES: &[(&str, &str)] = &[
+        ("/1-1-port1/device/idProduct", "1234"),
+        ("/1-1-port1/device/idVendor", "33f7"),
+        ("/1-1-port1/device/manufacturer", "Linux Automation GmbH"),
+        ("/1-1-port1/device/product", "Christmas Tree Ornament"),
+        ("/1-1-port2/device/idProduct", "4321"),
+        ("/1-1-port2/device/idVendor", "33f7"),
+        ("/1-1-port2/device/manufacturer", "Linux Automation GmbH"),
+        ("/1-1-port2/device/product", "LXA Water Hose Mux"),
+        ("/1-1-port3/device/idProduct", "cafe"),
+        ("/1-1-port3/device/idVendor", "33f7"),
+        ("/1-1-port3/device/manufacturer", "Linux Automation GmbH"),
+        ("/1-1-port3/device/product", "Mug warmer"),
+    ];
+
+    const DISABLE_CHANNELS: &[(&str, &str)] = &[
+        ("/1-1-port1/disable", "usb-host1-curr"),
+        ("/1-1-port2/disable", "usb-host2-curr"),
+        ("/1-1-port3/disable", "usb-host3-curr"),
+    ];
 
     static FILESYSTEM: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
     pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
-        Ok(FILESYSTEM
+        let path = path.as_ref().to_str().unwrap();
+
+        if let Some(stored) = FILESYSTEM
             .lock()
             .unwrap()
             .get_or_insert(HashMap::new())
-            .get(path.as_ref().to_str().unwrap())
+            .get(path)
             .cloned()
-            .unwrap_or(String::from("0")))
+        {
+            return Ok(stored);
+        }
+
+        for (path_tail, content) in DEVICES {
+            if path.ends_with(path_tail) {
+                return Ok(content.to_string());
+            }
+        }
+
+        Ok("0".to_string())
     }
 
     pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
         let path: &Path = path.as_ref();
+        let path = path.to_str().unwrap().to_string();
         let contents: &[u8] = contents.as_ref();
-        let text = std::str::from_utf8(contents).unwrap_or("[Broken UTF-8]");
+        let text = std::str::from_utf8(contents)
+            .unwrap_or("[Broken UTF-8]")
+            .to_string();
+
+        for (path_tail, iio_channel) in DISABLE_CHANNELS {
+            if path.ends_with(path_tail) {
+                let iio_thread = block_on(IioThread::new()).unwrap();
+
+                iio_thread
+                    .get_channel(iio_channel)
+                    .unwrap()
+                    .set(text == "0");
+            }
+        }
 
         FILESYSTEM
             .lock()
             .unwrap()
             .get_or_insert(HashMap::new())
-            .insert(path.to_str().unwrap().to_string(), text.to_string());
-
-        println!("USB: Would write {text} to {path:?} but don't feel like it");
+            .insert(path, text);
 
         Ok(())
     }
 }
 
-#[cfg(not(feature = "stub_out_usb_hub"))]
+#[cfg(not(feature = "demo_mode"))]
 mod rw {
     pub use std::fs::*;
 }
@@ -86,7 +135,7 @@ const PORTS: &[(&str, &str)] = &[
     ),
 ];
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct UsbDevice {
     id_product: String,
     id_vendor: String,
@@ -122,10 +171,10 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     spawn(async move {
         let (mut src, _) = powered.subscribe_unbounded().await;
 
-        while let Some(ev) = src.next().await.as_deref() {
-            write(&disable_path, if *ev { b"0" } else { b"1" }).unwrap();
+        while let Some(ev) = src.next().await {
+            write(&disable_path, if ev { b"0" } else { b"1" }).unwrap();
 
-            if !*ev {
+            if !ev {
                 device.set(None).await;
             }
         }
@@ -158,11 +207,11 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                 powered
                     .modify(|prev| {
                         let should_set = prev
-                            .map(|prev_powered| *prev_powered != is_powered)
+                            .map(|prev_powered| prev_powered != is_powered)
                             .unwrap_or(true);
 
                         match should_set {
-                            true => Some(Arc::new(is_powered)),
+                            true => Some(is_powered),
                             false => None,
                         }
                     })
@@ -187,11 +236,11 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
             device
                 .modify(|prev| {
                     let should_set = prev
-                        .map(|prev_dev_info| *prev_dev_info != dev_info)
+                        .map(|prev_dev_info| prev_dev_info != dev_info)
                         .unwrap_or(true);
 
                     match should_set {
-                        true => Some(Arc::new(dev_info)),
+                        true => Some(dev_info),
                         false => None,
                     }
                 })

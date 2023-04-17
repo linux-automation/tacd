@@ -21,18 +21,39 @@ use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(any(test, feature = "stub_out_barebox"))]
+#[cfg(feature = "demo_mode")]
 mod read_dt_props {
-    pub fn read_dt_property(_: &str) -> String {
-        "stub".to_string()
+    const DEMO_DATA_STR: &[(&str, &str)] = &[
+        ("barebox-version", "barebox-2022.11.0-20221121-1"),
+        (
+            "baseboard-factory-data/pcba-hardware-release",
+            "lxatac-S01-R03-B02-C00",
+        ),
+        (
+            "powerboard-factory-data/pcba-hardware-release",
+            "lxatac-S05-R03-V01-C00",
+        ),
+    ];
+
+    const DEMO_DATA_NUM: &[(&str, u32)] = &[
+        ("baseboard-factory-data/modification", 0),
+        ("baseboard-factory-data/factory-timestamp", 1678086417),
+        ("powerboard-factory-data/modification", 0),
+        ("powerboard-factory-data/factory-timestamp", 1678086418),
+    ];
+
+    pub fn read_dt_property(path: &str) -> String {
+        let (_, content) = DEMO_DATA_STR.iter().find(|(p, _)| *p == path).unwrap();
+
+        content.to_string()
     }
 
-    pub fn read_dt_property_u32(_: &str) -> u32 {
-        0
+    pub fn read_dt_property_u32(path: &str) -> u32 {
+        DEMO_DATA_NUM.iter().find(|(p, _)| *p == path).unwrap().1
     }
 }
 
-#[cfg(not(any(test, feature = "stub_out_barebox")))]
+#[cfg(not(feature = "demo_mode"))]
 mod read_dt_props {
     use std::fs::read;
     use std::str::from_utf8;
@@ -47,7 +68,7 @@ mod read_dt_props {
     }
 
     pub fn read_dt_property_u32(path: &str) -> u32 {
-        u32::from_str_radix(&read_dt_property(path), 10).unwrap()
+        read_dt_property(path).parse().unwrap()
     }
 }
 
@@ -113,8 +134,8 @@ impl Barebox {
 }
 
 pub struct System {
-    pub uname: Arc<Topic<Uname>>,
-    pub barebox: Arc<Topic<Barebox>>,
+    pub uname: Arc<Topic<Arc<Uname>>>,
+    pub barebox: Arc<Topic<Arc<Barebox>>>,
     pub tacd_version: Arc<Topic<String>>,
 }
 
@@ -123,8 +144,8 @@ impl System {
         let version = env!("VERSION_STRING").to_string();
 
         Self {
-            uname: bb.topic_ro("/v1/tac/info/uname", Some(Uname::get())),
-            barebox: bb.topic_ro("/v1/tac/info/bootloader", Some(Barebox::get())),
+            uname: bb.topic_ro("/v1/tac/info/uname", Some(Arc::new(Uname::get()))),
+            barebox: bb.topic_ro("/v1/tac/info/bootloader", Some(Arc::new(Barebox::get()))),
             tacd_version: bb.topic_ro("/v1/tac/info/tacd/version", Some(version)),
         }
     }

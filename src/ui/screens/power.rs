@@ -21,12 +21,12 @@ use async_trait::async_trait;
 
 use embedded_graphics::prelude::*;
 
-use crate::adc::Measurement;
+use super::buttons::*;
+use super::widgets::*;
+use super::{draw_border, MountableScreen, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle};
 use crate::dut_power::{OutputRequest, OutputState};
-
-use super::widgets::*;
-use super::{draw_border, ButtonEvent, MountableScreen, Screen, Ui};
+use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::DutPower;
 
@@ -109,6 +109,7 @@ impl MountableScreen for PowerScreen {
                 Box::new(|state: &OutputState| match state {
                     OutputState::On => "On".into(),
                     OutputState::Off => "Off".into(),
+                    OutputState::Changing => "Changing".into(),
                     OutputState::OffFloating => "Off (Float.)".into(),
                     OutputState::InvertedPolarity => "Inv. Pol.".into(),
                     OutputState::OverCurrent => "Ov. Curr.".into(),
@@ -127,6 +128,7 @@ impl MountableScreen for PowerScreen {
                 Box::new(|state: &OutputState| match state {
                     OutputState::On => IndicatorState::On,
                     OutputState::Off | OutputState::OffFloating => IndicatorState::Off,
+                    OutputState::Changing => IndicatorState::Unkown,
                     _ => IndicatorState::Error,
                 }),
             )
@@ -140,19 +142,23 @@ impl MountableScreen for PowerScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                if let ButtonEvent::ButtonOne(_) = *ev {
-                    let state = *power_state.get().await;
+                match ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: _,
+                    } => {
+                        let req = match power_state.get().await {
+                            OutputState::On => OutputRequest::Off,
+                            _ => OutputRequest::On,
+                        };
 
-                    let req = match state {
-                        OutputState::On => OutputRequest::Off,
-                        _ => OutputRequest::On,
-                    };
-
-                    power_request.set(req).await;
-                }
-
-                if let ButtonEvent::ButtonTwo(_) = *ev {
-                    screen.set(SCREEN_TYPE.next()).await
+                        power_request.set(req).await;
+                    }
+                    ButtonEvent::Release {
+                        btn: Button::Upper,
+                        dur: _,
+                    } => screen.set(SCREEN_TYPE.next()).await,
+                    ButtonEvent::Press { btn: _ } => {}
                 }
             }
         });

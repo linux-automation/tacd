@@ -4,6 +4,8 @@
 //! Source: `Interface '/org/freedesktop/NetworkManager/Devices/2' from service 'org.freedesktop.NetworkManager' on system bus`.
 //!
 
+#![allow(clippy::all)]
+
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::convert::TryFrom;
 use zvariant::{OwnedValue, Type};

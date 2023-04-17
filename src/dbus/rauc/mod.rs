@@ -20,19 +20,22 @@ use std::collections::HashMap;
 use async_std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 use async_std::prelude::*;
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 use async_std::task::spawn;
 
 use super::Connection;
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(feature = "demo_mode")]
+mod demo_mode;
+
+#[cfg(not(feature = "demo_mode"))]
 mod installer;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Progress {
     pub percentage: i32,
     pub message: String,
@@ -54,7 +57,7 @@ type SlotStatus = HashMap<String, HashMap<String, String>>;
 pub struct Rauc {
     pub operation: Arc<Topic<String>>,
     pub progress: Arc<Topic<Progress>>,
-    pub slot_status: Arc<Topic<SlotStatus>>,
+    pub slot_status: Arc<Topic<Arc<SlotStatus>>>,
     pub last_error: Arc<Topic<String>>,
     pub install: Arc<Topic<String>>,
 }
@@ -70,12 +73,20 @@ impl Rauc {
         }
     }
 
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     pub async fn new(bb: &mut BrokerBuilder, _conn: &Arc<Connection>) -> Self {
-        Self::setup_topics(bb)
+        let inst = Self::setup_topics(bb);
+
+        inst.operation.set("idle".to_string()).await;
+        inst.slot_status
+            .set(Arc::new(demo_mode::slot_status()))
+            .await;
+        inst.last_error.set("".to_string()).await;
+
+        inst
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
         let inst = Self::setup_topics(bb);
 
@@ -118,11 +129,9 @@ impl Rauc {
                                     let k = k
                                         .replace("type", "fs_type")
                                         .replace("class", "slot_class")
-                                        .replace(".", "_")
-                                        .replace("-", "_")
-                                        .to_string();
+                                        .replace(['.', '-'], "_");
 
-                                    (k, ss.or(s32).or(s64).unwrap_or_else(|| String::new()))
+                                    (k, ss.or(s32).or(s64).unwrap_or_default())
                                 })
                                 .collect();
 
@@ -132,14 +141,14 @@ impl Rauc {
 
                             // Remove "." from the dictionary key to make defining a typescript
                             // type easier ("rootfs.0" -> "rootfs_0").
-                            (slot_name.replace(".", "_").to_string(), info)
+                            (slot_name.replace('.', "_"), info)
                         })
                         .collect();
 
                     // In the RAUC API the slot status is a list of (name, info) tuples.
                     // It is once again easier in typescript to represent it as a dict with
                     // the names as keys, so that is what's exposed here.
-                    slot_status.set(slots).await;
+                    slot_status.set(Arc::new(slots)).await;
                 }
 
                 // Wait for the current operation to change

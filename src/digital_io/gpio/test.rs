@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::thread::sleep;
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::sync::{Arc, Mutex};
 use async_std::task::block_on;
 
@@ -87,6 +88,7 @@ pub enum EventRequestFlags {
     BOTH_EDGES,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub enum LineRequestFlags {
     OUTPUT,
     INPUT,
@@ -98,10 +100,10 @@ pub struct FindDecoy {
 }
 
 impl FindDecoy {
-    pub fn request(&self, _: LineRequestFlags, initial: u8, _: &str) -> Option<LineHandle> {
+    pub fn request(&self, _: LineRequestFlags, initial: u8, _: &str) -> Result<LineHandle> {
         self.val.store(initial, Ordering::Relaxed);
 
-        Some(LineHandle {
+        Ok(LineHandle {
             name: self.name.clone(),
             val: self.val.clone(),
         })
@@ -112,7 +114,7 @@ impl FindDecoy {
         _: LineRequestFlags,
         _: EventRequestFlags,
         _: &str,
-    ) -> Result<LineEventHandle, ()> {
+    ) -> Result<LineEventHandle> {
         Ok(LineEventHandle {
             val: self.val.clone(),
             prev_val: self.val.load(Ordering::Relaxed),
@@ -124,7 +126,7 @@ impl FindDecoy {
     }
 }
 
-pub fn find_line(name: &str) -> Option<FindDecoy> {
+pub fn find_line(name: &str) -> Result<FindDecoy> {
     let val = {
         let mut lines = block_on(LINES.lock());
 
@@ -137,8 +139,8 @@ pub fn find_line(name: &str) -> Option<FindDecoy> {
         }
     };
 
-    Some(FindDecoy {
+    Ok(FindDecoy {
         name: name.to_string(),
-        val: val,
+        val,
     })
 }

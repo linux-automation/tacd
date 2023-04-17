@@ -9,70 +9,47 @@ license = "GPL-2.0-only"
 [build-dependencies]
 chrono = "0.4"
 serde_json = "1.0"
-serde_yaml = "0.9.10"
+serde_yaml = "0.9"
 
 [dependencies]
 anyhow = "1.0"
 async-sse = "5.1"
 async-std = { version = "1.12", features = ["attributes"] }
 async-trait = "0.1"
-async-tungstenite = "0.15.0"
-base64 = "0.13.0"
+async-tungstenite = "0.20"
+base64 = "0.21"
 chrono = "0.4"
 embedded-graphics = "0.7"
-# Update to 0.12.1 once released. Versions between the one below and 0.12.1
-# do not build on 32 bit systems.
-evdev = "=0.11.3"
-flate2 = "1.0"
+env_logger = "0.10"
+evdev = "=0.12"
 framebuffer = "0.3"
 futures = "0.3"
 futures-lite = "1.12"
-futures-util = "0.3.15"
+futures-util = "0.3"
 gpio-cdev = "0.5"
-industrial-io = "0.5"
+industrial-io = { version = "0.5", default-features = false }
 log = { version = "0.4", features = ["release_max_level_warn"]}
-mqtt-protocol = "0.11.2"
-nix = "0.24"
+mqtt-protocol = "0.11"
+nix = "0.26"
 png = "0.17"
-pretty_env_logger = "0.4"
+rand = { version = "0.8", optional = true}
 serde_json = "1.0"
 serde_repr = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-sha-1 = "0.9.6"
+sha-1 = "0.10"
 surf = { version = "2.3", default-features = false, features = ["h1-client-no-tls"] }
 sysfs-class = "0.1"
 systemd = { version = "0.10", optional = true}
-thread-priority = "0.4"
+thread-priority = "0.13"
 tide = "0.16"
 unique-token = "0.2"
-zbus = "2.0"
-zvariant_derive = "3.0"
-zvariant = { version = "3", default-features = false, features = ["enumflags2"] }
+zbus = "3.11"
+zvariant_derive = "3.12"
+zvariant = { version = "3.12", default-features = false, features = ["enumflags2"] }
 
 [features]
 default = ["systemd"]
-stub_out_adc = []
-stub_out_barebox = []
-stub_out_display = []
-stub_out_dbus = []
-stub_out_evdev = []
-stub_out_fs = []
-stub_out_gpio = []
-stub_out_hwmon = []
-stub_out_root = []
-stub_out_usb_hub = []
-stub_out_everything = [
-  "stub_out_adc",
-  "stub_out_barebox",
-  "stub_out_display",
-  "stub_out_dbus",
-  "stub_out_evdev",
-  "stub_out_fs",
-  "stub_out_gpio",
-  "stub_out_hwmon",
-  "stub_out_root",
-  "stub_out_usb_hub",
-]
+demo_mode = ["rand"]
 
 [profile.release]
 lto = true

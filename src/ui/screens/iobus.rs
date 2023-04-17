@@ -16,7 +16,6 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use async_std::prelude::*;
-use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
 
@@ -27,8 +26,9 @@ use embedded_graphics::{
 use crate::broker::{Native, SubscriptionHandle};
 use crate::iobus::{LSSState, Nodes, ServerInfo};
 
+use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, ButtonEvent, MountableScreen, Screen, Ui};
+use super::{draw_border, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::IoBus;
 
@@ -142,14 +142,20 @@ impl MountableScreen for IoBusScreen {
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                if let ButtonEvent::ButtonOne(_) = *ev {
-                    iobus_pwr_en
-                        .modify(|prev| Some(Arc::new(!prev.as_deref().copied().unwrap_or(true))))
-                        .await
-                }
-
-                if let ButtonEvent::ButtonTwo(_) = *ev {
-                    screen.set(SCREEN_TYPE.next()).await
+                match ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: _,
+                    } => {
+                        iobus_pwr_en
+                            .modify(|prev| Some(!prev.unwrap_or(true)))
+                            .await
+                    }
+                    ButtonEvent::Release {
+                        btn: Button::Upper,
+                        dur: _,
+                    } => screen.set(SCREEN_TYPE.next()).await,
+                    ButtonEvent::Press { btn: _ } => {}
                 }
             }
         });

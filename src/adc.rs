@@ -15,77 +15,37 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::time::Duration;
+
+use anyhow::Result;
 use async_std::sync::Arc;
 use async_std::task::{sleep, spawn};
 
-use std::time::{Duration, Instant};
-
-use serde::{Deserialize, Serialize};
-
 use crate::broker::{BrokerBuilder, Topic};
+use crate::measurement::{Measurement, Timestamp};
 
 const HISTORY_LENGTH: usize = 200;
+const SLOW_INTERVAL: Duration = Duration::from_millis(100);
 
-#[cfg(any(test, feature = "stub_out_adc"))]
+#[cfg(test)]
 mod iio {
-    mod stub;
-    pub use stub::*;
+    mod test;
+    pub use test::*;
 }
 
-#[cfg(not(any(test, feature = "stub_out_adc")))]
+#[cfg(feature = "demo_mode")]
+mod iio {
+    mod demo_mode;
+    pub use demo_mode::*;
+}
+
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod iio {
     mod hardware;
     pub use hardware::*;
 }
 
 pub use iio::{CalibratedChannel, IioThread};
-
-/// Serialize an Instant as a javascript timestamp (f64 containing the number
-/// of milliseconds since Unix Epoch 0).
-/// Since Instants use a monotonic clock that is not actually related to the
-/// system clock this is a somewhat handwavey process.
-///
-/// The idea is to take the current Instant (monotonic time) and System Time
-/// (calendar time) and calculate: now_system - (now_instant - ts_instant).
-pub mod json_instant {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::time::{Instant, SystemTime};
-
-    pub fn serialize<S>(instant: &Instant, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let age = instant.elapsed();
-        let age_as_sys = SystemTime::now().checked_sub(age).unwrap();
-        let timestamp = age_as_sys.duration_since(SystemTime::UNIX_EPOCH).unwrap();
-        let js_timestamp = 1000.0 * timestamp.as_secs_f64();
-        js_timestamp.serialize(serializer)
-    }
-
-    pub fn deserialize<'a, D>(deserializer: D) -> Result<Instant, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
-        let _js_timestamp = f64::deserialize(deserializer)?;
-        unimplemented!();
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Measurement {
-    #[serde(with = "json_instant")]
-    pub ts: Instant,
-    pub value: f32,
-}
-
-impl From<(Instant, f32)> for Measurement {
-    fn from(m: (Instant, f32)) -> Self {
-        Self {
-            ts: m.0,
-            value: m.1,
-        }
-    }
-}
 
 /// A reference to an ADC channel.
 ///
@@ -113,11 +73,12 @@ pub struct Adc {
     pub iobus_volt: AdcChannel,
     pub pwr_volt: AdcChannel,
     pub pwr_curr: AdcChannel,
+    pub time: Arc<Topic<Timestamp>>,
 }
 
 impl Adc {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
-        let iio_thread = IioThread::new();
+    pub async fn new(bb: &mut BrokerBuilder) -> Result<Self> {
+        let iio_thread = IioThread::new().await?;
 
         let adc = Self {
             usb_host_curr: AdcChannel {
@@ -211,7 +172,7 @@ impl Adc {
                 ),
             },
             pwr_curr: AdcChannel {
-                fast: iio_thread.clone().get_channel("pwr-curr").unwrap(),
+                fast: iio_thread.get_channel("pwr-curr").unwrap(),
                 topic: bb.topic(
                     "/v1/dut/feedback/current",
                     true,
@@ -220,6 +181,7 @@ impl Adc {
                     HISTORY_LENGTH,
                 ),
             },
+            time: bb.topic_ro("/v1/tac/time/now", None),
         };
 
         let adc_clone = adc.clone();
@@ -228,61 +190,63 @@ impl Adc {
         // "fast" interface to the broker based "slow" interface.
         spawn(async move {
             loop {
-                sleep(Duration::from_millis(100)).await;
+                sleep(SLOW_INTERVAL).await;
 
                 adc_clone
                     .usb_host_curr
                     .topic
-                    .set(adc_clone.usb_host_curr.fast.get().into())
+                    .set(adc_clone.usb_host_curr.fast.get())
                     .await;
                 adc_clone
                     .usb_host1_curr
                     .topic
-                    .set(adc_clone.usb_host1_curr.fast.get().into())
+                    .set(adc_clone.usb_host1_curr.fast.get())
                     .await;
                 adc_clone
                     .usb_host2_curr
                     .topic
-                    .set(adc_clone.usb_host2_curr.fast.get().into())
+                    .set(adc_clone.usb_host2_curr.fast.get())
                     .await;
                 adc_clone
                     .usb_host3_curr
                     .topic
-                    .set(adc_clone.usb_host3_curr.fast.get().into())
+                    .set(adc_clone.usb_host3_curr.fast.get())
                     .await;
                 adc_clone
                     .out0_volt
                     .topic
-                    .set(adc_clone.out0_volt.fast.get().into())
+                    .set(adc_clone.out0_volt.fast.get())
                     .await;
                 adc_clone
                     .out1_volt
                     .topic
-                    .set(adc_clone.out1_volt.fast.get().into())
+                    .set(adc_clone.out1_volt.fast.get())
                     .await;
                 adc_clone
                     .iobus_curr
                     .topic
-                    .set(adc_clone.iobus_curr.fast.get().into())
+                    .set(adc_clone.iobus_curr.fast.get())
                     .await;
                 adc_clone
                     .iobus_volt
                     .topic
-                    .set(adc_clone.iobus_volt.fast.get().into())
+                    .set(adc_clone.iobus_volt.fast.get())
                     .await;
                 adc_clone
                     .pwr_volt
                     .topic
-                    .set(adc_clone.pwr_volt.fast.get().into())
+                    .set(adc_clone.pwr_volt.fast.get())
                     .await;
                 adc_clone
                     .pwr_curr
                     .topic
-                    .set(adc_clone.pwr_curr.fast.get().into())
+                    .set(adc_clone.pwr_curr.fast.get())
                     .await;
+
+                adc_clone.time.set(Timestamp::now()).await;
             }
         });
 
-        adc
+        Ok(adc)
     }
 }

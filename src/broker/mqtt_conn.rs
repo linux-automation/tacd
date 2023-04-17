@@ -33,6 +33,8 @@ use async_tungstenite::tungstenite::{
 };
 use async_tungstenite::WebSocketStream;
 
+use base64::Engine;
+
 use futures_lite::future::race;
 use futures_util::future::Either;
 use futures_util::{FutureExt, SinkExt, StreamExt};
@@ -43,8 +45,7 @@ use mqtt::packet::suback::SubscribeReturnCode;
 use mqtt::TopicFilter;
 use mqtt::{packet::*, Decodable, Encodable};
 
-use sha1::{Digest, Sha1};
-
+use sha1::{digest::Update, Digest, Sha1};
 use tide::http::format_err;
 use tide::http::headers::{HeaderName, CONNECTION, UPGRADE};
 use tide::http::upgrade::Connection;
@@ -216,8 +217,8 @@ async fn handle_connection(
     // - the tx task exiting for some reason
     'connection: loop {
         let ev = race(
-            stream_rx.next().map(|m| Either::Left(m)),
-            tx_done.next().map(|d| Either::Right(d)),
+            stream_rx.next().map(Either::Left),
+            tx_done.next().map(Either::Right),
         )
         .await;
 
@@ -281,7 +282,7 @@ async fn handle_connection(
                     let matcher = filter.get_matcher();
                     let sub_topics = topics
                         .iter()
-                        .filter(|topic| topic.web_readable() && matcher.is_match(&topic.path()));
+                        .filter(|topic| topic.web_readable() && matcher.is_match(topic.path()));
 
                     let mut new_subscribes = Vec::new();
 
@@ -334,8 +335,8 @@ async fn handle_connection(
             }
             VariablePacket::PublishPacket(pub_pkg) => {
                 if pub_pkg.qos() != QoSWithPacketIdentifier::Level0
-                    || pub_pkg.dup() != false
-                    || pub_pkg.retain() != true
+                    || pub_pkg.dup()
+                    || !pub_pkg.retain()
                 {
                     res = Err(anyhow!("QoS, DUP or Retain has non-allowed value"));
                     break 'connection;
@@ -343,8 +344,7 @@ async fn handle_connection(
 
                 let topic = topics
                     .iter()
-                    .filter(|t| t.web_writable() && &t.path()[..] == pub_pkg.topic_name())
-                    .next();
+                    .find(|t| t.web_writable() && &t.path()[..] == pub_pkg.topic_name());
 
                 if let Some(topic) = topic {
                     if let Err(e) = topic.set_from_bytes(pub_pkg.payload()).await {
@@ -452,7 +452,8 @@ pub(super) fn register(server: &mut tide::Server<()>, topics: Arc<Vec<Arc<dyn An
             response.insert_header(UPGRADE, "websocket");
             response.insert_header(CONNECTION, "Upgrade");
             let hash = Sha1::new().chain(header).chain(WEBSOCKET_GUID).finalize();
-            response.insert_header("Sec-Websocket-Accept", base64::encode(&hash[..]));
+            let hash = base64::engine::general_purpose::STANDARD.encode(&hash[..]);
+            response.insert_header("Sec-Websocket-Accept", hash);
             response.insert_header("Sec-Websocket-Version", "13");
 
             if let Some(protocol) = protocol {

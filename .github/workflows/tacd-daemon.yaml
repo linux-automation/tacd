@@ -8,8 +8,19 @@ on:
     branches:
       - main
 
+env:
+  # Make sure cargo commands not only fail on hard errors but also on warnings
+  # so we do not accidentially miss newly introduced warnings.
+  RUSTFLAGS: -D warnings
+
 jobs:
   check:
+    strategy:
+      matrix:
+        features:
+          - ""
+          - "--features=demo_mode --no-default-features"
+          - "--tests"
     name: cargo check
     runs-on: ubuntu-latest
     steps:
@@ -25,6 +36,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
+          args: ${{ matrix.features }}
 
   fmt:
     name: cargo fmt
@@ -43,6 +55,12 @@ jobs:
           args: --all -- --check
 
   clippy:
+    strategy:
+      matrix:
+        features:
+          - ""
+          - "--features=demo_mode --no-default-features"
+          - "--tests"
     name: cargo clippy
     runs-on: ubuntu-latest
     steps:
@@ -58,7 +76,7 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
+          args: ${{ matrix.features }}
           name: Clippy Output
 
   deny:
@@ -67,8 +85,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          command-arguments: --hide-inclusion-graph bans licenses sources
 
   test:
     name: cargo test

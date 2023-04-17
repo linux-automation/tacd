@@ -22,21 +22,21 @@ use async_trait::async_trait;
 
 use embedded_graphics::prelude::*;
 
-use crate::adc::Measurement;
-use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
-
+use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, ButtonEvent, MountableScreen, Screen, Ui, LONG_PRESS};
+use super::{draw_border, MountableScreen, Screen, Ui};
+use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
+use crate::measurement::Measurement;
 
-const SCREEN_TYPE: Screen = Screen::DigOut;
+const SCREEN_TYPE: Screen = Screen::Usb;
 
-pub struct DigOutScreen {
+pub struct UsbScreen {
     highlighted: Arc<Topic<u8>>,
     widgets: Vec<Box<dyn AnyWidget>>,
     buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
 }
 
-impl DigOutScreen {
+impl UsbScreen {
     pub fn new(bb: &mut BrokerBuilder) -> Self {
         Self {
             highlighted: bb.topic_hidden(Some(0)),
@@ -47,13 +47,13 @@ impl DigOutScreen {
 }
 
 #[async_trait]
-impl MountableScreen for DigOutScreen {
+impl MountableScreen for UsbScreen {
     fn is_my_type(&self, screen: Screen) -> bool {
         screen == SCREEN_TYPE
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        draw_border("Digital Out", SCREEN_TYPE, &ui.draw_target).await;
+        draw_border("USB Host", SCREEN_TYPE, &ui.draw_target).await;
 
         self.widgets.push(Box::new(
             DynamicWidget::locator(ui.locator_dance.clone(), ui.draw_target.clone()).await,
@@ -62,21 +62,28 @@ impl MountableScreen for DigOutScreen {
         let ports = [
             (
                 0,
-                "OUT 0",
-                29,
-                &ui.res.dig_io.out_0,
-                &ui.res.adc.out0_volt.topic,
+                "Port 1",
+                28,
+                &ui.res.usb_hub.port1.powered,
+                &ui.res.adc.usb_host1_curr.topic,
             ),
             (
                 1,
-                "OUT 1",
-                44,
-                &ui.res.dig_io.out_1,
-                &ui.res.adc.out1_volt.topic,
+                "Port 2",
+                41,
+                &ui.res.usb_hub.port2.powered,
+                &ui.res.adc.usb_host2_curr.topic,
+            ),
+            (
+                2,
+                "Port 3",
+                54,
+                &ui.res.usb_hub.port3.powered,
+                &ui.res.adc.usb_host3_curr.topic,
             ),
         ];
 
-        for (idx, name, y, status, voltage) in ports {
+        for (idx, name, y, status, current) in ports {
             self.widgets.push(Box::new(
                 DynamicWidget::text(
                     self.highlighted.clone(),
@@ -108,41 +115,49 @@ impl MountableScreen for DigOutScreen {
 
             self.widgets.push(Box::new(
                 DynamicWidget::bar(
-                    voltage.clone(),
+                    current.clone(),
                     ui.draw_target.clone(),
                     Point::new(70, y - 6),
                     45,
                     7,
-                    Box::new(|meas: &Measurement| meas.value.abs() / 5.0),
+                    Box::new(|meas: &Measurement| meas.value / 0.5),
                 )
                 .await,
             ));
         }
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
-        let port_enables = [ui.res.dig_io.out_0.clone(), ui.res.dig_io.out_1.clone()];
+        let port_enables = [
+            ui.res.usb_hub.port1.powered.clone(),
+            ui.res.usb_hub.port2.powered.clone(),
+            ui.res.usb_hub.port3.powered.clone(),
+        ];
         let port_highlight = self.highlighted.clone();
         let screen = ui.screen.clone();
 
         spawn(async move {
             while let Some(ev) = button_events.next().await {
-                let highlighted = *port_highlight.get().await;
+                let highlighted = port_highlight.get().await;
+                let port = &port_enables[highlighted as usize];
 
-                if let ButtonEvent::ButtonOne(dur) = *ev {
-                    if dur > LONG_PRESS {
-                        let port = &port_enables[highlighted as usize];
-
-                        port.modify(|prev| {
-                            Some(Arc::new(!prev.as_deref().copied().unwrap_or(true)))
-                        })
-                        .await;
-                    } else {
-                        port_highlight.set((highlighted + 1) % 2).await;
+                match ev {
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: PressDuration::Long,
+                    } => {
+                        port.modify(|prev| Some(!prev.unwrap_or(true))).await;
                     }
-                }
-
-                if let ButtonEvent::ButtonTwo(_) = *ev {
-                    screen.set(SCREEN_TYPE.next()).await
+                    ButtonEvent::Release {
+                        btn: Button::Lower,
+                        dur: PressDuration::Short,
+                    } => {
+                        port_highlight.set((highlighted + 1) % 3).await;
+                    }
+                    ButtonEvent::Release {
+                        btn: Button::Upper,
+                        dur: _,
+                    } => screen.set(SCREEN_TYPE.next()).await,
+                    ButtonEvent::Press { btn: _ } => {}
                 }
             }
         });

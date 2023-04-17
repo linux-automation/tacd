@@ -15,10 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::collections::VecDeque;
-
-use async_std::sync::{Arc, Mutex};
-
+use async_std::sync::Arc;
 use serde::{de::DeserializeOwned, Serialize};
 
 mod mqtt_conn;
@@ -26,7 +23,6 @@ mod rest;
 mod topic;
 
 pub use mqtt_conn::TopicName;
-use topic::RetainedValue;
 pub use topic::{AnySubscriptionHandle, AnyTopic, Native, SubscriptionHandle, Topic};
 
 pub struct BrokerBuilder {
@@ -40,7 +36,7 @@ impl BrokerBuilder {
 
     /// Register a new topic
     ///
-    /// Please not that you can build topics that perform some kind of
+    /// Please note that you can build topics that perform some kind of
     /// validation by registering a read only topic and a write only topic
     /// with the same path.
     /// This way your application can subscribe to events on the wo topic,
@@ -54,7 +50,16 @@ impl BrokerBuilder {
     /// * `web_writable` - Should this resource be externally writable?
     /// * `initial` - Retained value to return before set() was called the
     ///    first time. Or None
-    pub fn topic<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
+    /// * `retained_length` - Number of previously set values to retain
+    ///    and push out when subscribing to the serialized stream.
+    ///    This will usually be 1 so that the most recent value is available
+    ///    when doing a GET request to the topic via the REST API.
+    ///    It can also be 0 for topics that are purely transient events like
+    ///    button presses that go away as soon as they happen.
+    ///    It can also be a larger value to store up some history that should
+    ///    be pushed out to new (outside) subscribers as soon as they subscribe,
+    ///    to e.g. pre-populate a graph in the web interface.
+    pub fn topic<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
         web_readable: bool,
@@ -62,26 +67,13 @@ impl BrokerBuilder {
         initial: Option<E>,
         retained_length: usize,
     ) -> Arc<Topic<E>> {
-        let path = TopicName::new(path).unwrap();
-        let retained = {
-            let mut retained = VecDeque::with_capacity(retained_length + 1);
-
-            if let Some(v) = initial {
-                retained.push_back(RetainedValue::new(Arc::new(v)))
-            }
-
-            Mutex::new(retained)
-        };
-
-        let topic = Arc::new(Topic {
+        let topic = Arc::new(Topic::new(
             path,
             web_readable,
             web_writable,
-            senders: Mutex::new(Vec::new()),
-            retained,
+            initial,
             retained_length,
-            senders_serialized: Mutex::new(Vec::new()),
-        });
+        ));
 
         self.topics.push(topic.clone());
 
@@ -89,7 +81,7 @@ impl BrokerBuilder {
     }
 
     /// Register a new topic that is only readable from the outside
-    pub fn topic_ro<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
+    pub fn topic_ro<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
         initial: Option<E>,
@@ -98,7 +90,7 @@ impl BrokerBuilder {
     }
 
     /// Register a new topic that is both readable and writable from the outside
-    pub fn topic_rw<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
+    pub fn topic_rw<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
         initial: Option<E>,
@@ -107,7 +99,7 @@ impl BrokerBuilder {
     }
 
     /// Register a new topic that is only writable from the outside
-    pub fn topic_wo<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
+    pub fn topic_wo<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
         initial: Option<E>,
@@ -116,11 +108,11 @@ impl BrokerBuilder {
     }
 
     /// Register a new topic that can only be used internally
-    pub fn topic_hidden<E: Serialize + DeserializeOwned + Sync + Send + 'static>(
+    pub fn topic_hidden<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(&"/hidden", false, false, initial, 1)
+        self.topic("/hidden", false, false, initial, 1)
     }
 
     /// Finish building the broker

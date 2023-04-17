@@ -15,7 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 
 import Box from "@cloudscape-design/components/box";
 import { BoxProps } from "@cloudscape-design/components/box";
@@ -194,62 +194,6 @@ export function MqttButton<T>(props: MqttButtonProps<T>) {
       >
         {props.children}
       </Button>
-    </ApiPicker>
-  );
-}
-
-interface MqttDurationButtonProps<T> {
-  topic: string;
-  children: React.ReactNode;
-  format: (dur: number) => T;
-}
-
-export function MqttDurationButton<T>(props: MqttDurationButtonProps<T>) {
-  // eslint-disable-next-line
-  const [_settled, _payload, setPayload] = useMqttState<T>(props.topic);
-  const button = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    let btn = button.current;
-
-    let start_time: null | number = null;
-
-    function pointerdown(ev: PointerEvent) {
-      start_time = Date.now();
-    }
-
-    function pointerup(ev: MouseEvent) {
-      console.log(ev);
-      let duration = 100;
-
-      if (start_time !== null) {
-        duration = Date.now() - start_time;
-      }
-
-      setPayload(props.format(duration));
-    }
-
-    if (btn != null) {
-      btn.addEventListener("pointerdown", pointerdown);
-      btn.addEventListener("click", pointerup);
-
-      return () => {
-        if (btn != null) {
-          btn.removeEventListener("pointerdown", pointerdown);
-          btn.removeEventListener("click", pointerup);
-        }
-      };
-    }
-  }, [button]);
-
-  return (
-    <ApiPicker topic={props.topic}>
-      <button
-        className="awsui_button_vjswe_1hr3t_101 awsui_variant-primary_vjswe_1hr3t_206"
-        ref={button}
-      >
-        <span className="awsui_content_vjswe_1hr3t_97">{props.children}</span>
-      </button>
     </ApiPicker>
   );
 }

@@ -20,22 +20,22 @@ use async_std::sync::Arc;
 use async_std::task::spawn;
 use serde::{Deserialize, Serialize};
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 pub use futures_lite::future::race;
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 pub use log::warn;
 
 use super::{Connection, Result};
 use crate::broker::{BrokerBuilder, Topic};
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 mod manager;
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 mod service;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ServiceStatus {
     pub active_state: String,
     pub sub_state: String,
@@ -43,7 +43,7 @@ pub struct ServiceStatus {
     pub active_exit_ts: u64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum ServiceAction {
     Start,
     Stop,
@@ -65,7 +65,7 @@ pub struct Systemd {
 }
 
 impl ServiceStatus {
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     async fn get() -> Result<Self> {
         Ok(Self {
             active_state: "actvive".to_string(),
@@ -75,7 +75,7 @@ impl ServiceStatus {
         })
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     async fn get<'a>(unit: &service::UnitProxy<'a>) -> Result<Self> {
         Ok(Self {
             active_state: unit.active_state().await?,
@@ -94,7 +94,7 @@ impl Service {
         }
     }
 
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     async fn new(
         bb: &mut BrokerBuilder,
         _conn: Arc<Connection>,
@@ -108,7 +108,7 @@ impl Service {
         this
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     async fn new(
         bb: &mut BrokerBuilder,
         conn: Arc<Connection>,
@@ -129,21 +129,22 @@ impl Service {
             .await
             .unwrap();
 
-        let mut active_state_stream = unit.receive_active_state_changed().await.map(|_| ());
-        let mut sub_state_stream = unit.receive_sub_state_changed().await.map(|_| ());
-        let mut active_enter_stream = unit
-            .receive_active_enter_timestamp_changed()
-            .await
-            .map(|_| ());
-        let mut active_exit_stream = unit
-            .receive_active_exit_timestamp_changed()
-            .await
-            .map(|_| ());
-
         let unit_task = unit.clone();
         let status_topic = this.status.clone();
 
         spawn(async move {
+            let mut active_state_stream =
+                unit_task.receive_active_state_changed().await.map(|_| ());
+            let mut sub_state_stream = unit_task.receive_sub_state_changed().await.map(|_| ());
+            let mut active_enter_stream = unit_task
+                .receive_active_enter_timestamp_changed()
+                .await
+                .map(|_| ());
+            let mut active_exit_stream = unit_task
+                .receive_active_exit_timestamp_changed()
+                .await
+                .map(|_| ());
+
             loop {
                 let status = ServiceStatus::get(&unit_task).await.unwrap();
                 status_topic.set(status).await;
@@ -161,7 +162,7 @@ impl Service {
 
         spawn(async move {
             while let Some(action) = action_reqs.next().await {
-                let res = match *action {
+                let res = match action {
                     ServiceAction::Start => unit.start("replace").await,
                     ServiceAction::Stop => unit.stop("replace").await,
                     ServiceAction::Restart => unit.restart("replace").await,
@@ -181,20 +182,20 @@ impl Service {
 }
 
 impl Systemd {
-    #[cfg(feature = "stub_out_dbus")]
+    #[cfg(feature = "demo_mode")]
     pub async fn handle_reboot(reboot: Arc<Topic<bool>>, _conn: Arc<Connection>) {
         let (mut reboot_reqs, _) = reboot.subscribe_unbounded().await;
 
         spawn(async move {
             while let Some(req) = reboot_reqs.next().await {
-                if *req {
+                if req {
                     println!("Asked to reboot but don't feel like it");
                 }
             }
         });
     }
 
-    #[cfg(not(feature = "stub_out_dbus"))]
+    #[cfg(not(feature = "demo_mode"))]
     pub async fn handle_reboot(reboot: Arc<Topic<bool>>, conn: Arc<Connection>) {
         let (mut reboot_reqs, _) = reboot.subscribe_unbounded().await;
 
@@ -202,7 +203,7 @@ impl Systemd {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();
 
             while let Some(req) = reboot_reqs.next().await {
-                if *req {
+                if req {
                     if let Err(e) = manager.reboot().await {
                         warn!("Failed to trigger reboot: {}", e);
                     }

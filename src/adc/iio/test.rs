@@ -16,10 +16,12 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use async_std::sync::Arc;
+
+use crate::measurement::{Measurement, Timestamp};
 
 const NO_TRANSIENT: u32 = u32::MAX;
 
@@ -55,8 +57,14 @@ impl CalibratedChannel {
     pub fn try_get_multiple<const N: usize>(
         &self,
         channels: [&Self; N],
-    ) -> Option<(Instant, [f32; N])> {
-        let mut results = [0.0; N];
+    ) -> Option<[Measurement; N]> {
+        let mut ts = Timestamp::now();
+
+        if self.stall.load(Ordering::Relaxed) {
+            *ts -= Duration::from_millis(500)
+        }
+
+        let mut results = [Measurement { ts, value: 0.0 }; N];
 
         for i in 0..N {
             // If a transient is scheduled (channels[i].transient != NO_TRANSIENT)
@@ -67,23 +75,17 @@ impl CalibratedChannel {
                 transient => transient,
             };
 
-            results[i] = f32::from_bits(val_u32);
+            results[i].value = f32::from_bits(val_u32);
         }
 
-        let mut ts = Instant::now();
-
-        if self.stall.load(Ordering::Relaxed) {
-            ts -= Duration::from_millis(500)
-        }
-
-        Some((ts, results))
+        Some(results)
     }
 
-    pub fn try_get(&self) -> Option<(Instant, f32)> {
-        self.try_get_multiple([self]).map(|(ts, [val])| (ts, val))
+    pub fn try_get(&self) -> Option<Measurement> {
+        self.try_get_multiple([self]).map(|res| res[0])
     }
 
-    pub fn get(&self) -> (Instant, f32) {
+    pub fn get(&self) -> Measurement {
         loop {
             if let Some(r) = self.try_get() {
                 break r;
@@ -109,14 +111,14 @@ pub struct IioThread {
 }
 
 impl IioThread {
-    pub fn new() -> Arc<Self> {
+    pub async fn new() -> Result<Arc<Self>> {
         let mut channels = Vec::new();
 
         for name in CHANNELS {
             channels.push((*name, CalibratedChannel::new()))
         }
 
-        Arc::new(Self { channels })
+        Ok(Arc::new(Self { channels }))
     }
 
     pub fn get_channel(self: Arc<Self>, ch_name: &str) -> Result<CalibratedChannel> {

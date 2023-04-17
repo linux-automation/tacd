@@ -19,7 +19,7 @@ use super::ConnectionBuilder;
 
 pub struct Tacd {}
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 #[zbus::dbus_interface(name = "de.pengutronix.tacd1")]
 impl Tacd {
     fn get_version(&mut self) -> String {

@@ -19,13 +19,19 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::{block_on, spawn, spawn_blocking};
 
-#[cfg(any(test, feature = "stub_out_gpio"))]
+#[cfg(test)]
 mod gpio {
-    mod stub;
-    pub use stub::*;
+    mod test;
+    pub use test::*;
 }
 
-#[cfg(not(any(test, feature = "stub_out_gpio")))]
+#[cfg(feature = "demo_mode")]
+mod gpio {
+    mod demo_mode;
+    pub use demo_mode::*;
+}
+
+#[cfg(not(any(test, feature = "demo_mode")))]
 mod gpio {
     mod hardware;
     pub use hardware::*;
@@ -65,7 +71,7 @@ fn handle_line_wo(
         let (mut src, _) = topic_task.subscribe_unbounded().await;
 
         while let Some(ev) = src.next().await {
-            dst.set_value((*ev ^ inverted) as _).unwrap();
+            dst.set_value((ev ^ inverted) as _).unwrap();
         }
     });
 

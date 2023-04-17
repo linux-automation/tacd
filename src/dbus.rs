@@ -19,7 +19,7 @@ use async_std::sync::Arc;
 
 use crate::broker::BrokerBuilder;
 
-#[cfg(feature = "stub_out_dbus")]
+#[cfg(feature = "demo_mode")]
 mod zb {
     pub type Result<T> = std::result::Result<T, ()>;
 
@@ -45,21 +45,21 @@ mod zb {
     }
 }
 
-#[cfg(not(feature = "stub_out_dbus"))]
+#[cfg(not(feature = "demo_mode"))]
 mod zb {
     pub use zbus::*;
 }
 
 use zb::{Connection, ConnectionBuilder, Result};
 
-mod networkmanager;
-mod rauc;
-mod systemd;
-mod tacd;
+pub mod networkmanager;
+pub mod rauc;
+pub mod systemd;
+pub mod tacd;
 
-use self::systemd::Systemd;
-pub use networkmanager::{LinkInfo, Network};
-pub use rauc::{Progress, Rauc};
+pub use self::systemd::Systemd;
+pub use networkmanager::Network;
+pub use rauc::Rauc;
 pub use tacd::Tacd;
 
 /// Bunch together everything that uses a DBus system connection here, even
@@ -67,7 +67,7 @@ pub use tacd::Tacd;
 pub struct DbusSession {
     pub network: Network,
     pub rauc: Rauc,
-    pub system: Systemd,
+    pub systemd: Systemd,
 }
 
 impl DbusSession {
@@ -84,7 +84,7 @@ impl DbusSession {
         Self {
             network: Network::new(bb, &conn).await,
             rauc: Rauc::new(bb, &conn).await,
-            system: Systemd::new(bb, &conn).await,
+            systemd: Systemd::new(bb, &conn).await,
         }
     }
 }
