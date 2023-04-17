@@ -47,7 +47,7 @@ impl LineHandle {
                     .set(val != 0);
                 iio_thread.get_channel("iobus-volt").unwrap().set(val != 0);
             }
-            "IO0" => {
+            "DUT_PWR_EN" => {
                 iio_thread
                     .clone()
                     .get_channel("pwr-curr")

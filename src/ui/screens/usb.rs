@@ -20,7 +20,9 @@ use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
 
-use embedded_graphics::prelude::*;
+use embedded_graphics::{
+    mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
+};
 
 use super::buttons::*;
 use super::widgets::*;
@@ -29,6 +31,8 @@ use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
 use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::Usb;
+const CURRENT_LIMIT_PER_PORT: f32 = 0.5;
+const CURRENT_LIMIT_TOTAL: f32 = 0.7;
 
 pub struct UsbScreen {
     highlighted: Arc<Topic<u8>>,
@@ -63,32 +67,54 @@ impl MountableScreen for UsbScreen {
             (
                 0,
                 "Port 1",
-                28,
+                92,
                 &ui.res.usb_hub.port1.powered,
                 &ui.res.adc.usb_host1_curr.topic,
             ),
             (
                 1,
                 "Port 2",
-                41,
+                112,
                 &ui.res.usb_hub.port2.powered,
                 &ui.res.adc.usb_host2_curr.topic,
             ),
             (
                 2,
                 "Port 3",
-                54,
+                132,
                 &ui.res.usb_hub.port3.powered,
                 &ui.res.adc.usb_host3_curr.topic,
             ),
         ];
 
+        {
+            let mut draw_target = ui.draw_target.lock().await;
+
+            let ui_text_style: MonoTextStyle<BinaryColor> =
+                MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+            Text::new("Total", Point::new(8, 52), ui_text_style)
+                .draw(&mut *draw_target)
+                .unwrap();
+        }
+
+        self.widgets.push(Box::new(
+            DynamicWidget::bar(
+                ui.res.adc.usb_host_curr.topic.clone(),
+                ui.draw_target.clone(),
+                Point::new(130, 52 - 14),
+                90,
+                18,
+                Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_TOTAL),
+            )
+            .await,
+        ));
         for (idx, name, y, status, current) in ports {
             self.widgets.push(Box::new(
                 DynamicWidget::text(
                     self.highlighted.clone(),
                     ui.draw_target.clone(),
-                    Point::new(0, y),
+                    Point::new(8, y),
                     Box::new(move |highlight: &u8| {
                         format!(
                             "{} {}",
@@ -104,7 +130,7 @@ impl MountableScreen for UsbScreen {
                 DynamicWidget::indicator(
                     status.clone(),
                     ui.draw_target.clone(),
-                    Point::new(54, y - 7),
+                    Point::new(100, y - 10),
                     Box::new(|state: &bool| match *state {
                         true => IndicatorState::On,
                         false => IndicatorState::Off,
@@ -117,10 +143,10 @@ impl MountableScreen for UsbScreen {
                 DynamicWidget::bar(
                     current.clone(),
                     ui.draw_target.clone(),
-                    Point::new(70, y - 6),
-                    45,
-                    7,
-                    Box::new(|meas: &Measurement| meas.value / 0.5),
+                    Point::new(130, y - 14),
+                    90,
+                    18,
+                    Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_PER_PORT),
                 )
                 .await,
             ));

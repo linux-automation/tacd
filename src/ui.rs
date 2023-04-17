@@ -23,6 +23,7 @@ use async_std::task::{sleep, spawn};
 use tide::{Response, Server};
 
 use crate::broker::{BrokerBuilder, Topic};
+use crate::led::{BlinkPattern, BlinkPatternBuilder};
 
 mod buttons;
 mod draw_fb;
@@ -38,8 +39,10 @@ pub struct UiResources {
     pub dig_io: crate::digital_io::DigitalIo,
     pub dut_pwr: crate::dut_power::DutPwrThread,
     pub iobus: crate::iobus::IoBus,
+    pub led: crate::led::Led,
     pub network: crate::dbus::Network,
     pub rauc: crate::dbus::Rauc,
+    pub regulators: crate::regulators::Regulators,
     pub system: crate::system::System,
     pub systemd: crate::dbus::Systemd,
     pub temperatures: crate::temperatures::Temperatures,
@@ -113,6 +116,35 @@ impl Ui {
                     Some(true) => {}
                     Some(false) => continue,
                     None => break,
+                }
+            }
+        });
+
+        // Blink the status LED when locator is active
+        let locator_task = locator.clone();
+        let led_status_pattern = res.led.status.clone();
+        let led_status_color = res.led.status_color.clone();
+        spawn(async move {
+            let (mut rx, _) = locator_task.subscribe_unbounded().await;
+
+            let pattern_locator_on = BlinkPatternBuilder::new(0.0)
+                .fade_to(1.0, Duration::from_millis(100))
+                .stay_for(Duration::from_millis(300))
+                .fade_to(0.0, Duration::from_millis(100))
+                .stay_for(Duration::from_millis(500))
+                .forever();
+
+            let pattern_locator_off = BlinkPattern::solid(1.0);
+
+            while let Some(ev) = rx.next().await {
+                if ev {
+                    // White blinking when locator is on
+                    led_status_color.set((1.0, 1.0, 1.0)).await;
+                    led_status_pattern.set(pattern_locator_on.clone()).await;
+                } else {
+                    // Green light when locator is off
+                    led_status_color.set((0.0, 1.0, 0.0)).await;
+                    led_status_pattern.set(pattern_locator_off.clone()).await;
                 }
             }
         });

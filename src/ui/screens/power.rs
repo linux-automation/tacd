@@ -61,7 +61,7 @@ impl MountableScreen for PowerScreen {
             DynamicWidget::text(
                 ui.res.adc.pwr_volt.topic.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 26),
+                Point::new(8, 52),
                 Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
             )
             .await,
@@ -71,9 +71,9 @@ impl MountableScreen for PowerScreen {
             DynamicWidget::bar(
                 ui.res.adc.pwr_volt.topic.clone(),
                 ui.draw_target.clone(),
-                Point::new(70, 26 - 6),
-                45,
-                7,
+                Point::new(120, 52 - 14),
+                100,
+                18,
                 Box::new(|meas: &Measurement| meas.value / 48.0),
             )
             .await,
@@ -83,7 +83,7 @@ impl MountableScreen for PowerScreen {
             DynamicWidget::text(
                 ui.res.adc.pwr_curr.topic.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 36),
+                Point::new(8, 72),
                 Box::new(|meas: &Measurement| format!("I: {:-6.3}A", meas.value)),
             )
             .await,
@@ -93,9 +93,9 @@ impl MountableScreen for PowerScreen {
             DynamicWidget::bar(
                 ui.res.adc.pwr_curr.topic.clone(),
                 ui.draw_target.clone(),
-                Point::new(70, 36 - 6),
-                45,
-                7,
+                Point::new(120, 72 - 14),
+                100,
+                18,
                 Box::new(|meas: &Measurement| meas.value / 48.0),
             )
             .await,
@@ -105,7 +105,7 @@ impl MountableScreen for PowerScreen {
             DynamicWidget::text(
                 ui.res.dut_pwr.state.clone(),
                 ui.draw_target.clone(),
-                Point::new(0, 47),
+                Point::new(8, 92),
                 Box::new(|state: &OutputState| match state {
                     OutputState::On => "On".into(),
                     OutputState::Off => "Off".into(),
@@ -124,7 +124,7 @@ impl MountableScreen for PowerScreen {
             DynamicWidget::indicator(
                 ui.res.dut_pwr.state.clone(),
                 ui.draw_target.clone(),
-                Point::new(90, 47 - 6),
+                Point::new(120, 92 - 10),
                 Box::new(|state: &OutputState| match state {
                     OutputState::On => IndicatorState::On,
                     OutputState::Off | OutputState::OffFloating => IndicatorState::Off,

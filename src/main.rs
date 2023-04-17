@@ -25,7 +25,9 @@ mod dut_power;
 mod http_server;
 mod iobus;
 mod journal;
+mod led;
 mod measurement;
+mod regulators;
 mod system;
 mod temperatures;
 mod ui;
@@ -39,6 +41,8 @@ use digital_io::DigitalIo;
 use dut_power::DutPwrThread;
 use http_server::HttpServer;
 use iobus::IoBus;
+use led::Led;
+use regulators::Regulators;
 use system::System;
 use temperatures::Temperatures;
 use ui::{Ui, UiResources};
@@ -55,11 +59,18 @@ async fn main() -> Result<(), std::io::Error> {
     let mut bb = BrokerBuilder::new();
 
     // Expose hardware on the TAC via the broker framework.
+    let led = Led::new(&mut bb);
     let adc = Adc::new(&mut bb).await.unwrap();
-    let dut_pwr = DutPwrThread::new(&mut bb, adc.pwr_volt.clone(), adc.pwr_curr.clone())
-        .await
-        .unwrap();
-    let dig_io = DigitalIo::new(&mut bb);
+    let dut_pwr = DutPwrThread::new(
+        &mut bb,
+        adc.pwr_volt.clone(),
+        adc.pwr_curr.clone(),
+        led.dut_pwr.clone(),
+    )
+    .await
+    .unwrap();
+    let dig_io = DigitalIo::new(&mut bb, led.out_0.clone(), led.out_1.clone());
+    let regulators = Regulators::new(&mut bb);
     let temperatures = Temperatures::new(&mut bb);
     let usb_hub = UsbHub::new(&mut bb);
 
@@ -67,7 +78,7 @@ async fn main() -> Result<(), std::io::Error> {
     // to them via HTTP / DBus APIs.
     let iobus = IoBus::new(&mut bb);
     let (network, rauc, systemd) = {
-        let dbus = DbusSession::new(&mut bb).await;
+        let dbus = DbusSession::new(&mut bb, led.eth_dut.clone(), led.eth_lab.clone()).await;
 
         (dbus.network, dbus.rauc, dbus.systemd)
     };
@@ -101,6 +112,8 @@ async fn main() -> Result<(), std::io::Error> {
             dig_io,
             dut_pwr,
             iobus,
+            led,
+            regulators,
             system,
             temperatures,
             usb_hub,

@@ -2380,6 +2380,7 @@ dependencies = [
  "log",
  "mqtt-protocol",
  "nix 0.26.2",
+ "numtoa",
  "png",
  "rand 0.8.5",
  "serde",

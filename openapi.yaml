@@ -78,6 +78,55 @@ paths:
         '400':
           description: The value could not be parsed into a boolean
 
+  /v1/tac/led/{led}/pattern:
+    parameters:
+      - name: led
+        description: The name of the respective LED
+        required: true
+        schema:
+          type: string
+          enum:
+            - out_0
+            - out_1
+            - dut_pwr
+            - eth_dut
+            - eth_lab
+            - status
+
+    get:
+      summary: Get the current blink pattern of the LED
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlinkPattern'
+
+  /v1/tac/led/{led}/color:
+    parameters:
+      - name: led
+        description: The name of the respective LED
+        required: true
+        schema:
+          type: string
+          enum:
+            - status
+
+    get:
+      summary: Get the current RGB color of the LED
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: number
+                minItems: 3
+                maxItems: 3
+
   /v1/dut/powered:
     get:
       summary: Get the current Power Switch state
@@ -276,7 +325,7 @@ paths:
             - tx
     get:
       summary: Check if the selected direction is activated
-      tags: [Input/Output]
+      tags: [Input/Output, UART]
       responses:
         '200':
           content:
@@ -286,7 +335,7 @@ paths:
 
     put:
       summary: Activate/Deactivate the direction
-      tags: [Input/Output]
+      tags: [Input/Output, UART]
       requestBody:
         content:
           application/json:
@@ -295,6 +344,31 @@ paths:
       responses:
         '204':
           description: The direction was enabled/disabled
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/uart/powered:
+    get:
+      summary: Check if the power supply on the DUT UART connector is turned on
+      tags: [Input/Output, UART]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
+    put:
+      summary: Turn the power supply on the DUT UART connector on/off
+      tags: [Input/Output, UART]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: The UART supply was turned on/off
         '400':
           description: The value could not be parsed as boolean
 
@@ -646,6 +720,26 @@ components:
       oneOf:
         - required: [Press]
         - required: [Release]
+
+    BlinkPattern:
+      type: object
+      properties:
+        repetitions:
+          type: integer
+        steps:
+          type: array
+          items:
+            type: array
+            oneOf:
+              - type: number
+              - type: object
+                properties:
+                  secs:
+                    type: integer
+                  nanos:
+                    type: integer
+            minItems: 2
+            maxItems: 2
 
     DutPwrStatus:
       type: string
