@@ -29,6 +29,7 @@ import DashboardJournal from "./DashboardJournal";
 import DashboardTac from "./DashboardTac";
 import LandingPage from "./LandingPage";
 import SettingsLabgrid from "./SettingsLabgrid";
+import Setup from "./Setup";
 
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
@@ -45,6 +46,7 @@ root.render(
           <Route path="/settings/labgrid" element={<SettingsLabgrid />} />
           <Route path="/docs/api" element={<ApiDocs />} />
         </Route>
+        <Route path="/setup" element={<Setup />} />
       </Routes>
     </HashRouter>
   </React.StrictMode>

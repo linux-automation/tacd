@@ -28,6 +28,7 @@ mod journal;
 mod led;
 mod measurement;
 mod regulators;
+mod setup_mode;
 mod system;
 mod temperatures;
 mod ui;
@@ -43,6 +44,7 @@ use http_server::HttpServer;
 use iobus::IoBus;
 use led::Led;
 use regulators::Regulators;
+use setup_mode::SetupMode;
 use system::System;
 use temperatures::Temperatures;
 use ui::{Ui, UiResources};
@@ -96,6 +98,9 @@ async fn main() -> Result<(), std::io::Error> {
     // interface and config files that may be edited inside the web ui.
     let mut http_server = HttpServer::new();
 
+    // Allow editing some aspects of the TAC configuration when in "setup mode".
+    let setup_mode = SetupMode::new(&mut bb, &mut http_server.server);
+
     // Expose a live log of the TAC's systemd journal so it can be viewed
     // in the web interface.
     journal::serve(&mut http_server.server);
@@ -113,6 +118,7 @@ async fn main() -> Result<(), std::io::Error> {
             network,
             rauc,
             regulators,
+            setup_mode,
             system,
             systemd,
             temperatures,

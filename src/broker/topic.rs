@@ -89,6 +89,7 @@ pub struct Topic<E> {
     path: TopicName,
     web_readable: bool,
     web_writable: bool,
+    persistent: bool,
     retained_length: usize,
     inner: Mutex<TopicInner<E>>,
 }
@@ -151,6 +152,7 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
         path: &str,
         web_readable: bool,
         web_writable: bool,
+        persistent: bool,
         initial: Option<E>,
         retained_length: usize,
     ) -> Self {
@@ -162,13 +164,14 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
             path,
             web_readable,
             web_writable,
+            persistent,
             retained_length,
             inner,
         }
     }
 
     pub fn anonymous(initial: Option<E>) -> Arc<Self> {
-        Arc::new(Self::new("/hidden", false, false, initial, 1))
+        Arc::new(Self::new("/hidden", false, false, false, initial, 1))
     }
 
     /// Set a new value for the topic and notify subscribers with the inner
@@ -325,12 +328,16 @@ pub trait AnyTopic: Sync + Send {
     fn path(&self) -> &TopicName;
     fn web_readable(&self) -> bool;
     fn web_writable(&self) -> bool;
+    fn persistent(&self) -> bool;
     fn set_from_bytes(&self, msg: &[u8]) -> serde_json::Result<()>;
+    fn set_from_json_value(&self, msg: serde_json::Value) -> serde_json::Result<()>;
     fn subscribe_as_bytes(
         self: Arc<Self>,
         sender: Sender<(TopicName, Arc<[u8]>)>,
+        enqueue_retained: bool,
     ) -> Box<dyn AnySubscriptionHandle>;
     fn try_get_as_bytes(&self) -> Option<Arc<[u8]>>;
+    fn try_get_json_value(&self) -> Option<serde_json::Value>;
 }
 
 impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic for Topic<E> {
@@ -346,11 +353,26 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
         self.web_writable
     }
 
+    fn persistent(&self) -> bool {
+        self.persistent
+    }
+
     /// De-Serialize a message and set the topic to the resulting value
     ///
     /// Returns an Err if deserialization failed.
     fn set_from_bytes(&self, msg: &[u8]) -> serde_json::Result<()> {
         let msg = serde_json::from_slice(msg)?;
+        self.set(msg);
+        Ok(())
+    }
+
+    /// Take a value that was deserialized as serde_json value and set the
+    /// topic to it.
+    ///
+    /// Returns an Err if de-structuring the generic value into this specific
+    /// type failed.
+    fn set_from_json_value(&self, msg: serde_json::Value) -> serde_json::Result<()> {
+        let msg = serde_json::from_value(msg)?;
         self.set(msg);
         Ok(())
     }
@@ -364,27 +386,31 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
     /// # Arguments:
     ///
     /// * `sender` - The sender side of the queue to add
+    /// * `enqueue_retained` - whether to enqueue the currently retained values
     fn subscribe_as_bytes(
         self: Arc<Self>,
         sender: Sender<(TopicName, Arc<[u8]>)>,
+        enqueue_retained: bool,
     ) -> Box<dyn AnySubscriptionHandle> {
         let mut inner = self.inner.lock().unwrap();
         let token = Unique::new();
         let mut should_add = true;
 
-        // If there are retained values try to enqueue them right away.
-        // It that fails mimic what set_arc_with_retain_lock would do.
-        for val in inner.retained.iter_mut() {
-            match sender.try_send((self.path.clone(), val.serialized())) {
-                Ok(_) => {}
-                Err(TrySendError::Full(_)) => {
-                    sender.close();
-                    should_add = false;
-                    break;
-                }
-                Err(TrySendError::Closed(_)) => {
-                    should_add = false;
-                    break;
+        if enqueue_retained {
+            // If there are retained values try to enqueue them right away.
+            // It that fails mimic what set_arc_with_retain_lock would do.
+            for val in inner.retained.iter_mut() {
+                match sender.try_send((self.path.clone(), val.serialized())) {
+                    Ok(_) => {}
+                    Err(TrySendError::Full(_)) => {
+                        sender.close();
+                        should_add = false;
+                        break;
+                    }
+                    Err(TrySendError::Closed(_)) => {
+                        should_add = false;
+                        break;
+                    }
                 }
             }
         }
@@ -413,6 +439,18 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
             .back_mut()
             .map(|v| v.serialized())
     }
+
+    /// Try to get the current value as serde_json value
+    ///
+    /// Returns None if no value was set yet.
+    fn try_get_json_value(&self) -> Option<serde_json::Value> {
+        self.inner
+            .lock()
+            .unwrap()
+            .retained
+            .back()
+            .map(|v| serde_json::to_value(v.native()).unwrap())
+    }
 }
 
 #[cfg(test)]
@@ -430,7 +468,7 @@ mod tests {
     }
 
     fn new_topic<E: Serialize + DeserializeOwned + Clone>() -> Arc<Topic<E>> {
-        Arc::new(Topic::new("/", true, true, None, 1))
+        Arc::new(Topic::new("/", true, true, true, None, 1))
     }
 
     fn collect_native<E: Clone>(recv: Receiver<E>) -> Vec<E> {
@@ -461,17 +499,17 @@ mod tests {
 
         let (ser_1, ser_handle_1) = {
             let (tx, rx) = unbounded();
-            (rx, topic.clone().subscribe_as_bytes(tx))
+            (rx, topic.clone().subscribe_as_bytes(tx, true))
         };
 
         let (ser_2, ser_handle_2) = {
             let (tx, rx) = unbounded();
-            (rx, topic.clone().subscribe_as_bytes(tx))
+            (rx, topic.clone().subscribe_as_bytes(tx, true))
         };
 
         let (ser_3, ser_handle_3) = {
             let (tx, rx) = unbounded();
-            (rx, topic.clone().subscribe_as_bytes(tx))
+            (rx, topic.clone().subscribe_as_bytes(tx, true))
         };
 
         assert_eq!(topic.inner.lock().unwrap().senders.len(), 3);

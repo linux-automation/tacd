@@ -43,6 +43,7 @@ pub struct UiResources {
     pub network: crate::dbus::Network,
     pub rauc: crate::dbus::Rauc,
     pub regulators: crate::regulators::Regulators,
+    pub setup_mode: crate::setup_mode::SetupMode,
     pub system: crate::system::System,
     pub systemd: crate::dbus::Systemd,
     pub temperatures: crate::temperatures::Temperatures,
@@ -79,7 +80,7 @@ impl Ui {
         let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
         let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));
-        let buttons = bb.topic("/v1/tac/display/buttons", true, true, None, 0);
+        let buttons = bb.topic("/v1/tac/display/buttons", true, true, false, None, 0);
 
         // Initialize all the screens now so they can be mounted later
         let screens: Vec<Box<dyn MountableScreen>> = screens::init(&res, &screen, &buttons);
