@@ -73,11 +73,9 @@ fn handle_pattern(
     let topic = bb.topic_ro(&format!("/v1/tac/led/{topic_name}/pattern"), None);
 
     if let Some(led) = get_led_checked(hardware_name) {
-        let topic_task = topic.clone();
+        let (mut rx, _) = topic.clone().subscribe_unbounded();
 
         spawn(async move {
-            let (mut rx, _) = topic_task.subscribe_unbounded().await;
-
             while let Some(pattern) = rx.next().await {
                 if let Err(e) = led.set_pattern(pattern) {
                     warn!("Failed to set LED pattern: {}", e);
@@ -97,11 +95,9 @@ fn handle_color(
     let topic = bb.topic_ro(&format!("/v1/tac/led/{topic_name}/color"), None);
 
     if let Some(led) = get_led_checked(hardware_name) {
-        let topic_task = topic.clone();
+        let (mut rx, _) = topic.clone().subscribe_unbounded();
 
         spawn(async move {
-            let (mut rx, _) = topic_task.subscribe_unbounded().await;
-
             while let Some((r, g, b)) = rx.next().await {
                 let max = led.max_brightness().unwrap();
 

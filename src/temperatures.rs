@@ -20,7 +20,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use async_std::sync::Arc;
-use async_std::task::{block_on, spawn_blocking};
+use async_std::task::spawn_blocking;
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::Measurement;
@@ -83,7 +83,7 @@ impl Temperatures {
                     .unwrap();
 
                 let meas = Measurement::now(val as f32 / 1000.0);
-                block_on(soc_temperature_thread.set(meas));
+                soc_temperature_thread.set(meas);
 
                 sleep(UPDATE_INTERVAL);
             }

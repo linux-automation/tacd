@@ -106,15 +106,15 @@ async fn main() -> Result<(), std::io::Error> {
     let ui = {
         let resources = UiResources {
             adc,
-            network,
-            rauc,
-            systemd,
             dig_io,
             dut_pwr,
             iobus,
             led,
+            network,
+            rauc,
             regulators,
             system,
+            systemd,
             temperatures,
             usb_hub,
         };

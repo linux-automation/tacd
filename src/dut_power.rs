@@ -255,26 +255,25 @@ fn setup_labgrid_compat(
     let compat_request = bb.topic_wo::<u8>("/v1/dut/powered/compat", None);
     let compat_response = bb.topic_ro::<u8>("/v1/dut/powered/compat", None);
 
-    task::spawn(async move {
-        let (mut request_stream, _) = compat_request.subscribe_unbounded().await;
+    let (mut state_stream, _) = state.subscribe_unbounded();
+    let (mut compat_request_stream, _) = compat_request.subscribe_unbounded();
 
-        while let Some(req) = request_stream.next().await {
+    task::spawn(async move {
+        while let Some(req) = compat_request_stream.next().await {
             match req {
-                0 => request.set(OutputRequest::Off).await,
-                1 => request.set(OutputRequest::On).await,
+                0 => request.set(OutputRequest::Off),
+                1 => request.set(OutputRequest::On),
                 _ => {}
             }
         }
     });
 
     task::spawn(async move {
-        let (mut state_stream, _) = state.subscribe_unbounded().await;
-
         while let Some(state) = state_stream.next().await {
             match state {
-                OutputState::On => compat_response.set(1).await,
+                OutputState::On => compat_response.set(1),
                 OutputState::Changing => {}
-                _ => compat_response.set(0).await,
+                _ => compat_response.set(0),
             }
         }
     });
@@ -481,13 +480,11 @@ impl DutPwrThread {
 
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
-        let request_topic_task = request_topic.clone();
         let state_topic_task = state_topic.clone();
+        let (mut request_stream, _) = request_topic.clone().subscribe_unbounded();
         task::spawn(async move {
-            let (mut request_stream, _) = request_topic_task.subscribe_unbounded().await;
-
             while let Some(req) = request_stream.next().await {
-                state_topic_task.set(OutputState::Changing).await;
+                state_topic_task.set(OutputState::Changing);
                 request.store(req as u8, Ordering::Relaxed);
             }
         });
@@ -502,17 +499,15 @@ impl DutPwrThread {
                 let curr_state = Some(state.load(Ordering::Relaxed).into());
 
                 // Only send publish events if the state changed
-                state_topic_task
-                    .modify(|prev_state| match prev_state != curr_state {
-                        true => curr_state,
-                        false => None,
-                    })
-                    .await;
+                state_topic_task.modify(|prev_state| match prev_state != curr_state {
+                    true => curr_state,
+                    false => None,
+                });
             }
         });
 
         // Forward the state information to the DUT Power LED
-        let state_topic_task = state_topic.clone();
+        let (mut state_stream, _) = state_topic.clone().subscribe_unbounded();
         task::spawn(async move {
             let pattern_on = BlinkPattern::solid(1.0);
             let pattern_off = BlinkPattern::solid(0.0);
@@ -532,16 +527,12 @@ impl DutPwrThread {
                 pb.stay_for(Duration::from_millis(400)).forever()
             };
 
-            let (mut state_stream, _) = state_topic_task.subscribe_unbounded().await;
-
             while let Some(state) = state_stream.next().await {
                 match state {
-                    OutputState::On => pwr_led.set(pattern_on.clone()).await,
-                    OutputState::Off | OutputState::OffFloating => {
-                        pwr_led.set(pattern_off.clone()).await
-                    }
+                    OutputState::On => pwr_led.set(pattern_on.clone()),
+                    OutputState::Off | OutputState::OffFloating => pwr_led.set(pattern_off.clone()),
                     OutputState::Changing => {}
-                    _ => pwr_led.set(pattern_error.clone()).await,
+                    _ => pwr_led.set(pattern_error.clone()),
                 }
             }
         });
@@ -565,7 +556,7 @@ mod tests {
     use async_std::task::{block_on, sleep};
 
     use crate::adc::Adc;
-    use crate::broker::BrokerBuilder;
+    use crate::broker::{BrokerBuilder, Topic};
     use crate::digital_io::find_line;
 
     use super::{
@@ -581,7 +572,7 @@ mod tests {
         let (adc, dut_pwr, led) = {
             let mut bb = BrokerBuilder::new();
             let adc = block_on(Adc::new(&mut bb)).unwrap();
-            let led = bb.topic_hidden(None);
+            let led = Topic::anonymous(None);
 
             let dut_pwr = block_on(DutPwrThread::new(
                 &mut bb,
@@ -609,7 +600,7 @@ mod tests {
         assert!(block_on(led.get()).is_off());
 
         println!("Turn Off Floating");
-        block_on(dut_pwr.request.set(OutputRequest::OffFloating));
+        dut_pwr.request.set(OutputRequest::OffFloating);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -617,7 +608,7 @@ mod tests {
         assert!(block_on(led.get()).is_off());
 
         println!("Turn on");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -643,7 +634,7 @@ mod tests {
         assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -669,7 +660,7 @@ mod tests {
         assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -695,7 +686,7 @@ mod tests {
         assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
@@ -716,7 +707,7 @@ mod tests {
         assert!(block_on(led.get()).is_blinking());
 
         println!("Turn on again");
-        block_on(dut_pwr.request.set(OutputRequest::On));
+        dut_pwr.request.set(OutputRequest::On);
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);

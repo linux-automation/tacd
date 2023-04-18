@@ -24,7 +24,6 @@ use super::AnyTopic;
 async fn get_handler(topic: Arc<dyn AnyTopic>, mut _req: Request<()>) -> tide::Result {
     topic
         .try_get_as_bytes()
-        .await
         .ok_or(tide::Error::from_str(
             404,
             "Don't have a retained message yet",
@@ -40,7 +39,6 @@ async fn get_handler(topic: Arc<dyn AnyTopic>, mut _req: Request<()>) -> tide::R
 async fn put_handler(topic: Arc<dyn AnyTopic>, mut req: Request<()>) -> tide::Result {
     topic
         .set_from_bytes(&req.body_bytes().await?)
-        .await
         .map(|_| Response::new(204))
         .map_err(|_| tide::Error::from_str(400, "Malformed payload"))
 }

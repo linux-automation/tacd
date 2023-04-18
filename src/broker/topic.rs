@@ -17,12 +17,10 @@
 
 use std::collections::VecDeque;
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex, Weak};
 
 use async_std::channel::{unbounded, Receiver, Sender, TrySendError};
 use async_std::prelude::*;
-use async_std::sync::{Arc, Mutex, Weak};
-
-use async_trait::async_trait;
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -109,9 +107,9 @@ impl<E> SubscriptionHandle<E, Native> {
     ///
     /// The sender may already have been unsubscribed if e.g. the receiving side
     /// was dropped and set() was called. This will not result in an error.
-    pub async fn unsubscribe(self) {
+    pub fn unsubscribe(self) {
         if let Some(topic) = self.topic.upgrade() {
-            let mut inner = topic.inner.lock().await;
+            let mut inner = topic.inner.lock().unwrap();
 
             if let Some(idx) = inner
                 .senders
@@ -124,20 +122,18 @@ impl<E> SubscriptionHandle<E, Native> {
     }
 }
 
-#[async_trait]
 pub trait AnySubscriptionHandle: Sync + Send {
-    async fn unsubscribe(&self);
+    fn unsubscribe(&self);
 }
 
-#[async_trait]
 impl<E: Send + Sync> AnySubscriptionHandle for SubscriptionHandle<E, Serialized> {
     /// Unsubscribe a sender from the serialized topic values
     ///
     /// The sender may already have been unsubscribed if e.g. the receiving side
     /// was dropped and set() was called. This will not result in an error.
-    async fn unsubscribe(&self) {
+    fn unsubscribe(&self) {
         if let Some(topic) = self.topic.upgrade() {
-            let mut inner = topic.inner.lock().await;
+            let mut inner = topic.inner.lock().unwrap();
 
             if let Some(idx) = inner
                 .senders_serialized
@@ -169,6 +165,10 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
             retained_length,
             inner,
         }
+    }
+
+    pub fn anonymous(initial: Option<E>) -> Arc<Self> {
+        Arc::new(Self::new("/hidden", false, false, initial, 1))
     }
 
     /// Set a new value for the topic and notify subscribers with the inner
@@ -222,25 +222,30 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
     /// # Arguments
     ///
     /// * `msg` - Value to set the topic to
-    pub async fn set(&self, msg: E) {
-        let mut inner = self.inner.lock().await;
+    pub fn set(&self, msg: E) {
+        let mut inner = self.inner.lock().unwrap();
         self.set_with_lock(msg, &mut *inner)
     }
 
     /// Get the current value
     ///
     /// Or nothing if none is set
-    pub async fn try_get(&self) -> Option<E> {
-        self.inner.lock().await.retained.back().map(|v| v.native())
+    pub fn try_get(&self) -> Option<E> {
+        self.inner
+            .lock()
+            .unwrap()
+            .retained
+            .back()
+            .map(|v| v.native())
     }
 
     // Get the value of this topic
     //
     // Waits for a value if none was set yet
     pub async fn get(self: &Arc<Self>) -> E {
-        let (mut rx, sub) = self.clone().subscribe_unbounded().await;
+        let (mut rx, sub) = self.clone().subscribe_unbounded();
         let val = rx.next().await;
-        sub.unsubscribe().await;
+        sub.unsubscribe();
 
         // Unwrap here to keep the interface simple. The stream could only yield
         // None if the sender side is dropped, which will not happen as we hold
@@ -253,11 +258,11 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
     /// The closure is called with the current value of the topic (may be None).
     /// If the value returned by the closure is Some(v) the value will then be
     /// set to v.
-    pub async fn modify<F>(&self, cb: F)
+    pub fn modify<F>(&self, cb: F)
     where
         F: FnOnce(Option<E>) -> Option<E>,
     {
-        let mut inner = self.inner.lock().await;
+        let mut inner = self.inner.lock().unwrap();
         let retained = inner.retained.back().map(|v| v.native());
 
         if let Some(new) = cb(retained) {
@@ -276,8 +281,8 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
     /// # Arguments
     ///
     /// * `sender` - The sender side of the queue to subscribe
-    pub async fn subscribe(self: Arc<Self>, sender: Sender<E>) -> SubscriptionHandle<E, Native> {
-        let mut inner = self.inner.lock().await;
+    pub fn subscribe(self: Arc<Self>, sender: Sender<E>) -> SubscriptionHandle<E, Native> {
+        let mut inner = self.inner.lock().unwrap();
         let token = Unique::new();
 
         // If there is a retained value try to enqueue it right away.
@@ -310,28 +315,24 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
     /// The returned SubscriptionHandle can be used to remove the sender again
     /// from the list of subscribers.
     /// If a retained value is present it will be enqueued immediately.
-    pub async fn subscribe_unbounded(
-        self: Arc<Self>,
-    ) -> (Receiver<E>, SubscriptionHandle<E, Native>) {
+    pub fn subscribe_unbounded(self: Arc<Self>) -> (Receiver<E>, SubscriptionHandle<E, Native>) {
         let (tx, rx) = unbounded();
-        (rx, self.subscribe(tx).await)
+        (rx, self.subscribe(tx))
     }
 }
 
-#[async_trait]
 pub trait AnyTopic: Sync + Send {
     fn path(&self) -> &TopicName;
     fn web_readable(&self) -> bool;
     fn web_writable(&self) -> bool;
-    async fn set_from_bytes(&self, msg: &[u8]) -> serde_json::Result<()>;
-    async fn subscribe_as_bytes(
+    fn set_from_bytes(&self, msg: &[u8]) -> serde_json::Result<()>;
+    fn subscribe_as_bytes(
         self: Arc<Self>,
         sender: Sender<(TopicName, Arc<[u8]>)>,
     ) -> Box<dyn AnySubscriptionHandle>;
-    async fn try_get_as_bytes(&self) -> Option<Arc<[u8]>>;
+    fn try_get_as_bytes(&self) -> Option<Arc<[u8]>>;
 }
 
-#[async_trait]
 impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic for Topic<E> {
     fn path(&self) -> &TopicName {
         &self.path
@@ -348,9 +349,9 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
     /// De-Serialize a message and set the topic to the resulting value
     ///
     /// Returns an Err if deserialization failed.
-    async fn set_from_bytes(&self, msg: &[u8]) -> serde_json::Result<()> {
+    fn set_from_bytes(&self, msg: &[u8]) -> serde_json::Result<()> {
         let msg = serde_json::from_slice(msg)?;
-        self.set(msg).await;
+        self.set(msg);
         Ok(())
     }
 
@@ -363,11 +364,11 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
     /// # Arguments:
     ///
     /// * `sender` - The sender side of the queue to add
-    async fn subscribe_as_bytes(
+    fn subscribe_as_bytes(
         self: Arc<Self>,
         sender: Sender<(TopicName, Arc<[u8]>)>,
     ) -> Box<dyn AnySubscriptionHandle> {
-        let mut inner = self.inner.lock().await;
+        let mut inner = self.inner.lock().unwrap();
         let token = Unique::new();
         let mut should_add = true;
 
@@ -404,10 +405,10 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
     /// Try to get the current serialized topic value
     ///
     /// Returns None if no value was set yet.
-    async fn try_get_as_bytes(&self) -> Option<Arc<[u8]>> {
+    fn try_get_as_bytes(&self) -> Option<Arc<[u8]>> {
         self.inner
             .lock()
-            .await
+            .unwrap()
             .retained
             .back_mut()
             .map(|v| v.serialized())
@@ -419,7 +420,6 @@ mod tests {
     use super::{AnyTopic, RetainedValue, Topic, TopicName};
     use async_std::channel::{unbounded, Receiver};
     use async_std::sync::Arc;
-    use async_std::task::block_on;
     use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -453,98 +453,93 @@ mod tests {
 
     #[test]
     fn unsubscribe_works() {
-        block_on(async {
-            let topic = new_topic::<u32>();
+        let topic = new_topic::<u32>();
 
-            let (native_1, native_handle_1) = topic.clone().subscribe_unbounded().await;
-            let (native_2, native_handle_2) = topic.clone().subscribe_unbounded().await;
-            let (native_3, native_handle_3) = topic.clone().subscribe_unbounded().await;
+        let (native_1, native_handle_1) = topic.clone().subscribe_unbounded();
+        let (native_2, native_handle_2) = topic.clone().subscribe_unbounded();
+        let (native_3, native_handle_3) = topic.clone().subscribe_unbounded();
 
-            let (ser_1, ser_handle_1) = {
-                let (tx, rx) = unbounded();
-                (rx, topic.clone().subscribe_as_bytes(tx).await)
-            };
+        let (ser_1, ser_handle_1) = {
+            let (tx, rx) = unbounded();
+            (rx, topic.clone().subscribe_as_bytes(tx))
+        };
 
-            let (ser_2, ser_handle_2) = {
-                let (tx, rx) = unbounded();
-                (rx, topic.clone().subscribe_as_bytes(tx).await)
-            };
+        let (ser_2, ser_handle_2) = {
+            let (tx, rx) = unbounded();
+            (rx, topic.clone().subscribe_as_bytes(tx))
+        };
 
-            let (ser_3, ser_handle_3) = {
-                let (tx, rx) = unbounded();
-                (rx, topic.clone().subscribe_as_bytes(tx).await)
-            };
+        let (ser_3, ser_handle_3) = {
+            let (tx, rx) = unbounded();
+            (rx, topic.clone().subscribe_as_bytes(tx))
+        };
 
-            assert_eq!(topic.inner.lock().await.senders.len(), 3);
-            assert_eq!(topic.inner.lock().await.senders_serialized.len(), 3);
+        assert_eq!(topic.inner.lock().unwrap().senders.len(), 3);
+        assert_eq!(topic.inner.lock().unwrap().senders_serialized.len(), 3);
 
-            topic.set(2).await;
-            native_handle_2.unsubscribe().await;
-            ser_handle_2.unsubscribe().await;
+        topic.set(2);
+        native_handle_2.unsubscribe();
+        ser_handle_2.unsubscribe();
 
-            assert_eq!(topic.inner.lock().await.senders.len(), 2);
-            assert_eq!(topic.inner.lock().await.senders_serialized.len(), 2);
+        assert_eq!(topic.inner.lock().unwrap().senders.len(), 2);
+        assert_eq!(topic.inner.lock().unwrap().senders_serialized.len(), 2);
 
-            topic.set(1).await;
-            native_handle_1.unsubscribe().await;
-            ser_handle_1.unsubscribe().await;
+        topic.set(1);
+        native_handle_1.unsubscribe();
+        ser_handle_1.unsubscribe();
 
-            assert_eq!(topic.inner.lock().await.senders.len(), 1);
-            assert_eq!(topic.inner.lock().await.senders_serialized.len(), 1);
+        assert_eq!(topic.inner.lock().unwrap().senders.len(), 1);
+        assert_eq!(topic.inner.lock().unwrap().senders_serialized.len(), 1);
 
-            topic.set(3).await;
-            native_handle_3.unsubscribe().await;
-            ser_handle_3.unsubscribe().await;
+        topic.set(3);
+        native_handle_3.unsubscribe();
+        ser_handle_3.unsubscribe();
 
-            assert_eq!(topic.inner.lock().await.senders.len(), 0);
-            assert_eq!(topic.inner.lock().await.senders_serialized.len(), 0);
+        assert_eq!(topic.inner.lock().unwrap().senders.len(), 0);
+        assert_eq!(topic.inner.lock().unwrap().senders_serialized.len(), 0);
 
-            topic.set(4).await;
+        topic.set(4);
 
-            let native_1 = collect_native(native_1);
-            let native_2 = collect_native(native_2);
-            let native_3 = collect_native(native_3);
+        let native_1 = collect_native(native_1);
+        let native_2 = collect_native(native_2);
+        let native_3 = collect_native(native_3);
 
-            let ser_1 = collect_serialized(ser_1);
-            let ser_2 = collect_serialized(ser_2);
-            let ser_3 = collect_serialized(ser_3);
+        let ser_1 = collect_serialized(ser_1);
+        let ser_2 = collect_serialized(ser_2);
+        let ser_3 = collect_serialized(ser_3);
 
-            assert_eq!(&native_1, &[2, 1]);
-            assert_eq!(&native_2, &[2]);
-            assert_eq!(&native_3, &[2, 1, 3]);
+        assert_eq!(&native_1, &[2, 1]);
+        assert_eq!(&native_2, &[2]);
+        assert_eq!(&native_3, &[2, 1, 3]);
 
-            assert_eq!(&ser_1, &[b"2", b"1"]);
-            assert_eq!(&ser_2, &[b"2"]);
-            assert_eq!(&ser_3, &[b"2", b"1", b"3"]);
-        })
+        assert_eq!(&ser_1, &[b"2", b"1"]);
+        assert_eq!(&ser_2, &[b"2"]);
+        assert_eq!(&ser_3, &[b"2", b"1", b"3"]);
     }
 
     #[test]
     fn serialize_roundtrip() {
-        block_on(async {
-            let topic = new_topic::<SerTestType>();
+        let topic = new_topic::<SerTestType>();
 
-            assert_eq!(topic.try_get().await, None);
-            assert_eq!(topic.try_get_as_bytes().await, None);
+        assert_eq!(topic.try_get(), None);
+        assert_eq!(topic.try_get_as_bytes(), None);
 
-            topic
-                .set_from_bytes(br#"{"c": "test", "b": 1, "a": true}"#)
-                .await
-                .unwrap();
+        topic
+            .set_from_bytes(br#"{"c": "test", "b": 1, "a": true}"#)
+            .unwrap();
 
-            assert_eq!(
-                topic.try_get().await,
-                Some(SerTestType {
-                    a: true,
-                    b: 1,
-                    c: "test".to_string()
-                })
-            );
+        assert_eq!(
+            topic.try_get(),
+            Some(SerTestType {
+                a: true,
+                b: 1,
+                c: "test".to_string()
+            })
+        );
 
-            let ser = topic.try_get_as_bytes().await.unwrap();
-            let ser_str = std::str::from_utf8(ser.as_ref()).unwrap();
+        let ser = topic.try_get_as_bytes().unwrap();
+        let ser_str = std::str::from_utf8(ser.as_ref()).unwrap();
 
-            assert_eq!(ser_str, r#"{"a":true,"b":1,"c":"test"}"#);
-        })
+        assert_eq!(ser_str, r#"{"a":true,"b":1,"c":"test"}"#);
     }
 }

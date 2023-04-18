@@ -280,21 +280,11 @@ async fn handle_connection(
                     // subscribe request matches. This should make sure that
                     // wildcard subscriptions work.
                     let matcher = filter.get_matcher();
-                    let sub_topics = topics
+                    let new_subscribes: Vec<_> = topics
                         .iter()
-                        .filter(|topic| topic.web_readable() && matcher.is_match(topic.path()));
-
-                    let mut new_subscribes = Vec::new();
-
-                    for topic in sub_topics {
-                        // Subscribe to the serialized messages via the broker
-                        // framework. This uses a single queue per connection for
-                        // all topics.
-                        let sub_handle =
-                            topic.clone().subscribe_as_bytes(to_websocket.clone()).await;
-
-                        new_subscribes.push(sub_handle);
-                    }
+                        .filter(|topic| topic.web_readable() && matcher.is_match(topic.path()))
+                        .map(|topic| topic.clone().subscribe_as_bytes(to_websocket.clone()))
+                        .collect();
 
                     // Only allow one subscribe with the same match per
                     // connection, so if there is an existing one it should
@@ -303,7 +293,7 @@ async fn handle_connection(
                         subscription_handles.insert(filter.clone(), new_subscribes)
                     {
                         for unsub in old_subscribes {
-                            unsub.unsubscribe().await
+                            unsub.unsubscribe()
                         }
                     }
                 }
@@ -312,7 +302,7 @@ async fn handle_connection(
                 for filter in unsub_pkg.subscribes() {
                     if let Some(old_subscribes) = subscription_handles.remove(filter) {
                         for unsub in old_subscribes {
-                            unsub.unsubscribe().await
+                            unsub.unsubscribe()
                         }
                     }
                 }
@@ -347,7 +337,7 @@ async fn handle_connection(
                     .find(|t| t.web_writable() && &t.path()[..] == pub_pkg.topic_name());
 
                 if let Some(topic) = topic {
-                    if let Err(e) = topic.set_from_bytes(pub_pkg.payload()).await {
+                    if let Err(e) = topic.set_from_bytes(pub_pkg.payload()) {
                         res = Err(e.into());
                         break 'connection;
                     }
@@ -377,7 +367,7 @@ async fn handle_connection(
 
     // Unsubscribe this connection from all topics
     for desub in subscription_handles.into_values().flatten() {
-        desub.unsubscribe().await
+        desub.unsubscribe()
     }
 
     // We may be able to get a closing frame with some information about errors

@@ -115,34 +115,30 @@ impl IoBus {
                     .recv_json::<ServerInfo>()
                     .await
                 {
-                    server_info_task
-                        .modify(|prev| {
-                            let need_update = prev.map(|p| p != si).unwrap_or(true);
+                    server_info_task.modify(|prev| {
+                        let need_update = prev.map(|p| p != si).unwrap_or(true);
 
-                            if need_update {
-                                Some(si)
-                            } else {
-                                None
-                            }
-                        })
-                        .await;
+                        if need_update {
+                            Some(si)
+                        } else {
+                            None
+                        }
+                    });
                 }
 
                 if let Ok(nodes) = http::get("http://127.0.0.1:8080/nodes/")
                     .recv_json::<Nodes>()
                     .await
                 {
-                    nodes_task
-                        .modify(|prev| {
-                            let need_update = prev.map(|n| n != nodes).unwrap_or(true);
+                    nodes_task.modify(|prev| {
+                        let need_update = prev.map(|n| n != nodes).unwrap_or(true);
 
-                            if need_update {
-                                Some(nodes)
-                            } else {
-                                None
-                            }
-                        })
-                        .await;
+                        if need_update {
+                            Some(nodes)
+                        } else {
+                            None
+                        }
+                    });
                 }
 
                 sleep(Duration::from_secs(1)).await;

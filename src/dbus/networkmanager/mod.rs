@@ -254,7 +254,7 @@ impl Network {
     }
 
     #[cfg(feature = "demo_mode")]
-    pub async fn new<C>(
+    pub fn new<C>(
         bb: &mut BrokerBuilder,
         _conn: C,
         _led_dut: Arc<Topic<BlinkPattern>>,
@@ -262,28 +262,22 @@ impl Network {
     ) -> Self {
         let this = Self::setup_topics(bb);
 
-        this.hostname.set("lxatac".to_string()).await;
-        this.bridge_interface
-            .set(vec![String::from("192.168.1.1")])
-            .await;
-        this.dut_interface
-            .set(LinkInfo {
-                speed: 0,
-                carrier: false,
-            })
-            .await;
-        this.uplink_interface
-            .set(LinkInfo {
-                speed: 1000,
-                carrier: true,
-            })
-            .await;
+        this.hostname.set("lxatac".to_string());
+        this.bridge_interface.set(vec![String::from("192.168.1.1")]);
+        this.dut_interface.set(LinkInfo {
+            speed: 0,
+            carrier: false,
+        });
+        this.uplink_interface.set(LinkInfo {
+            speed: 1000,
+            carrier: true,
+        });
 
         this
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    pub async fn new(
+    pub fn new(
         bb: &mut BrokerBuilder,
         conn: &Arc<Connection>,
         led_dut: Arc<Topic<BlinkPattern>>,
@@ -300,12 +294,12 @@ impl Network {
                 let mut stream = proxy.receive_hostname_changed().await;
 
                 if let Ok(h) = proxy.hostname().await {
-                    hostname_topic.set(h).await;
+                    hostname_topic.set(h);
                 }
 
                 while let Some(v) = stream.next().await {
                     if let Ok(h) = v.get().await {
-                        hostname_topic.set(h).await;
+                        hostname_topic.set(h);
                     }
                 }
             });
@@ -323,7 +317,7 @@ impl Network {
                     sleep(Duration::from_secs(1)).await;
                 };
 
-                dut_interface.set(link_stream.now()).await;
+                dut_interface.set(link_stream.now());
 
                 while let Ok(info) = link_stream.next().await {
                     // The two color LED on the DUT interface is under the control of
@@ -332,9 +326,9 @@ impl Network {
                     // Build the most round-about link speed indicator ever so that we
                     // have speed indication for 10MBit/s.
                     let led_brightness = if info.speed == 10 { 1.0 } else { 0.0 };
-                    led_dut.set(BlinkPattern::solid(led_brightness)).await;
+                    led_dut.set(BlinkPattern::solid(led_brightness));
 
-                    dut_interface.set(info).await;
+                    dut_interface.set(info);
                 }
             });
         }
@@ -351,15 +345,15 @@ impl Network {
                     sleep(Duration::from_secs(1)).await;
                 };
 
-                uplink_interface.set(link_stream.now()).await;
+                uplink_interface.set(link_stream.now());
 
                 while let Ok(info) = link_stream.next().await {
                     // See the equivalent section on the uplink interface on why
                     // this is here.
                     let led_brightness = if info.speed == 10 { 1.0 } else { 0.0 };
-                    led_uplink.set(BlinkPattern::solid(led_brightness)).await;
+                    led_uplink.set(BlinkPattern::solid(led_brightness));
 
-                    uplink_interface.set(info).await;
+                    uplink_interface.set(info);
                 }
             });
         }
@@ -376,12 +370,10 @@ impl Network {
                     sleep(Duration::from_secs(1)).await;
                 };
 
-                bridge_interface
-                    .set(ip_stream.now(&conn).await.unwrap())
-                    .await;
+                bridge_interface.set(ip_stream.now(&conn).await.unwrap());
 
                 while let Ok(info) = ip_stream.next(&conn).await {
-                    bridge_interface.set(info).await;
+                    bridge_interface.set(info);
                 }
             });
         }

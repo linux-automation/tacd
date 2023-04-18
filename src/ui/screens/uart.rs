@@ -22,7 +22,7 @@ use async_trait::async_trait;
 
 use embedded_graphics::prelude::*;
 
-use crate::broker::{BrokerBuilder, Native, SubscriptionHandle, Topic};
+use crate::broker::{Native, SubscriptionHandle, Topic};
 
 use super::buttons::*;
 use super::widgets::*;
@@ -37,9 +37,9 @@ pub struct UartScreen {
 }
 
 impl UartScreen {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
+    pub fn new() -> Self {
         Self {
-            highlighted: bb.topic_hidden(Some(0)),
+            highlighted: Topic::anonymous(Some(0)),
             widgets: Vec::new(),
             buttons_handle: None,
         }
@@ -55,9 +55,10 @@ impl MountableScreen for UartScreen {
     async fn mount(&mut self, ui: &Ui) {
         draw_border("DUT UART", SCREEN_TYPE, &ui.draw_target).await;
 
-        self.widgets.push(Box::new(
-            DynamicWidget::locator(ui.locator_dance.clone(), ui.draw_target.clone()).await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::locator(
+            ui.locator_dance.clone(),
+            ui.draw_target.clone(),
+        )));
 
         let ports = [
             (0, "UART RX EN", 52, &ui.res.dig_io.uart_rx_en),
@@ -65,37 +66,31 @@ impl MountableScreen for UartScreen {
         ];
 
         for (idx, name, y, status) in ports {
-            self.widgets.push(Box::new(
-                DynamicWidget::text(
-                    self.highlighted.clone(),
-                    ui.draw_target.clone(),
-                    Point::new(8, y),
-                    Box::new(move |highlight: &u8| {
-                        format!(
-                            "{} {}",
-                            if *highlight as usize == idx { ">" } else { " " },
-                            name,
-                        )
-                    }),
-                )
-                .await,
-            ));
+            self.widgets.push(Box::new(DynamicWidget::text(
+                self.highlighted.clone(),
+                ui.draw_target.clone(),
+                Point::new(8, y),
+                Box::new(move |highlight: &u8| {
+                    format!(
+                        "{} {}",
+                        if *highlight as usize == idx { ">" } else { " " },
+                        name,
+                    )
+                }),
+            )));
 
-            self.widgets.push(Box::new(
-                DynamicWidget::indicator(
-                    status.clone(),
-                    ui.draw_target.clone(),
-                    Point::new(160, y - 10),
-                    Box::new(|state: &bool| match *state {
-                        true => IndicatorState::On,
-                        false => IndicatorState::Off,
-                    }),
-                )
-                .await,
-            ));
+            self.widgets.push(Box::new(DynamicWidget::indicator(
+                status.clone(),
+                ui.draw_target.clone(),
+                Point::new(160, y - 10),
+                Box::new(|state: &bool| match *state {
+                    true => IndicatorState::On,
+                    false => IndicatorState::Off,
+                }),
+            )));
         }
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
+        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let dir_enables = [
             ui.res.dig_io.uart_rx_en.clone(),
             ui.res.dig_io.uart_tx_en.clone(),
@@ -112,18 +107,21 @@ impl MountableScreen for UartScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Long,
-                    } => port.modify(|prev| Some(!prev.unwrap_or(false))).await,
+                        src: _,
+                    } => port.modify(|prev| Some(!prev.unwrap_or(false))),
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Short,
+                        src: _,
                     } => {
-                        dir_highlight.set((highlighted + 1) % 2).await;
+                        dir_highlight.set((highlighted + 1) % 2);
                     }
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
-                    } => screen.set(SCREEN_TYPE.next()).await,
-                    ButtonEvent::Press { btn: _ } => {}
+                        src: _,
+                    } => screen.set(SCREEN_TYPE.next()),
+                    ButtonEvent::Press { btn: _, src: _ } => {}
                 }
             }
         });
@@ -133,7 +131,7 @@ impl MountableScreen for UartScreen {
 
     async fn unmount(&mut self) {
         if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe().await;
+            handle.unsubscribe();
         }
 
         for mut widget in self.widgets.drain(..) {

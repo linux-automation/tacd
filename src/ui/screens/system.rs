@@ -53,60 +53,49 @@ impl MountableScreen for SystemScreen {
     async fn mount(&mut self, ui: &Ui) {
         draw_border("System Status", SCREEN_TYPE, &ui.draw_target).await;
 
-        self.widgets.push(Box::new(
-            DynamicWidget::locator(ui.locator_dance.clone(), ui.draw_target.clone()).await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::locator(
+            ui.locator_dance.clone(),
+            ui.draw_target.clone(),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::text(
-                ui.res.temperatures.soc_temperature.clone(),
-                ui.draw_target.clone(),
-                Point::new(8, 52),
-                Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::text(
+            ui.res.temperatures.soc_temperature.clone(),
+            ui.draw_target.clone(),
+            Point::new(8, 52),
+            Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::text(
-                ui.res.network.uplink_interface.clone(),
-                ui.draw_target.clone(),
-                Point::new(8, 72),
-                Box::new(|info: &LinkInfo| match info.carrier {
-                    true => format!("Uplink: {}MBit/s", info.speed),
-                    false => "Uplink: Down".to_string(),
-                }),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::text(
+            ui.res.network.uplink_interface.clone(),
+            ui.draw_target.clone(),
+            Point::new(8, 72),
+            Box::new(|info: &LinkInfo| match info.carrier {
+                true => format!("Uplink: {}MBit/s", info.speed),
+                false => "Uplink: Down".to_string(),
+            }),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::text(
-                ui.res.network.dut_interface.clone(),
-                ui.draw_target.clone(),
-                Point::new(8, 92),
-                Box::new(|info: &LinkInfo| match info.carrier {
-                    true => format!("DUT:    {}MBit/s", info.speed),
-                    false => "DUT:    Down".to_string(),
-                }),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::text(
+            ui.res.network.dut_interface.clone(),
+            ui.draw_target.clone(),
+            Point::new(8, 92),
+            Box::new(|info: &LinkInfo| match info.carrier {
+                true => format!("DUT:    {}MBit/s", info.speed),
+                false => "DUT:    Down".to_string(),
+            }),
+        )));
 
-        self.widgets.push(Box::new(
-            DynamicWidget::text(
-                ui.res.network.bridge_interface.clone(),
-                ui.draw_target.clone(),
-                Point::new(8, 112),
-                Box::new(|ips: &Vec<String>| {
-                    let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
-                    format!("IP:     {}", ip)
-                }),
-            )
-            .await,
-        ));
+        self.widgets.push(Box::new(DynamicWidget::text(
+            ui.res.network.bridge_interface.clone(),
+            ui.draw_target.clone(),
+            Point::new(8, 112),
+            Box::new(|ips: &Vec<String>| {
+                let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
+                format!("IP:     {}", ip)
+            }),
+        )));
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded().await;
+        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let screen = ui.screen.clone();
 
         spawn(async move {
@@ -115,12 +104,14 @@ impl MountableScreen for SystemScreen {
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: _,
-                    } => screen.set(Screen::RebootConfirm).await,
+                        src: _,
+                    } => screen.set(Screen::RebootConfirm),
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,
-                    } => screen.set(SCREEN_TYPE.next()).await,
-                    ButtonEvent::Press { btn: _ } => {}
+                        src: _,
+                    } => screen.set(SCREEN_TYPE.next()),
+                    ButtonEvent::Press { btn: _, src: _ } => {}
                 }
             }
         });
@@ -130,7 +121,7 @@ impl MountableScreen for SystemScreen {
 
     async fn unmount(&mut self) {
         if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe().await;
+            handle.unsubscribe();
         }
 
         for mut widget in self.widgets.drain(..) {

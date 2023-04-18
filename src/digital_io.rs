@@ -17,7 +17,7 @@
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::{block_on, spawn, spawn_blocking};
+use async_std::task::{spawn, spawn_blocking};
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
@@ -66,17 +66,15 @@ fn handle_line_wo(
         .request(LineRequestFlags::OUTPUT, (initial ^ inverted) as _, "tacd")
         .unwrap();
 
-    let topic_task = topic.clone();
+    let (mut src, _) = topic.clone().subscribe_unbounded();
 
     spawn(async move {
-        let (mut src, _) = topic_task.subscribe_unbounded().await;
-
         while let Some(ev) = src.next().await {
             dst.set_value((ev ^ inverted) as _).unwrap();
 
             if let Some(led) = &led_topic {
                 let pattern = BlinkPattern::solid(if ev { 1.0 } else { 0.0 });
-                led.set(pattern).await;
+                led.set(pattern);
             }
         }
     });
@@ -101,7 +99,7 @@ fn handle_line_ro(bb: &mut BrokerBuilder, path: &str, line_name: &str) -> Arc<To
         .unwrap();
 
     spawn_blocking(move || {
-        block_on(topic_thread.set(src.get_value().unwrap() != 0));
+        topic_thread.set(src.get_value().unwrap() != 0);
 
         for ev in src {
             let state = match ev.unwrap().event_type() {
@@ -109,7 +107,7 @@ fn handle_line_ro(bb: &mut BrokerBuilder, path: &str, line_name: &str) -> Arc<To
                 EventType::FallingEdge => false,
             };
 
-            block_on(topic_thread.set(state));
+            topic_thread.set(state);
         }
     });
 

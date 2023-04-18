@@ -18,7 +18,7 @@
 use std::time::Duration;
 
 use async_std::sync::Arc;
-use async_std::task::{block_on, spawn_blocking};
+use async_std::task::spawn_blocking;
 use serde::{Deserialize, Serialize};
 
 use crate::broker::Topic;
@@ -84,16 +84,38 @@ impl PressDuration {
     }
 }
 
+// There are certain actions that we only allow when they are performed
+// on the local ui of the device, not from the web interface.
+// E.g. going back to setup mode.
+// The #[default] together with the serde(skip) below prevents the web ui
+// from ever being able to simulate a local button press.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default)]
+pub enum Source {
+    Local,
+    #[default]
+    Web,
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub enum ButtonEvent {
-    Press { btn: Button },
-    Release { btn: Button, dur: PressDuration },
+    Press {
+        btn: Button,
+        #[serde(skip)]
+        src: Source,
+    },
+    Release {
+        btn: Button,
+        dur: PressDuration,
+        #[serde(skip)]
+        src: Source,
+    },
 }
 
 impl ButtonEvent {
     fn press_from_id(id: usize) -> Self {
         ButtonEvent::Press {
             btn: Button::from_id(id),
+            src: Source::Local,
         }
     }
 
@@ -101,6 +123,7 @@ impl ButtonEvent {
         ButtonEvent::Release {
             btn: Button::from_id(id),
             dur: PressDuration::from_duration(duration),
+            src: Source::Local,
         }
     }
 }
@@ -131,13 +154,13 @@ pub fn handle_buttons(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
                     if let Some(start) = start_time[id].take() {
                         if let Ok(duration) = ev.timestamp().duration_since(start) {
                             let button_event = ButtonEvent::release_from_id_duration(id, duration);
-                            block_on(topic.set(button_event));
+                            topic.set(button_event);
                         }
                     }
                 } else {
                     // Button press -> register start time and send event
                     start_time[id] = Some(ev.timestamp());
-                    block_on(topic.set(ButtonEvent::press_from_id(id)));
+                    topic.set(ButtonEvent::press_from_id(id));
                 }
             }
         }

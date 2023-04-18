@@ -82,7 +82,7 @@ impl Ui {
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, None, 0);
 
         // Initialize all the screens now so they can be mounted later
-        let screens: Vec<Box<dyn MountableScreen>> = screens::init(bb, &res, &screen, &buttons);
+        let screens: Vec<Box<dyn MountableScreen>> = screens::init(&res, &screen, &buttons);
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",
@@ -93,24 +93,22 @@ impl Ui {
         let locator_task = locator.clone();
         let locator_dance_task = locator_dance.clone();
         spawn(async move {
-            let (mut rx, _) = locator_task.clone().subscribe_unbounded().await;
+            let (mut rx, _) = locator_task.clone().subscribe_unbounded();
 
             loop {
                 // As long as the locator is active:
                 // count down the value in locator_dance from 63 to 0
                 // with some pause in between in a loop.
-                while locator_task.try_get().await.unwrap_or(false) {
-                    locator_dance_task
-                        .modify(|v| match v {
-                            None | Some(0) => Some(63),
-                            Some(v) => Some(v - 1),
-                        })
-                        .await;
+                while locator_task.try_get().unwrap_or(false) {
+                    locator_dance_task.modify(|v| match v {
+                        None | Some(0) => Some(63),
+                        Some(v) => Some(v - 1),
+                    });
                     sleep(Duration::from_millis(100)).await;
                 }
 
                 // If the locator is empty stop the animation
-                locator_dance_task.set(0).await;
+                locator_dance_task.set(0);
 
                 match rx.next().await {
                     Some(true) => {}
@@ -121,12 +119,10 @@ impl Ui {
         });
 
         // Blink the status LED when locator is active
-        let locator_task = locator.clone();
         let led_status_pattern = res.led.status.clone();
         let led_status_color = res.led.status_color.clone();
+        let (mut locator_stream, _) = locator.clone().subscribe_unbounded();
         spawn(async move {
-            let (mut rx, _) = locator_task.subscribe_unbounded().await;
-
             let pattern_locator_on = BlinkPatternBuilder::new(0.0)
                 .fade_to(1.0, Duration::from_millis(100))
                 .stay_for(Duration::from_millis(300))
@@ -136,15 +132,15 @@ impl Ui {
 
             let pattern_locator_off = BlinkPattern::solid(1.0);
 
-            while let Some(ev) = rx.next().await {
+            while let Some(ev) = locator_stream.next().await {
                 if ev {
                     // White blinking when locator is on
-                    led_status_color.set((1.0, 1.0, 1.0)).await;
-                    led_status_pattern.set(pattern_locator_on.clone()).await;
+                    led_status_color.set((1.0, 1.0, 1.0));
+                    led_status_pattern.set(pattern_locator_on.clone());
                 } else {
                     // Green light when locator is off
-                    led_status_color.set((0.0, 1.0, 0.0)).await;
-                    led_status_pattern.set(pattern_locator_off.clone()).await;
+                    led_status_color.set((0.0, 1.0, 0.0));
+                    led_status_pattern.set(pattern_locator_off.clone());
                 }
             }
         });
@@ -166,7 +162,7 @@ impl Ui {
     }
 
     pub async fn run(mut self) -> Result<(), std::io::Error> {
-        let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded().await;
+        let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded();
 
         // Take the screens out of self so we can hand out references to self
         // to the screen mounting methods.

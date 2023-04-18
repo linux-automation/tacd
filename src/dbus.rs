@@ -87,8 +87,8 @@ impl DbusSession {
         let conn = Arc::new(tacd.serve(conn_builder).build().await.unwrap());
 
         Self {
-            network: Network::new(bb, &conn, led_dut, led_uplink).await,
-            rauc: Rauc::new(bb, &conn).await,
+            network: Network::new(bb, &conn, led_dut, led_uplink),
+            rauc: Rauc::new(bb, &conn),
             systemd: Systemd::new(bb, &conn).await,
         }
     }

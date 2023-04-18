@@ -1,2 +1,5 @@
 /target
 /.cargo
+/web/npm-shrinkwrap.json
+/web/oe-logs
+/web/oe-workdir
