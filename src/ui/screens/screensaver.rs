@@ -143,12 +143,12 @@ impl MountableScreen for ScreenSaverScreen {
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::new(
             ui.res.adc.time.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             Box::new(move |_, target| {
                 let ui_text_style: MonoTextStyle<BinaryColor> =
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);

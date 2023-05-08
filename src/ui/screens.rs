@@ -52,7 +52,7 @@ use usb::UsbScreen;
 
 use super::buttons;
 use super::widgets;
-use super::{FramebufferDrawTarget, Ui, UiResources};
+use super::{Display, Ui, UiResources};
 use crate::broker::Topic;
 use buttons::ButtonEvent;
 use widgets::UI_TEXT_FONT;
@@ -105,20 +105,20 @@ pub(super) trait MountableScreen: Sync + Send {
 
 /// Draw static screen border containing a title and an indicator for the
 /// position of the screen in the list of screens.
-async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<FramebufferDrawTarget>>) {
-    let mut draw_target = draw_target.lock().await;
+async fn draw_border(text: &str, screen: Screen, display: &Arc<Mutex<Display>>) {
+    let mut display = display.lock().await;
 
     Text::new(
         text,
         Point::new(8, 17),
         MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On),
     )
-    .draw(&mut *draw_target)
+    .draw(&mut *display)
     .unwrap();
 
     Line::new(Point::new(0, 24), Point::new(230, 24))
         .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-        .draw(&mut *draw_target)
+        .draw(&mut *display)
         .unwrap();
 
     let screen_idx = screen as i32;
@@ -128,7 +128,7 @@ async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<Framebu
 
     Line::new(Point::new(x_start, 238), Point::new(x_end, 238))
         .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
-        .draw(&mut *draw_target)
+        .draw(&mut *display)
         .unwrap();
 }
 

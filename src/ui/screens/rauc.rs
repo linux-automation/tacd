@@ -70,12 +70,12 @@ impl MountableScreen for RaucScreen {
     async fn mount(&mut self, ui: &Ui) {
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text_center(
             ui.res.rauc.progress.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             Point::new(120, 100),
             Box::new(|progress: &Progress| {
                 let (_, text) = progress.message.split_whitespace().fold(
@@ -104,7 +104,7 @@ impl MountableScreen for RaucScreen {
 
         self.widgets.push(Box::new(DynamicWidget::bar(
             ui.res.rauc.progress.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             Point::new(20, 180),
             200,
             18,

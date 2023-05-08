@@ -53,11 +53,11 @@ impl MountableScreen for UartScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        draw_border("DUT UART", SCREEN_TYPE, &ui.draw_target).await;
+        draw_border("DUT UART", SCREEN_TYPE, &ui.display).await;
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
         )));
 
         let ports = [
@@ -68,7 +68,7 @@ impl MountableScreen for UartScreen {
         for (idx, name, y, status) in ports {
             self.widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
-                ui.draw_target.clone(),
+                ui.display.clone(),
                 Point::new(8, y),
                 Box::new(move |highlight: &u8| {
                     format!(
@@ -81,7 +81,7 @@ impl MountableScreen for UartScreen {
 
             self.widgets.push(Box::new(DynamicWidget::indicator(
                 status.clone(),
-                ui.draw_target.clone(),
+                ui.display.clone(),
                 Point::new(160, y - 10),
                 Box::new(|state: &bool| match *state {
                     true => IndicatorState::On,

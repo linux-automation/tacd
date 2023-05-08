@@ -29,7 +29,7 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{FramebufferDrawTarget, MountableScreen, Screen, Ui};
+use super::{Display, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::RebootConfirm;
 
@@ -45,7 +45,7 @@ impl RebootConfirmScreen {
     }
 }
 
-fn rly(draw_target: &mut FramebufferDrawTarget) {
+fn rly(display: &mut Display) {
     let text_style: MonoTextStyle<BinaryColor> = MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
     Text::with_alignment(
@@ -54,14 +54,14 @@ fn rly(draw_target: &mut FramebufferDrawTarget) {
         text_style,
         Alignment::Center,
     )
-    .draw(draw_target)
+    .draw(display)
     .unwrap();
 }
 
-fn brb(draw_target: &mut FramebufferDrawTarget) {
+fn brb(display: &mut Display) {
     let text_style: MonoTextStyle<BinaryColor> = MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-    draw_target.clear();
+    display.clear();
 
     Text::with_alignment(
         "Hold tight\nBe right back",
@@ -69,7 +69,7 @@ fn brb(draw_target: &mut FramebufferDrawTarget) {
         text_style,
         Alignment::Center,
     )
-    .draw(draw_target)
+    .draw(display)
     .unwrap();
 }
 
@@ -80,8 +80,8 @@ impl MountableScreen for RebootConfirmScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        let draw_target = ui.draw_target.clone();
-        rly(&mut *draw_target.lock().await);
+        let display = ui.display.clone();
+        rly(&mut *display.lock().await);
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let screen = ui.screen.clone();
@@ -95,7 +95,7 @@ impl MountableScreen for RebootConfirmScreen {
                         dur: PressDuration::Long,
                         src: _,
                     } => {
-                        brb(&mut *draw_target.lock().await);
+                        brb(&mut *display.lock().await);
                         reboot.set(true);
                         break;
                     }

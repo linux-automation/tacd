@@ -78,14 +78,14 @@ impl MountableScreen for HelpScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             page.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             Point::new(8, 24),
             Box::new(|page| PAGES[*page].into()),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             up.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             Point::new(8, 200),
             Box::new(|up| match up {
                 false => "  Scroll up".into(),
@@ -95,7 +95,7 @@ impl MountableScreen for HelpScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             up.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             Point::new(8, 220),
             Box::new(|up| match up {
                 false => "> Scroll down".into(),

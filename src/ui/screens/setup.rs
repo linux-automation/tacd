@@ -146,7 +146,7 @@ impl MountableScreen for SetupScreen {
         self.widgets.push(Box::new(
             DynamicWidget::text_aligned(
                 connectivity_topic,
-                ui.draw_target.clone(),
+                ui.display.clone(),
                 Point::new(120, 55),
                 Box::new(|connectivity| match connectivity {
                     Connectivity::Nothing => {

@@ -29,7 +29,7 @@ use embedded_graphics::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use super::FramebufferDrawTarget;
+use super::Display;
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
 pub const UI_TEXT_FONT: MonoFont = FONT_10X20;
@@ -41,8 +41,8 @@ pub enum IndicatorState {
     Unkown,
 }
 
-pub trait DrawFn<T>: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
-impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
+pub trait DrawFn<T>: Fn(&T, &mut Display) -> Option<Rectangle> {}
+impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut Display) -> Option<Rectangle> {}
 
 pub trait IndicatorFormatFn<T>: Fn(&T) -> IndicatorState {}
 impl<T, U> IndicatorFormatFn<T> for U where U: Fn(&T) -> IndicatorState {}
@@ -74,7 +74,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     ///   The widget system takes care of clearing this area before redrawing.
     pub fn new(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        target: Arc<Mutex<Display>>,
         draw_fn: Box<dyn DrawFn<T> + Sync + Send>,
     ) -> Self {
         let (mut rx, sub_handle) = topic.subscribe_unbounded();
@@ -107,7 +107,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// the fraction of the graph to fill.
     pub fn bar(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        target: Arc<Mutex<Display>>,
         anchor: Point,
         width: u32,
         height: u32,
@@ -141,7 +141,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw an indicator bubble in an "On", "Off" or "Error" state
     pub fn indicator(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        target: Arc<Mutex<Display>>,
         anchor: Point,
         format_fn: Box<dyn IndicatorFormatFn<T> + Sync + Send>,
     ) -> Self {
@@ -207,7 +207,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw self-updating text with configurable alignment
     pub fn text_aligned(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        target: Arc<Mutex<Display>>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
         alignment: Alignment,
@@ -235,7 +235,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw self-updating left aligned text
     pub fn text(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        target: Arc<Mutex<Display>>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
     ) -> Self {
@@ -245,7 +245,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw self-updating centered text
     pub fn text_center(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        target: Arc<Mutex<Display>>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
     ) -> Self {
@@ -256,7 +256,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
 impl DynamicWidget<i32> {
     /// Draw an animated locator widget at the side of the screen
     /// (if the locator is active).
-    pub fn locator(topic: Arc<Topic<i32>>, target: Arc<Mutex<FramebufferDrawTarget>>) -> Self {
+    pub fn locator(topic: Arc<Topic<i32>>, target: Arc<Mutex<Display>>) -> Self {
         Self::new(
             topic,
             target,

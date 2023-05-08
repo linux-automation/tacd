@@ -60,11 +60,11 @@ impl MountableScreen for DigOutScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        draw_border("Digital Out", SCREEN_TYPE, &ui.draw_target).await;
+        draw_border("Digital Out", SCREEN_TYPE, &ui.display).await;
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
         )));
 
         let ports = [
@@ -91,19 +91,19 @@ impl MountableScreen for DigOutScreen {
             let anchor_bar = anchor_voltage + OFFSET_BAR;
 
             {
-                let mut draw_target = ui.draw_target.lock().await;
+                let mut display = ui.display.lock().await;
 
                 let ui_text_style: MonoTextStyle<BinaryColor> =
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
                 Text::new(name, anchor_name, ui_text_style)
-                    .draw(&mut *draw_target)
+                    .draw(&mut *display)
                     .unwrap();
             }
 
             self.widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
-                ui.draw_target.clone(),
+                ui.display.clone(),
                 anchor_assert,
                 Box::new(move |highlight: &u8| {
                     if *highlight == idx {
@@ -116,7 +116,7 @@ impl MountableScreen for DigOutScreen {
 
             self.widgets.push(Box::new(DynamicWidget::indicator(
                 status.clone(),
-                ui.draw_target.clone(),
+                ui.display.clone(),
                 anchor_indicator,
                 Box::new(|state: &bool| match *state {
                     true => IndicatorState::On,
@@ -126,14 +126,14 @@ impl MountableScreen for DigOutScreen {
 
             self.widgets.push(Box::new(DynamicWidget::text(
                 voltage.clone(),
-                ui.draw_target.clone(),
+                ui.display.clone(),
                 anchor_voltage,
                 Box::new(|meas: &Measurement| format!("  Volt: {:>4.1}V", meas.value)),
             )));
 
             self.widgets.push(Box::new(DynamicWidget::bar(
                 voltage.clone(),
-                ui.draw_target.clone(),
+                ui.display.clone(),
                 anchor_bar,
                 WIDTH_BAR,
                 HEIGHT_BAR,

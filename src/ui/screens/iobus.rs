@@ -54,46 +54,46 @@ impl MountableScreen for IoBusScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        draw_border("IOBus", SCREEN_TYPE, &ui.draw_target).await;
+        draw_border("IOBus", SCREEN_TYPE, &ui.display).await;
 
         {
-            let mut draw_target = ui.draw_target.lock().await;
+            let mut display = ui.display.lock().await;
 
             let ui_text_style: MonoTextStyle<BinaryColor> =
                 MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
             Text::new("CAN Status:", row_anchor(0), ui_text_style)
-                .draw(&mut *draw_target)
+                .draw(&mut *display)
                 .unwrap();
 
             Text::new("LSS Scan Status:", row_anchor(1), ui_text_style)
-                .draw(&mut *draw_target)
+                .draw(&mut *display)
                 .unwrap();
 
             Text::new("Power Fault:", row_anchor(2), ui_text_style)
-                .draw(&mut *draw_target)
+                .draw(&mut *display)
                 .unwrap();
 
             Text::new("> Power On:", row_anchor(5), ui_text_style)
-                .draw(&mut *draw_target)
+                .draw(&mut *display)
                 .unwrap();
         }
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.iobus.nodes.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(3),
             Box::new(move |nodes: &Nodes| format!("Connected Nodes:  {}", nodes.result.len())),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.iobus.server_info.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(0) + OFFSET_INDICATOR,
             Box::new(|info: &ServerInfo| match info.can_tx_error {
                 false => IndicatorState::On,
@@ -103,7 +103,7 @@ impl MountableScreen for IoBusScreen {
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.iobus.server_info.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(1) + OFFSET_INDICATOR,
             Box::new(|info: &ServerInfo| match info.lss_state {
                 LSSState::Scanning => IndicatorState::On,
@@ -113,7 +113,7 @@ impl MountableScreen for IoBusScreen {
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.dig_io.iobus_flt_fb.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(2) + OFFSET_INDICATOR,
             Box::new(|state: &bool| match *state {
                 true => IndicatorState::Error,
@@ -123,7 +123,7 @@ impl MountableScreen for IoBusScreen {
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.regulators.iobus_pwr_en.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(5) + OFFSET_INDICATOR,
             Box::new(|state: &bool| match *state {
                 true => IndicatorState::On,

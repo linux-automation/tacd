@@ -62,17 +62,17 @@ mod backend {
 
 use backend::Framebuffer;
 
-pub struct FramebufferDrawTarget {
+pub struct Display {
     fb: Framebuffer,
 }
 
-impl FramebufferDrawTarget {
-    pub fn new() -> FramebufferDrawTarget {
+impl Display {
+    pub fn new() -> Display {
         let mut fb = Framebuffer::new("/dev/fb0").unwrap();
         fb.var_screen_info.activate = 128; // FB_ACTIVATE_FORCE
         Framebuffer::put_var_screeninfo(&fb.device, &fb.var_screen_info).unwrap();
 
-        FramebufferDrawTarget { fb }
+        Display { fb }
     }
 
     pub fn clear(&mut self) {
@@ -105,7 +105,7 @@ impl FramebufferDrawTarget {
     }
 }
 
-impl DrawTarget for FramebufferDrawTarget {
+impl DrawTarget for Display {
     type Color = BinaryColor;
     type Error = core::convert::Infallible;
 
@@ -140,7 +140,7 @@ impl DrawTarget for FramebufferDrawTarget {
     }
 }
 
-impl OriginDimensions for FramebufferDrawTarget {
+impl OriginDimensions for Display {
     fn size(&self) -> Size {
         Size::new(self.fb.var_screen_info.xres, self.fb.var_screen_info.yres)
     }

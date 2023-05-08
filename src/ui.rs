@@ -26,12 +26,12 @@ use crate::broker::{BrokerBuilder, Topic};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
 
 mod buttons;
-mod draw_fb;
+mod display;
 mod screens;
 mod widgets;
 
 use buttons::{handle_buttons, ButtonEvent};
-use draw_fb::FramebufferDrawTarget;
+use display::Display;
 use screens::{MountableScreen, Screen};
 
 pub struct UiResources {
@@ -51,7 +51,7 @@ pub struct UiResources {
 }
 
 pub struct Ui {
-    draw_target: Arc<Mutex<FramebufferDrawTarget>>,
+    display: Arc<Mutex<Display>>,
     screen: Arc<Topic<Screen>>,
     locator: Arc<Topic<bool>>,
     locator_dance: Arc<Topic<i32>>,
@@ -61,15 +61,15 @@ pub struct Ui {
 }
 
 /// Add a web endpoint that serves the current framebuffer as png
-fn serve_framebuffer(server: &mut Server<()>, draw_target: Arc<Mutex<FramebufferDrawTarget>>) {
+fn serve_framebuffer(server: &mut Server<()>, display: Arc<Mutex<Display>>) {
     server.at("/v1/tac/display/content").get(move |_| {
-        let draw_target = draw_target.clone();
+        let display = display.clone();
 
         async move {
             Ok(Response::builder(200)
                 .content_type("image/png")
                 .header("Cache-Control", "no-store")
-                .body(draw_target.lock().await.as_png())
+                .body(display.lock().await.as_png())
                 .build())
         }
     });
@@ -146,13 +146,13 @@ impl Ui {
             }
         });
 
-        let draw_target = Arc::new(Mutex::new(FramebufferDrawTarget::new()));
+        let display = Arc::new(Mutex::new(Display::new()));
 
         // Expose the framebuffer as png via the web interface
-        serve_framebuffer(server, draw_target.clone());
+        serve_framebuffer(server, display.clone());
 
         Self {
-            draw_target,
+            display,
             screen,
             locator,
             locator_dance,
@@ -191,7 +191,7 @@ impl Ui {
 
                 // Clear the screen as static elements are not cleared by the
                 // widget framework magic
-                self.draw_target.lock().await.clear();
+                self.display.lock().await.clear();
 
                 // Find the screen to show (if any) and "mount" it
                 // (e.g. tell it to handle the screen by itself).

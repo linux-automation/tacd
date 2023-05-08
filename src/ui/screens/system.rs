@@ -67,25 +67,25 @@ impl MountableScreen for SystemScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        draw_border("System Status", SCREEN_TYPE, &ui.draw_target).await;
+        draw_border("System Status", SCREEN_TYPE, &ui.display).await;
 
         let highlighted = Topic::anonymous(Some(Action::Reboot));
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.temperatures.soc_temperature.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(0),
             Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.uplink_interface.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(1),
             Box::new(|info: &LinkInfo| match info.carrier {
                 true => format!("Uplink: {}MBit/s", info.speed),
@@ -95,7 +95,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.dut_interface.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(2),
             Box::new(|info: &LinkInfo| match info.carrier {
                 true => format!("DUT:    {}MBit/s", info.speed),
@@ -105,7 +105,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.bridge_interface.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(3),
             Box::new(|ips: &Vec<String>| {
                 let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
@@ -115,7 +115,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(5),
             Box::new(|action| match action {
                 Action::Reboot => "> Reboot".into(),
@@ -125,7 +125,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(6),
             Box::new(|action| match action {
                 Action::Help => "> Help".into(),
@@ -135,7 +135,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(7),
             Box::new(|action| match action {
                 Action::SetupMode => "> Setup Mode".into(),

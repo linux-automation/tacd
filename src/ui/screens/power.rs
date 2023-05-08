@@ -57,23 +57,23 @@ impl MountableScreen for PowerScreen {
     }
 
     async fn mount(&mut self, ui: &Ui) {
-        draw_border("DUT Power", SCREEN_TYPE, &ui.draw_target).await;
+        draw_border("DUT Power", SCREEN_TYPE, &ui.display).await;
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.adc.pwr_volt.topic.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(0),
             Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.pwr_volt.topic.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(0) + OFFSET_BAR,
             WIDTH_BAR,
             HEIGHT_BAR,
@@ -82,14 +82,14 @@ impl MountableScreen for PowerScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.adc.pwr_curr.topic.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(1),
             Box::new(|meas: &Measurement| format!("I: {:-6.3}A", meas.value)),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.pwr_curr.topic.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(1) + OFFSET_BAR,
             WIDTH_BAR,
             HEIGHT_BAR,
@@ -98,7 +98,7 @@ impl MountableScreen for PowerScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.dut_pwr.state.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(3),
             Box::new(|state: &OutputState| match state {
                 OutputState::On => "> On".into(),
@@ -114,7 +114,7 @@ impl MountableScreen for PowerScreen {
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.dut_pwr.state.clone(),
-            ui.draw_target.clone(),
+            ui.display.clone(),
             row_anchor(3) + OFFSET_INDICATOR,
             Box::new(|state: &OutputState| match state {
                 OutputState::On => IndicatorState::On,
