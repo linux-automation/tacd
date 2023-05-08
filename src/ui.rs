@@ -60,8 +60,8 @@ pub struct Ui {
     res: UiResources,
 }
 
-/// Add a web endpoint that serves the current framebuffer as png
-fn serve_framebuffer(server: &mut Server<()>, screenshooter: ScreenShooter) {
+/// Add a web endpoint that serves the current display content as png
+fn serve_display(server: &mut Server<()>, screenshooter: ScreenShooter) {
     server.at("/v1/tac/display/content").get(move |_| {
         let png = screenshooter.as_png();
 
@@ -148,8 +148,8 @@ impl Ui {
 
         let display = Arc::new(Display::new());
 
-        // Expose the framebuffer as png via the web interface
-        serve_framebuffer(server, display.screenshooter());
+        // Expose the display content as png via the web interface
+        serve_display(server, display.screenshooter());
 
         Self {
             display,
