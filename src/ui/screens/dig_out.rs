@@ -156,9 +156,7 @@ impl MountableScreen for DigOutScreen {
                         dur: PressDuration::Long,
                         src: _,
                     } => {
-                        let port = &port_enables[highlighted as usize];
-
-                        port.modify(|prev| Some(!prev.unwrap_or(true)));
+                        port_enables[highlighted as usize].toggle(true);
                     }
                     ButtonEvent::Release {
                         btn: Button::Lower,

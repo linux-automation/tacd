@@ -173,7 +173,7 @@ impl MountableScreen for SystemScreen {
                     } => match action {
                         Action::Reboot => screen.set(Screen::RebootConfirm),
                         Action::Help => screen.set(Screen::Help),
-                        Action::SetupMode => setup_mode.modify(|prev| Some(!prev.unwrap_or(true))),
+                        Action::SetupMode => setup_mode.set(true),
                     },
                     ButtonEvent::Release {
                         btn: Button::Lower,

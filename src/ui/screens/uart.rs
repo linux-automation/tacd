@@ -108,7 +108,7 @@ impl MountableScreen for UartScreen {
                         btn: Button::Lower,
                         dur: PressDuration::Long,
                         src: _,
-                    } => port.modify(|prev| Some(!prev.unwrap_or(false))),
+                    } => port.toggle(false),
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Short,

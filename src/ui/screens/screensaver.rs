@@ -173,7 +173,7 @@ impl MountableScreen for ScreenSaverScreen {
                         btn: Button::Lower,
                         dur: _,
                         src: _,
-                    } => locator.modify(|prev| Some(!prev.unwrap_or(false))),
+                    } => locator.toggle(false),
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,

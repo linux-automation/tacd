@@ -113,7 +113,7 @@ impl MountableScreen for HelpScreen {
                         btn: Button::Lower,
                         dur: PressDuration::Short,
                         src: _,
-                    } => up.modify(|a| Some(!a.unwrap_or(false))),
+                    } => up.toggle(false),
                     ButtonEvent::Release {
                         btn: Button::Lower,
                         dur: PressDuration::Long,

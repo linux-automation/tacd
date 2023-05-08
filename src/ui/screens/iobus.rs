@@ -142,7 +142,7 @@ impl MountableScreen for IoBusScreen {
                         btn: Button::Lower,
                         dur: PressDuration::Long,
                         src: _,
-                    } => iobus_pwr_en.modify(|prev| Some(!prev.unwrap_or(true))),
+                    } => iobus_pwr_en.toggle(true),
                     ButtonEvent::Release {
                         btn: Button::Upper,
                         dur: _,

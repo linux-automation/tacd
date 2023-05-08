@@ -163,7 +163,7 @@ impl MountableScreen for UsbScreen {
                         dur: PressDuration::Long,
                         src: _,
                     } => {
-                        port.modify(|prev| Some(!prev.unwrap_or(true)));
+                        port.toggle(true);
                     }
                     ButtonEvent::Release {
                         btn: Button::Lower,
