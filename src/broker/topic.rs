@@ -325,6 +325,19 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
     }
 }
 
+impl<E: Serialize + DeserializeOwned + Clone + PartialEq> Topic<E> {
+    /// Set a new value for the topic and notify subscribers _if the value changed_
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - Value to set the topic to
+    pub fn set_if_changed(&self, msg: E) {
+        let msg = Some(msg);
+
+        self.modify(|prev| if prev != msg { msg } else { None });
+    }
+}
+
 impl<E: Serialize + DeserializeOwned + Clone + Not + Not<Output = E>> Topic<E> {
     /// Toggle the value of a topic
     ///

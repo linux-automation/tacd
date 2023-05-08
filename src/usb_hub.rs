@@ -204,16 +204,7 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                     _ => panic!("Read unexpected value for USB port disable state"),
                 };
 
-                powered.modify(|prev| {
-                    let should_set = prev
-                        .map(|prev_powered| prev_powered != is_powered)
-                        .unwrap_or(true);
-
-                    match should_set {
-                        true => Some(is_powered),
-                        false => None,
-                    }
-                });
+                powered.set_if_changed(is_powered);
             }
 
             let id_product = read_to_string(&id_product_path).ok();
@@ -231,16 +222,7 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                 product: pro.trim().to_string(),
             });
 
-            device.modify(|prev| {
-                let should_set = prev
-                    .map(|prev_dev_info| prev_dev_info != dev_info)
-                    .unwrap_or(true);
-
-                match should_set {
-                    true => Some(dev_info),
-                    false => None,
-                }
-            });
+            device.set_if_changed(dev_info);
 
             sleep(POLL_INTERVAL).await;
         }
