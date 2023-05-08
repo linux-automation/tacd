@@ -47,7 +47,7 @@ impl PowerScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
     buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
 }
 
@@ -59,72 +59,81 @@ impl ActivatableScreen for PowerScreen {
     fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
         draw_border("DUT Power", SCREEN_TYPE, &display);
 
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            display.clone(),
-        )));
+        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
-        widgets.push(Box::new(DynamicWidget::text(
-            ui.res.adc.pwr_volt.topic.clone(),
-            display.clone(),
-            row_anchor(0),
-            Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.adc.pwr_volt.topic.clone(),
+                display,
+                row_anchor(0),
+                Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::bar(
-            ui.res.adc.pwr_volt.topic.clone(),
-            display.clone(),
-            row_anchor(0) + OFFSET_BAR,
-            WIDTH_BAR,
-            HEIGHT_BAR,
-            Box::new(|meas: &Measurement| meas.value / VOLTAGE_LIMIT),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::bar(
+                ui.res.adc.pwr_volt.topic.clone(),
+                display,
+                row_anchor(0) + OFFSET_BAR,
+                WIDTH_BAR,
+                HEIGHT_BAR,
+                Box::new(|meas: &Measurement| meas.value / VOLTAGE_LIMIT),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            ui.res.adc.pwr_curr.topic.clone(),
-            display.clone(),
-            row_anchor(1),
-            Box::new(|meas: &Measurement| format!("I: {:-6.3}A", meas.value)),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.adc.pwr_curr.topic.clone(),
+                display,
+                row_anchor(1),
+                Box::new(|meas: &Measurement| format!("I: {:-6.3}A", meas.value)),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::bar(
-            ui.res.adc.pwr_curr.topic.clone(),
-            display.clone(),
-            row_anchor(1) + OFFSET_BAR,
-            WIDTH_BAR,
-            HEIGHT_BAR,
-            Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::bar(
+                ui.res.adc.pwr_curr.topic.clone(),
+                display,
+                row_anchor(1) + OFFSET_BAR,
+                WIDTH_BAR,
+                HEIGHT_BAR,
+                Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            ui.res.dut_pwr.state.clone(),
-            display.clone(),
-            row_anchor(3),
-            Box::new(|state: &OutputState| match state {
-                OutputState::On => "> On".into(),
-                OutputState::Off => "> Off".into(),
-                OutputState::Changing => "> Changing".into(),
-                OutputState::OffFloating => "> Off (Float.)".into(),
-                OutputState::InvertedPolarity => "> Inv. Pol.".into(),
-                OutputState::OverCurrent => "> Ov. Curr.".into(),
-                OutputState::OverVoltage => "> Ov. Volt.".into(),
-                OutputState::RealtimeViolation => "> Rt Err.".into(),
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.dut_pwr.state.clone(),
+                display,
+                row_anchor(3),
+                Box::new(|state: &OutputState| match state {
+                    OutputState::On => "> On".into(),
+                    OutputState::Off => "> Off".into(),
+                    OutputState::Changing => "> Changing".into(),
+                    OutputState::OffFloating => "> Off (Float.)".into(),
+                    OutputState::InvertedPolarity => "> Inv. Pol.".into(),
+                    OutputState::OverCurrent => "> Ov. Curr.".into(),
+                    OutputState::OverVoltage => "> Ov. Volt.".into(),
+                    OutputState::RealtimeViolation => "> Rt Err.".into(),
+                }),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::indicator(
-            ui.res.dut_pwr.state.clone(),
-            display,
-            row_anchor(3) + OFFSET_INDICATOR,
-            Box::new(|state: &OutputState| match state {
-                OutputState::On => IndicatorState::On,
-                OutputState::Off | OutputState::OffFloating => IndicatorState::Off,
-                OutputState::Changing => IndicatorState::Unkown,
-                _ => IndicatorState::Error,
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::indicator(
+                ui.res.dut_pwr.state.clone(),
+                display,
+                row_anchor(3) + OFFSET_INDICATOR,
+                Box::new(|state: &OutputState| match state {
+                    OutputState::On => IndicatorState::On,
+                    OutputState::Off | OutputState::OffFloating => IndicatorState::Off,
+                    OutputState::Changing => IndicatorState::Unkown,
+                    _ => IndicatorState::Error,
+                }),
+            )
+        });
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let power_state = ui.res.dut_pwr.state.clone();
@@ -174,9 +183,6 @@ impl ActivatableScreen for PowerScreen {
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
         self.buttons_handle.unsubscribe();
-
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }

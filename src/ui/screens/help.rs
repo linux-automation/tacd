@@ -63,7 +63,7 @@ impl HelpScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
     buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
 }
 
@@ -73,37 +73,43 @@ impl ActivatableScreen for HelpScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        let mut widgets = WidgetContainer::new(display);
 
         let up = Topic::anonymous(Some(false));
         let page = Topic::anonymous(Some(0));
 
-        widgets.push(Box::new(DynamicWidget::text(
-            page.clone(),
-            display.clone(),
-            Point::new(8, 24),
-            Box::new(|page| PAGES[*page].into()),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                page.clone(),
+                display,
+                Point::new(8, 24),
+                Box::new(|page| PAGES[*page].into()),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            up.clone(),
-            display.clone(),
-            Point::new(8, 200),
-            Box::new(|up| match up {
-                false => "  Scroll up".into(),
-                true => "> Scroll up".into(),
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                up.clone(),
+                display,
+                Point::new(8, 200),
+                Box::new(|up| match up {
+                    false => "  Scroll up".into(),
+                    true => "> Scroll up".into(),
+                }),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            up.clone(),
-            display,
-            Point::new(8, 220),
-            Box::new(|up| match up {
-                false => "> Scroll down".into(),
-                true => "  Scroll down".into(),
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                up.clone(),
+                display,
+                Point::new(8, 220),
+                Box::new(|up| match up {
+                    false => "> Scroll down".into(),
+                    true => "  Scroll down".into(),
+                }),
+            )
+        });
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let screen = ui.screen.clone();
@@ -155,9 +161,6 @@ impl ActivatableScreen for HelpScreen {
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
         self.buttons_handle.unsubscribe();
-
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }

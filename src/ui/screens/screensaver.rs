@@ -123,7 +123,7 @@ impl ScreenSaverScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
     buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
 }
 
@@ -139,29 +139,28 @@ impl ActivatableScreen for ScreenSaverScreen {
             Point::new(230, 240),
         ));
 
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            display.clone(),
-        )));
+        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
-        widgets.push(Box::new(DynamicWidget::new(
-            ui.res.adc.time.clone(),
-            display,
-            Box::new(move |_, target| {
-                let ui_text_style: MonoTextStyle<BinaryColor> =
-                    MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+        widgets.push(|display| {
+            DynamicWidget::new(
+                ui.res.adc.time.clone(),
+                display,
+                Box::new(move |_, target| {
+                    let ui_text_style: MonoTextStyle<BinaryColor> =
+                        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-                let hostname = hostname.try_get().unwrap_or_default();
-                let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
-                let text = bounce.bounce(text);
+                    let hostname = hostname.try_get().unwrap_or_default();
+                    let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
+                    let text = bounce.bounce(text);
 
-                text.draw(target).unwrap();
+                    text.draw(target).unwrap();
 
-                Some(text.bounding_box())
-            }),
-        )));
+                    Some(text.bounding_box())
+                }),
+            )
+        });
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let locator = ui.locator.clone();
@@ -198,9 +197,6 @@ impl ActivatableScreen for ScreenSaverScreen {
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
         self.buttons_handle.unsubscribe();
-
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }

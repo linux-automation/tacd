@@ -43,7 +43,7 @@ impl UartScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
     buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
 }
 
@@ -55,12 +55,9 @@ impl ActivatableScreen for UartScreen {
     fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
         draw_border("DUT UART", SCREEN_TYPE, &display);
 
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            display.clone(),
-        )));
+        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
         let ports = [
             (0, "UART RX EN", 52, &ui.res.dig_io.uart_rx_en),
@@ -68,28 +65,32 @@ impl ActivatableScreen for UartScreen {
         ];
 
         for (idx, name, y, status) in ports {
-            widgets.push(Box::new(DynamicWidget::text(
-                self.highlighted.clone(),
-                display.clone(),
-                Point::new(8, y),
-                Box::new(move |highlight: &u8| {
-                    format!(
-                        "{} {}",
-                        if *highlight as usize == idx { ">" } else { " " },
-                        name,
-                    )
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::text(
+                    self.highlighted.clone(),
+                    display,
+                    Point::new(8, y),
+                    Box::new(move |highlight: &u8| {
+                        format!(
+                            "{} {}",
+                            if *highlight as usize == idx { ">" } else { " " },
+                            name,
+                        )
+                    }),
+                )
+            });
 
-            widgets.push(Box::new(DynamicWidget::indicator(
-                status.clone(),
-                display.clone(),
-                Point::new(160, y - 10),
-                Box::new(|state: &bool| match *state {
-                    true => IndicatorState::On,
-                    false => IndicatorState::Off,
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::indicator(
+                    status.clone(),
+                    display,
+                    Point::new(160, y - 10),
+                    Box::new(|state: &bool| match *state {
+                        true => IndicatorState::On,
+                        false => IndicatorState::Off,
+                    }),
+                )
+            });
         }
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
@@ -141,9 +142,6 @@ impl ActivatableScreen for UartScreen {
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
         self.buttons_handle.unsubscribe();
-
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }

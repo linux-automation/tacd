@@ -51,7 +51,7 @@ impl UsbScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
     buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
 }
 
@@ -63,12 +63,9 @@ impl ActivatableScreen for UsbScreen {
     fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
         draw_border("USB Host", SCREEN_TYPE, &display);
 
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        let mut widgets = WidgetContainer::new(display.clone());
 
-        widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            display.clone(),
-        )));
+        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
         let ports = [
             (
@@ -100,47 +97,55 @@ impl ActivatableScreen for UsbScreen {
                 .unwrap();
         });
 
-        widgets.push(Box::new(DynamicWidget::bar(
-            ui.res.adc.usb_host_curr.topic.clone(),
-            display.clone(),
-            row_anchor(0) + OFFSET_BAR,
-            WIDTH_BAR,
-            HEIGHT_BAR,
-            Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_TOTAL),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::bar(
+                ui.res.adc.usb_host_curr.topic.clone(),
+                display,
+                row_anchor(0) + OFFSET_BAR,
+                WIDTH_BAR,
+                HEIGHT_BAR,
+                Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_TOTAL),
+            )
+        });
 
         for (idx, name, status, current) in ports {
             let anchor_text = row_anchor(idx + 2);
             let anchor_indicator = anchor_text + OFFSET_INDICATOR;
             let anchor_bar = anchor_text + OFFSET_BAR;
 
-            widgets.push(Box::new(DynamicWidget::text(
-                self.highlighted.clone(),
-                display.clone(),
-                anchor_text,
-                Box::new(move |highlight: &u8| {
-                    format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::text(
+                    self.highlighted.clone(),
+                    display,
+                    anchor_text,
+                    Box::new(move |highlight: &u8| {
+                        format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
+                    }),
+                )
+            });
 
-            widgets.push(Box::new(DynamicWidget::indicator(
-                status.clone(),
-                display.clone(),
-                anchor_indicator,
-                Box::new(|state: &bool| match *state {
-                    true => IndicatorState::On,
-                    false => IndicatorState::Off,
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::indicator(
+                    status.clone(),
+                    display,
+                    anchor_indicator,
+                    Box::new(|state: &bool| match *state {
+                        true => IndicatorState::On,
+                        false => IndicatorState::Off,
+                    }),
+                )
+            });
 
-            widgets.push(Box::new(DynamicWidget::bar(
-                current.clone(),
-                display.clone(),
-                anchor_bar,
-                WIDTH_BAR,
-                HEIGHT_BAR,
-                Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_PER_PORT),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::bar(
+                    current.clone(),
+                    display,
+                    anchor_bar,
+                    WIDTH_BAR,
+                    HEIGHT_BAR,
+                    Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_PER_PORT),
+                )
+            });
         }
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
@@ -195,9 +200,6 @@ impl ActivatableScreen for UsbScreen {
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
         self.buttons_handle.unsubscribe();
-
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }

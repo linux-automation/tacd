@@ -67,7 +67,7 @@ impl SetupScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
     hostname_update_handle: SubscriptionHandle<String, Native>,
     ip_update_handle: SubscriptionHandle<Vec<String>, Native>,
 }
@@ -140,9 +140,9 @@ impl ActivatableScreen for SetupScreen {
             }
         });
 
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(Box::new(
+        widgets.push(|display|
             DynamicWidget::text_aligned(
                 connectivity_topic,
                 display,
@@ -159,8 +159,6 @@ impl ActivatableScreen for SetupScreen {
                     ),
                 }),
                 Alignment::Center,
-            )
-            ,
         ));
 
         let active = Active {
@@ -178,9 +176,6 @@ impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
         self.hostname_update_handle.unsubscribe();
         self.ip_update_handle.unsubscribe();
-
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }

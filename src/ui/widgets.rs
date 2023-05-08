@@ -41,6 +41,36 @@ pub enum IndicatorState {
     Unkown,
 }
 
+pub struct WidgetContainer {
+    display: Arc<Display>,
+    widgets: Vec<Box<dyn AnyWidget>>,
+}
+
+impl WidgetContainer {
+    pub fn new(display: Arc<Display>) -> Self {
+        Self {
+            display,
+            widgets: Vec::new(),
+        }
+    }
+
+    pub fn push<F, W>(&mut self, create_fn: F)
+    where
+        F: FnOnce(Arc<Display>) -> W,
+        W: AnyWidget + 'static,
+    {
+        let display = self.display.clone();
+        let widget = create_fn(display);
+        self.widgets.push(Box::new(widget));
+    }
+
+    pub async fn destroy(self) {
+        for mut widget in self.widgets.into_iter() {
+            widget.unmount().await;
+        }
+    }
+}
+
 pub trait DrawFn<T>: Fn(&T, &mut DisplayExclusive) -> Option<Rectangle> {}
 impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut DisplayExclusive) -> Option<Rectangle> {}
 

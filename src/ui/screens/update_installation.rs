@@ -58,7 +58,7 @@ impl UpdateInstallationScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
 }
 
 impl ActivatableScreen for UpdateInstallationScreen {
@@ -67,50 +67,51 @@ impl ActivatableScreen for UpdateInstallationScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            display.clone(),
-        )));
+        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
-        widgets.push(Box::new(DynamicWidget::text_center(
-            ui.res.rauc.progress.clone(),
-            display.clone(),
-            Point::new(120, 100),
-            Box::new(|progress: &Progress| {
-                let (_, text) = progress.message.split_whitespace().fold(
-                    (0, String::new()),
-                    move |(mut ll, mut text), word| {
-                        let word_len = word.len();
+        widgets.push(|display| {
+            DynamicWidget::text_center(
+                ui.res.rauc.progress.clone(),
+                display,
+                Point::new(120, 100),
+                Box::new(|progress: &Progress| {
+                    let (_, text) = progress.message.split_whitespace().fold(
+                        (0, String::new()),
+                        move |(mut ll, mut text), word| {
+                            let word_len = word.len();
 
-                        if (ll + word_len) > 15 {
-                            text.push('\n');
-                            ll = 0;
-                        } else {
-                            text.push(' ');
-                            ll += 1;
-                        }
+                            if (ll + word_len) > 15 {
+                                text.push('\n');
+                                ll = 0;
+                            } else {
+                                text.push(' ');
+                                ll += 1;
+                            }
 
-                        text.push_str(word);
-                        ll += word_len;
+                            text.push_str(word);
+                            ll += word_len;
 
-                        (ll, text)
-                    },
-                );
+                            (ll, text)
+                        },
+                    );
 
-                text
-            }),
-        )));
+                    text
+                }),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::bar(
-            ui.res.rauc.progress.clone(),
-            display,
-            Point::new(20, 180),
-            200,
-            18,
-            Box::new(|progress: &Progress| progress.percentage as f32 / 100.0),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::bar(
+                ui.res.rauc.progress.clone(),
+                display,
+                Point::new(20, 180),
+                200,
+                18,
+                Box::new(|progress: &Progress| progress.percentage as f32 / 100.0),
+            )
+        });
 
         let active = Active { widgets };
 
@@ -121,8 +122,6 @@ impl ActivatableScreen for UpdateInstallationScreen {
 #[async_trait]
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }

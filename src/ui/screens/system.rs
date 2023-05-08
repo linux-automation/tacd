@@ -57,7 +57,7 @@ impl SystemScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
     buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
 }
 
@@ -69,81 +69,91 @@ impl ActivatableScreen for SystemScreen {
     fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
         draw_border("System Status", SCREEN_TYPE, &display);
 
+        let mut widgets = WidgetContainer::new(display);
         let highlighted = Topic::anonymous(Some(Action::Reboot));
 
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
-        widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            display.clone(),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.temperatures.soc_temperature.clone(),
+                display,
+                row_anchor(0),
+                Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            ui.res.temperatures.soc_temperature.clone(),
-            display.clone(),
-            row_anchor(0),
-            Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.network.uplink_interface.clone(),
+                display,
+                row_anchor(1),
+                Box::new(|info: &LinkInfo| match info.carrier {
+                    true => format!("Uplink: {}MBit/s", info.speed),
+                    false => "Uplink: Down".to_string(),
+                }),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            ui.res.network.uplink_interface.clone(),
-            display.clone(),
-            row_anchor(1),
-            Box::new(|info: &LinkInfo| match info.carrier {
-                true => format!("Uplink: {}MBit/s", info.speed),
-                false => "Uplink: Down".to_string(),
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.network.dut_interface.clone(),
+                display,
+                row_anchor(2),
+                Box::new(|info: &LinkInfo| match info.carrier {
+                    true => format!("DUT:    {}MBit/s", info.speed),
+                    false => "DUT:    Down".to_string(),
+                }),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            ui.res.network.dut_interface.clone(),
-            display.clone(),
-            row_anchor(2),
-            Box::new(|info: &LinkInfo| match info.carrier {
-                true => format!("DUT:    {}MBit/s", info.speed),
-                false => "DUT:    Down".to_string(),
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.network.bridge_interface.clone(),
+                display,
+                row_anchor(3),
+                Box::new(|ips: &Vec<String>| {
+                    let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
+                    format!("IP:     {}", ip)
+                }),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            ui.res.network.bridge_interface.clone(),
-            display.clone(),
-            row_anchor(3),
-            Box::new(|ips: &Vec<String>| {
-                let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
-                format!("IP:     {}", ip)
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                highlighted.clone(),
+                display,
+                row_anchor(5),
+                Box::new(|action| match action {
+                    Action::Reboot => "> Reboot".into(),
+                    _ => "  Reboot".into(),
+                }),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            highlighted.clone(),
-            display.clone(),
-            row_anchor(5),
-            Box::new(|action| match action {
-                Action::Reboot => "> Reboot".into(),
-                _ => "  Reboot".into(),
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                highlighted.clone(),
+                display,
+                row_anchor(6),
+                Box::new(|action| match action {
+                    Action::Help => "> Help".into(),
+                    _ => "  Help".into(),
+                }),
+            )
+        });
 
-        widgets.push(Box::new(DynamicWidget::text(
-            highlighted.clone(),
-            display.clone(),
-            row_anchor(6),
-            Box::new(|action| match action {
-                Action::Help => "> Help".into(),
-                _ => "  Help".into(),
-            }),
-        )));
-
-        widgets.push(Box::new(DynamicWidget::text(
-            highlighted.clone(),
-            display,
-            row_anchor(7),
-            Box::new(|action| match action {
-                Action::SetupMode => "> Setup Mode".into(),
-                _ => "  Setup Mode".into(),
-            }),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::text(
+                highlighted.clone(),
+                display,
+                row_anchor(7),
+                Box::new(|action| match action {
+                    Action::SetupMode => "> Setup Mode".into(),
+                    _ => "  Setup Mode".into(),
+                }),
+            )
+        });
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let setup_mode = ui.res.setup_mode.setup_mode.clone();
@@ -207,9 +217,6 @@ impl ActivatableScreen for SystemScreen {
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
         self.buttons_handle.unsubscribe();
-
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }

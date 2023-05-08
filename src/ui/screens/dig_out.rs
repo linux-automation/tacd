@@ -50,7 +50,7 @@ impl DigOutScreen {
 }
 
 struct Active {
-    widgets: Vec<Box<dyn AnyWidget>>,
+    widgets: WidgetContainer,
     button_handle: SubscriptionHandle<ButtonEvent, Native>,
 }
 
@@ -62,12 +62,9 @@ impl ActivatableScreen for DigOutScreen {
     fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
         draw_border("Digital Out", SCREEN_TYPE, &display);
 
-        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+        let mut widgets = WidgetContainer::new(display.clone());
 
-        widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            display.clone(),
-        )));
+        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
         let ports = [
             (
@@ -101,44 +98,52 @@ impl ActivatableScreen for DigOutScreen {
                     .unwrap();
             });
 
-            widgets.push(Box::new(DynamicWidget::text(
-                self.highlighted.clone(),
-                display.clone(),
-                anchor_assert,
-                Box::new(move |highlight: &u8| {
-                    if *highlight == idx {
-                        "> Asserted:".into()
-                    } else {
-                        "  Asserted:".into()
-                    }
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::text(
+                    self.highlighted.clone(),
+                    display,
+                    anchor_assert,
+                    Box::new(move |highlight: &u8| {
+                        if *highlight == idx {
+                            "> Asserted:".into()
+                        } else {
+                            "  Asserted:".into()
+                        }
+                    }),
+                )
+            });
 
-            widgets.push(Box::new(DynamicWidget::indicator(
-                status.clone(),
-                display.clone(),
-                anchor_indicator,
-                Box::new(|state: &bool| match *state {
-                    true => IndicatorState::On,
-                    false => IndicatorState::Off,
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::indicator(
+                    status.clone(),
+                    display,
+                    anchor_indicator,
+                    Box::new(|state: &bool| match *state {
+                        true => IndicatorState::On,
+                        false => IndicatorState::Off,
+                    }),
+                )
+            });
 
-            widgets.push(Box::new(DynamicWidget::text(
-                voltage.clone(),
-                display.clone(),
-                anchor_voltage,
-                Box::new(|meas: &Measurement| format!("  Volt: {:>4.1}V", meas.value)),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::text(
+                    voltage.clone(),
+                    display,
+                    anchor_voltage,
+                    Box::new(|meas: &Measurement| format!("  Volt: {:>4.1}V", meas.value)),
+                )
+            });
 
-            widgets.push(Box::new(DynamicWidget::bar(
-                voltage.clone(),
-                display.clone(),
-                anchor_bar,
-                WIDTH_BAR,
-                HEIGHT_BAR,
-                Box::new(|meas: &Measurement| meas.value.abs() / VOLTAGE_MAX),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::bar(
+                    voltage.clone(),
+                    display,
+                    anchor_bar,
+                    WIDTH_BAR,
+                    HEIGHT_BAR,
+                    Box::new(|meas: &Measurement| meas.value.abs() / VOLTAGE_MAX),
+                )
+            });
         }
 
         let (mut button_events, button_handle) = ui.buttons.clone().subscribe_unbounded();
@@ -190,9 +195,6 @@ impl ActivatableScreen for DigOutScreen {
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) {
         self.button_handle.unsubscribe();
-
-        for mut widget in self.widgets.into_iter() {
-            widget.unmount().await
-        }
+        self.widgets.destroy().await;
     }
 }
