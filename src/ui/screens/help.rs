@@ -24,7 +24,7 @@ use embedded_graphics::prelude::Point;
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{Display, MountableScreen, Screen, Ui};
+use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
 const SCREEN_TYPE: Screen = Screen::Help;
@@ -54,38 +54,38 @@ Press it to leave
 this guide",
 ];
 
-pub struct HelpScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
-}
+pub struct HelpScreen;
 
 impl HelpScreen {
     pub fn new() -> Self {
-        Self {
-            widgets: Vec::new(),
-            buttons_handle: None,
-        }
+        Self
     }
 }
 
-#[async_trait]
-impl MountableScreen for HelpScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for HelpScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
         let up = Topic::anonymous(Some(false));
         let page = Topic::anonymous(Some(0));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             page.clone(),
             display.clone(),
             Point::new(8, 24),
             Box::new(|page| PAGES[*page].into()),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             up.clone(),
             display.clone(),
             Point::new(8, 200),
@@ -95,7 +95,7 @@ impl MountableScreen for HelpScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             up.clone(),
             display,
             Point::new(8, 220),
@@ -142,15 +142,21 @@ impl MountableScreen for HelpScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        let active = Active {
+            widgets,
+            buttons_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.buttons_handle.unsubscribe();
 
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

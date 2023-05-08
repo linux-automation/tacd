@@ -30,33 +30,33 @@ use crate::iobus::{LSSState, Nodes, ServerInfo};
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::IoBus;
 const OFFSET_INDICATOR: Point = Point::new(180, -10);
 
-pub struct IoBusScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
-}
+pub struct IoBusScreen;
 
 impl IoBusScreen {
     pub fn new() -> Self {
-        Self {
-            widgets: Vec::new(),
-            buttons_handle: None,
-        }
+        Self
     }
 }
 
-#[async_trait]
-impl MountableScreen for IoBusScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for IoBusScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
-        draw_border("IOBus", SCREEN_TYPE, &display).await;
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        draw_border("IOBus", SCREEN_TYPE, &display);
+
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
 
         display.with_lock(|target| {
             let ui_text_style: MonoTextStyle<BinaryColor> =
@@ -79,19 +79,19 @@ impl MountableScreen for IoBusScreen {
                 .unwrap();
         });
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             ui.res.iobus.nodes.clone(),
             display.clone(),
             row_anchor(3),
             Box::new(move |nodes: &Nodes| format!("Connected Nodes:  {}", nodes.result.len())),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
+        widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
             display.clone(),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::indicator(
+        widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.iobus.server_info.clone(),
             display.clone(),
             row_anchor(0) + OFFSET_INDICATOR,
@@ -101,7 +101,7 @@ impl MountableScreen for IoBusScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::indicator(
+        widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.iobus.server_info.clone(),
             display.clone(),
             row_anchor(1) + OFFSET_INDICATOR,
@@ -111,7 +111,7 @@ impl MountableScreen for IoBusScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::indicator(
+        widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.dig_io.iobus_flt_fb.clone(),
             display.clone(),
             row_anchor(2) + OFFSET_INDICATOR,
@@ -121,9 +121,9 @@ impl MountableScreen for IoBusScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::indicator(
+        widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.regulators.iobus_pwr_en.clone(),
-            display.clone(),
+            display,
             row_anchor(5) + OFFSET_INDICATOR,
             Box::new(|state: &bool| match *state {
                 true => IndicatorState::On,
@@ -158,15 +158,21 @@ impl MountableScreen for IoBusScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        let active = Active {
+            widgets,
+            buttons_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.buttons_handle.unsubscribe();
 
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

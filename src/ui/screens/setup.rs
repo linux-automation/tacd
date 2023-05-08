@@ -24,7 +24,7 @@ use embedded_graphics::{prelude::Point, text::Alignment};
 use serde::{Deserialize, Serialize};
 
 use super::widgets::*;
-use super::{Display, MountableScreen, Screen, Ui};
+use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
 const SCREEN_TYPE: Screen = Screen::Setup;
@@ -37,11 +37,7 @@ enum Connectivity {
     Both(String, String),
 }
 
-pub struct SetupScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    hostname_update_handle: Option<SubscriptionHandle<String, Native>>,
-    ip_update_handle: Option<SubscriptionHandle<Vec<String>, Native>>,
-}
+pub struct SetupScreen;
 
 impl SetupScreen {
     pub fn new(screen: &Arc<Topic<Screen>>, setup_mode: &Arc<Topic<bool>>) -> Self {
@@ -66,21 +62,22 @@ impl SetupScreen {
             }
         });
 
-        Self {
-            widgets: Vec::new(),
-            hostname_update_handle: None,
-            ip_update_handle: None,
-        }
+        Self
     }
 }
 
-#[async_trait]
-impl MountableScreen for SetupScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    hostname_update_handle: SubscriptionHandle<String, Native>,
+    ip_update_handle: SubscriptionHandle<Vec<String>, Native>,
+}
+
+impl ActivatableScreen for SetupScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
         /* We want to display hints on how to connect to this TAC.
          * We want to show:
          * - An URL based on the hostname, e.g. http://lxatac-12345
@@ -143,7 +140,9 @@ impl MountableScreen for SetupScreen {
             }
         });
 
-        self.widgets.push(Box::new(
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
+        widgets.push(Box::new(
             DynamicWidget::text_aligned(
                 connectivity_topic,
                 display,
@@ -164,20 +163,23 @@ impl MountableScreen for SetupScreen {
             ,
         ));
 
-        self.hostname_update_handle = Some(hostname_update_handle);
-        self.ip_update_handle = Some(ip_update_handle);
+        let active = Active {
+            widgets,
+            hostname_update_handle,
+            ip_update_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.hostname_update_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.hostname_update_handle.unsubscribe();
+        self.ip_update_handle.unsubscribe();
 
-        if let Some(handle) = self.ip_update_handle.take() {
-            handle.unsubscribe();
-        }
-
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

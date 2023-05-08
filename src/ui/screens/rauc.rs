@@ -26,13 +26,11 @@ use crate::broker::Topic;
 use crate::dbus::rauc::Progress;
 
 use super::widgets::*;
-use super::{Display, MountableScreen, Screen, Ui};
+use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::Rauc;
 
-pub struct RaucScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-}
+pub struct RaucScreen;
 
 impl RaucScreen {
     pub fn new(screen: &Arc<Topic<Screen>>, operation: &Arc<Topic<String>>) -> Self {
@@ -55,25 +53,28 @@ impl RaucScreen {
             }
         });
 
-        Self {
-            widgets: Vec::new(),
-        }
+        Self
     }
 }
 
-#[async_trait]
-impl MountableScreen for RaucScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+}
+
+impl ActivatableScreen for RaucScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
-        self.widgets.push(Box::new(DynamicWidget::locator(
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
+        widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
             display.clone(),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text_center(
+        widgets.push(Box::new(DynamicWidget::text_center(
             ui.res.rauc.progress.clone(),
             display.clone(),
             Point::new(120, 100),
@@ -102,7 +103,7 @@ impl MountableScreen for RaucScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::bar(
+        widgets.push(Box::new(DynamicWidget::bar(
             ui.res.rauc.progress.clone(),
             display,
             Point::new(20, 180),
@@ -110,10 +111,17 @@ impl MountableScreen for RaucScreen {
             18,
             Box::new(|progress: &Progress| progress.percentage as f32 / 100.0),
         )));
-    }
 
-    async fn unmount(&mut self) {
-        for mut widget in self.widgets.drain(..) {
+        let active = Active { widgets };
+
+        Box::new(active)
+    }
+}
+
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

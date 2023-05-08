@@ -26,36 +26,38 @@ use crate::broker::{Native, SubscriptionHandle, Topic};
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, Display, MountableScreen, Screen, Ui};
+use super::{draw_border, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::Uart;
 
 pub struct UartScreen {
     highlighted: Arc<Topic<u8>>,
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
 }
 
 impl UartScreen {
     pub fn new() -> Self {
         Self {
             highlighted: Topic::anonymous(Some(0)),
-            widgets: Vec::new(),
-            buttons_handle: None,
         }
     }
 }
 
-#[async_trait]
-impl MountableScreen for UartScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for UartScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
-        draw_border("DUT UART", SCREEN_TYPE, &display).await;
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        draw_border("DUT UART", SCREEN_TYPE, &display);
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
+        widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
             display.clone(),
         )));
@@ -66,7 +68,7 @@ impl MountableScreen for UartScreen {
         ];
 
         for (idx, name, y, status) in ports {
-            self.widgets.push(Box::new(DynamicWidget::text(
+            widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
                 display.clone(),
                 Point::new(8, y),
@@ -79,7 +81,7 @@ impl MountableScreen for UartScreen {
                 }),
             )));
 
-            self.widgets.push(Box::new(DynamicWidget::indicator(
+            widgets.push(Box::new(DynamicWidget::indicator(
                 status.clone(),
                 display.clone(),
                 Point::new(160, y - 10),
@@ -126,15 +128,21 @@ impl MountableScreen for UartScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        let active = Active {
+            widgets,
+            buttons_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.buttons_handle.unsubscribe();
 
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

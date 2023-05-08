@@ -26,7 +26,7 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::measurement::Measurement;
 
@@ -39,30 +39,32 @@ const HEIGHT_BAR: u32 = 18;
 
 pub struct DigOutScreen {
     highlighted: Arc<Topic<u8>>,
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
 }
 
 impl DigOutScreen {
     pub fn new() -> Self {
         Self {
             highlighted: Topic::anonymous(Some(0)),
-            widgets: Vec::new(),
-            buttons_handle: None,
         }
     }
 }
 
-#[async_trait]
-impl MountableScreen for DigOutScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    button_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for DigOutScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
-        draw_border("Digital Out", SCREEN_TYPE, &display).await;
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        draw_border("Digital Out", SCREEN_TYPE, &display);
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
+        widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
             display.clone(),
         )));
@@ -99,7 +101,7 @@ impl MountableScreen for DigOutScreen {
                     .unwrap();
             });
 
-            self.widgets.push(Box::new(DynamicWidget::text(
+            widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
                 display.clone(),
                 anchor_assert,
@@ -112,7 +114,7 @@ impl MountableScreen for DigOutScreen {
                 }),
             )));
 
-            self.widgets.push(Box::new(DynamicWidget::indicator(
+            widgets.push(Box::new(DynamicWidget::indicator(
                 status.clone(),
                 display.clone(),
                 anchor_indicator,
@@ -122,14 +124,14 @@ impl MountableScreen for DigOutScreen {
                 }),
             )));
 
-            self.widgets.push(Box::new(DynamicWidget::text(
+            widgets.push(Box::new(DynamicWidget::text(
                 voltage.clone(),
                 display.clone(),
                 anchor_voltage,
                 Box::new(|meas: &Measurement| format!("  Volt: {:>4.1}V", meas.value)),
             )));
 
-            self.widgets.push(Box::new(DynamicWidget::bar(
+            widgets.push(Box::new(DynamicWidget::bar(
                 voltage.clone(),
                 display.clone(),
                 anchor_bar,
@@ -139,7 +141,7 @@ impl MountableScreen for DigOutScreen {
             )));
         }
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
+        let (mut button_events, button_handle) = ui.buttons.clone().subscribe_unbounded();
         let port_enables = [ui.res.dig_io.out_0.clone(), ui.res.dig_io.out_1.clone()];
         let port_highlight = self.highlighted.clone();
         let screen = ui.screen.clone();
@@ -175,15 +177,21 @@ impl MountableScreen for DigOutScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        let active = Active {
+            widgets,
+            button_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.button_handle.unsubscribe();
 
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

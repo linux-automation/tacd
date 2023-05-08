@@ -31,19 +31,15 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{Display, MountableScreen, Screen, Ui};
+use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::RebootConfirm;
 
-pub struct RebootConfirmScreen {
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
-}
+pub struct RebootConfirmScreen;
 
 impl RebootConfirmScreen {
     pub fn new() -> Self {
-        Self {
-            buttons_handle: None,
-        }
+        Self
     }
 }
 
@@ -79,13 +75,16 @@ fn brb(display: &Display) {
     });
 }
 
-#[async_trait]
-impl MountableScreen for RebootConfirmScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for RebootConfirmScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
         rly(&display);
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
@@ -110,12 +109,15 @@ impl MountableScreen for RebootConfirmScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
-    }
+        let active = Active { buttons_handle };
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+        Box::new(active)
+    }
+}
+
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.buttons_handle.unsubscribe();
     }
 }

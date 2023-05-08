@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::dbus::networkmanager::LinkInfo;
 use crate::measurement::Measurement;
@@ -48,44 +48,44 @@ impl Action {
     }
 }
 
-pub struct SystemScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
-}
+pub struct SystemScreen;
 
 impl SystemScreen {
     pub fn new() -> Self {
-        Self {
-            widgets: Vec::new(),
-            buttons_handle: None,
-        }
+        Self
     }
 }
 
-#[async_trait]
-impl MountableScreen for SystemScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for SystemScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
-        draw_border("System Status", SCREEN_TYPE, &display).await;
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        draw_border("System Status", SCREEN_TYPE, &display);
 
         let highlighted = Topic::anonymous(Some(Action::Reboot));
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
+        widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
             display.clone(),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             ui.res.temperatures.soc_temperature.clone(),
             display.clone(),
             row_anchor(0),
             Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.uplink_interface.clone(),
             display.clone(),
             row_anchor(1),
@@ -95,7 +95,7 @@ impl MountableScreen for SystemScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.dut_interface.clone(),
             display.clone(),
             row_anchor(2),
@@ -105,7 +105,7 @@ impl MountableScreen for SystemScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.bridge_interface.clone(),
             display.clone(),
             row_anchor(3),
@@ -115,7 +115,7 @@ impl MountableScreen for SystemScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
             display.clone(),
             row_anchor(5),
@@ -125,7 +125,7 @@ impl MountableScreen for SystemScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
             display.clone(),
             row_anchor(6),
@@ -135,9 +135,9 @@ impl MountableScreen for SystemScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
-            display.clone(),
+            display,
             row_anchor(7),
             Box::new(|action| match action {
                 Action::SetupMode => "> Setup Mode".into(),
@@ -194,15 +194,21 @@ impl MountableScreen for SystemScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        let active = Active {
+            widgets,
+            buttons_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.buttons_handle.unsubscribe();
 
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

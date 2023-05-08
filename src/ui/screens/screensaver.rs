@@ -35,7 +35,7 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{Display, MountableScreen, Screen, Ui};
+use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
@@ -88,10 +88,7 @@ impl BounceAnimation {
     }
 }
 
-pub struct ScreenSaverScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
-}
+pub struct ScreenSaverScreen;
 
 impl ScreenSaverScreen {
     pub fn new(buttons: &Arc<Topic<ButtonEvent>>, screen: &Arc<Topic<Screen>>) -> Self {
@@ -121,38 +118,42 @@ impl ScreenSaverScreen {
             }
         });
 
-        Self {
-            widgets: Vec::new(),
-            buttons_handle: None,
-        }
+        Self
     }
 }
 
-#[async_trait]
-impl MountableScreen for ScreenSaverScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for ScreenSaverScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
-        let hostname = ui.res.network.hostname.get().await;
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        let hostname = ui.res.network.hostname.clone();
         let bounce = BounceAnimation::new(Rectangle::with_corners(
             Point::new(0, 8),
             Point::new(230, 240),
         ));
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
+        widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
             display.clone(),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::new(
+        widgets.push(Box::new(DynamicWidget::new(
             ui.res.adc.time.clone(),
-            display.clone(),
+            display,
             Box::new(move |_, target| {
                 let ui_text_style: MonoTextStyle<BinaryColor> =
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
+                let hostname = hostname.try_get().unwrap_or_default();
                 let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
                 let text = bounce.bounce(text);
 
@@ -184,15 +185,21 @@ impl MountableScreen for ScreenSaverScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        let active = Active {
+            widgets,
+            buttons_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.buttons_handle.unsubscribe();
 
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

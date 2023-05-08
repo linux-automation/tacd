@@ -26,7 +26,7 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::measurement::Measurement;
 
@@ -40,30 +40,32 @@ const HEIGHT_BAR: u32 = 18;
 
 pub struct UsbScreen {
     highlighted: Arc<Topic<u8>>,
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
 }
 
 impl UsbScreen {
     pub fn new() -> Self {
         Self {
             highlighted: Topic::anonymous(Some(0)),
-            widgets: Vec::new(),
-            buttons_handle: None,
         }
     }
 }
 
-#[async_trait]
-impl MountableScreen for UsbScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for UsbScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
-        draw_border("USB Host", SCREEN_TYPE, &display).await;
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        draw_border("USB Host", SCREEN_TYPE, &display);
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
+        widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
             display.clone(),
         )));
@@ -98,7 +100,7 @@ impl MountableScreen for UsbScreen {
                 .unwrap();
         });
 
-        self.widgets.push(Box::new(DynamicWidget::bar(
+        widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.usb_host_curr.topic.clone(),
             display.clone(),
             row_anchor(0) + OFFSET_BAR,
@@ -112,7 +114,7 @@ impl MountableScreen for UsbScreen {
             let anchor_indicator = anchor_text + OFFSET_INDICATOR;
             let anchor_bar = anchor_text + OFFSET_BAR;
 
-            self.widgets.push(Box::new(DynamicWidget::text(
+            widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
                 display.clone(),
                 anchor_text,
@@ -121,7 +123,7 @@ impl MountableScreen for UsbScreen {
                 }),
             )));
 
-            self.widgets.push(Box::new(DynamicWidget::indicator(
+            widgets.push(Box::new(DynamicWidget::indicator(
                 status.clone(),
                 display.clone(),
                 anchor_indicator,
@@ -131,7 +133,7 @@ impl MountableScreen for UsbScreen {
                 }),
             )));
 
-            self.widgets.push(Box::new(DynamicWidget::bar(
+            widgets.push(Box::new(DynamicWidget::bar(
                 current.clone(),
                 display.clone(),
                 anchor_bar,
@@ -180,15 +182,21 @@ impl MountableScreen for UsbScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        let active = Active {
+            widgets,
+            buttons_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.buttons_handle.unsubscribe();
 
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

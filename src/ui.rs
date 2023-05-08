@@ -32,7 +32,7 @@ mod widgets;
 
 use buttons::{handle_buttons, ButtonEvent};
 use display::{Display, ScreenShooter};
-use screens::{splash, MountableScreen, Screen};
+use screens::{splash, ActivatableScreen, ActiveScreen, Screen};
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,
@@ -55,7 +55,7 @@ pub struct Ui {
     locator: Arc<Topic<bool>>,
     locator_dance: Arc<Topic<i32>>,
     buttons: Arc<Topic<ButtonEvent>>,
-    screens: Vec<Box<dyn MountableScreen>>,
+    screens: Vec<Box<dyn ActivatableScreen>>,
     res: UiResources,
 }
 
@@ -91,7 +91,7 @@ impl Ui {
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, false, None, 0);
 
         // Initialize all the screens now so they can be mounted later
-        let screens: Vec<Box<dyn MountableScreen>> = screens::init(&res, &screen, &buttons);
+        let screens: Vec<Box<_>> = screens::init(&res, &screen, &buttons);
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",
@@ -176,6 +176,8 @@ impl Ui {
             decoy
         };
 
+        let mut active_screen: Option<Box<dyn ActiveScreen>> = None;
+
         let mut curr_screen_type = None;
 
         while let Some(next_screen_type) = screen_rx.next().await {
@@ -185,11 +187,9 @@ impl Ui {
                 .unwrap_or(true);
 
             if should_change {
-                // Find the currently shown screen (if any) and unmount it
-                if let Some(curr) = curr_screen_type {
-                    if let Some(screen) = screens.iter_mut().find(|s| s.is_my_type(curr)) {
-                        screen.unmount().await;
-                    }
+                // Deactivate the current screen if one is active
+                if let Some(active) = active_screen.take() {
+                    active.deactivate().await;
                 }
 
                 // Clear the screen as static elements are not cleared by the
@@ -198,8 +198,8 @@ impl Ui {
 
                 // Find the screen to show (if any) and "mount" it
                 // (e.g. tell it to handle the screen by itself).
-                if let Some(screen) = screens.iter_mut().find(|s| s.is_my_type(next_screen_type)) {
-                    screen.mount(&self, display.clone()).await;
+                if let Some(screen) = screens.iter_mut().find(|s| s.my_type() == next_screen_type) {
+                    active_screen = Some(screen.activate(&self, display.clone()));
                 }
 
                 curr_screen_type = Some(next_screen_type);

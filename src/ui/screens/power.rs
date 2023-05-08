@@ -25,7 +25,7 @@ use embedded_graphics::prelude::*;
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle};
 use crate::dut_power::{OutputRequest, OutputState};
 use crate::measurement::Measurement;
@@ -38,42 +38,42 @@ const OFFSET_BAR: Point = Point::new(112, -14);
 const WIDTH_BAR: u32 = 100;
 const HEIGHT_BAR: u32 = 18;
 
-pub struct PowerScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
-}
+pub struct PowerScreen;
 
 impl PowerScreen {
     pub fn new() -> Self {
-        Self {
-            widgets: Vec::new(),
-            buttons_handle: None,
-        }
+        Self
     }
 }
 
-#[async_trait]
-impl MountableScreen for PowerScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: Vec<Box<dyn AnyWidget>>,
+    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+}
+
+impl ActivatableScreen for PowerScreen {
+    fn my_type(&self) -> Screen {
+        SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
-        draw_border("DUT Power", SCREEN_TYPE, &display).await;
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+        draw_border("DUT Power", SCREEN_TYPE, &display);
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
+        let mut widgets: Vec<Box<dyn AnyWidget>> = Vec::new();
+
+        widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
             display.clone(),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             ui.res.adc.pwr_volt.topic.clone(),
             display.clone(),
             row_anchor(0),
             Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::bar(
+        widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.pwr_volt.topic.clone(),
             display.clone(),
             row_anchor(0) + OFFSET_BAR,
@@ -82,14 +82,14 @@ impl MountableScreen for PowerScreen {
             Box::new(|meas: &Measurement| meas.value / VOLTAGE_LIMIT),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             ui.res.adc.pwr_curr.topic.clone(),
             display.clone(),
             row_anchor(1),
             Box::new(|meas: &Measurement| format!("I: {:-6.3}A", meas.value)),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::bar(
+        widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.pwr_curr.topic.clone(),
             display.clone(),
             row_anchor(1) + OFFSET_BAR,
@@ -98,7 +98,7 @@ impl MountableScreen for PowerScreen {
             Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::text(
+        widgets.push(Box::new(DynamicWidget::text(
             ui.res.dut_pwr.state.clone(),
             display.clone(),
             row_anchor(3),
@@ -114,9 +114,9 @@ impl MountableScreen for PowerScreen {
             }),
         )));
 
-        self.widgets.push(Box::new(DynamicWidget::indicator(
+        widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.dut_pwr.state.clone(),
-            display.clone(),
+            display,
             row_anchor(3) + OFFSET_INDICATOR,
             Box::new(|state: &OutputState| match state {
                 OutputState::On => IndicatorState::On,
@@ -161,15 +161,21 @@ impl MountableScreen for PowerScreen {
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        let active = Active {
+            widgets,
+            buttons_handle,
+        };
+
+        Box::new(active)
     }
+}
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+#[async_trait]
+impl ActiveScreen for Active {
+    async fn deactivate(mut self: Box<Self>) {
+        self.buttons_handle.unsubscribe();
 
-        for mut widget in self.widgets.drain(..) {
+        for mut widget in self.widgets.into_iter() {
             widget.unmount().await
         }
     }

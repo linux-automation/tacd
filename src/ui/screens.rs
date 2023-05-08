@@ -98,15 +98,18 @@ impl Screen {
 }
 
 #[async_trait]
-pub(super) trait MountableScreen: Sync + Send {
-    fn is_my_type(&self, screen: Screen) -> bool;
-    async fn mount(&mut self, ui: &Ui, display: Arc<Display>);
-    async fn unmount(&mut self);
+pub(super) trait ActiveScreen {
+    async fn deactivate(self: Box<Self>);
+}
+
+pub(super) trait ActivatableScreen: Sync + Send {
+    fn my_type(&self) -> Screen;
+    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen>;
 }
 
 /// Draw static screen border containing a title and an indicator for the
 /// position of the screen in the list of screens.
-async fn draw_border(text: &str, screen: Screen, display: &Display) {
+fn draw_border(text: &str, screen: Screen, display: &Display) {
     display.with_lock(|target| {
         Text::new(
             text,
@@ -159,7 +162,7 @@ pub(super) fn init(
     res: &UiResources,
     screen: &Arc<Topic<Screen>>,
     buttons: &Arc<Topic<ButtonEvent>>,
-) -> Vec<Box<dyn MountableScreen>> {
+) -> Vec<Box<dyn ActivatableScreen>> {
     vec![
         Box::new(DigOutScreen::new()),
         Box::new(HelpScreen::new()),
