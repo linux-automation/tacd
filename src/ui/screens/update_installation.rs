@@ -66,7 +66,7 @@ impl ActivatableScreen for UpdateInstallationScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         let mut widgets = WidgetContainer::new(display);
 
         widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
@@ -121,7 +121,7 @@ impl ActivatableScreen for UpdateInstallationScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
-        self.widgets.destroy().await;
+    async fn deactivate(mut self: Box<Self>) -> Display {
+        self.widgets.destroy().await
     }
 }

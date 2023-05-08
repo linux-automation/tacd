@@ -166,7 +166,6 @@ impl Ui {
 
     pub async fn run(mut self, display: Display) -> Result<(), std::io::Error> {
         let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded();
-        let display = Arc::new(display);
 
         // Take the screens out of self so we can hand out references to self
         // to the screen mounting methods.
@@ -177,6 +176,7 @@ impl Ui {
         };
 
         let mut active_screen: Option<Box<dyn ActiveScreen>> = None;
+        let mut display = Some(display);
 
         let mut curr_screen_type = None;
 
@@ -189,17 +189,18 @@ impl Ui {
             if should_change {
                 // Deactivate the current screen if one is active
                 if let Some(active) = active_screen.take() {
-                    active.deactivate().await;
+                    display = Some(active.deactivate().await);
                 }
-
-                // Clear the screen as static elements are not cleared by the
-                // widget framework magic
-                display.clear();
 
                 // Find the screen to show (if any) and "mount" it
                 // (e.g. tell it to handle the screen by itself).
                 if let Some(screen) = screens.iter_mut().find(|s| s.my_type() == next_screen_type) {
-                    active_screen = Some(screen.activate(&self, display.clone()));
+                    let display = display.take().unwrap();
+                    // Clear the screen as static elements are not cleared by the
+                    // widget framework magic
+                    display.clear();
+
+                    active_screen = Some(screen.activate(&self, display));
                 }
 
                 curr_screen_type = Some(next_screen_type);

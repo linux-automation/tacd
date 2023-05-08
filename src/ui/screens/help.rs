@@ -15,8 +15,6 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::sync::Arc;
-
 use async_std::prelude::*;
 use async_std::task::spawn;
 use async_trait::async_trait;
@@ -72,7 +70,7 @@ impl ActivatableScreen for HelpScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         let mut widgets = WidgetContainer::new(display);
 
         let up = Topic::anonymous(Some(false));
@@ -159,8 +157,8 @@ impl ActivatableScreen for HelpScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
+    async fn deactivate(mut self: Box<Self>) -> Display {
         self.buttons_handle.unsubscribe();
-        self.widgets.destroy().await;
+        self.widgets.destroy().await
     }
 }

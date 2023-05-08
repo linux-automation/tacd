@@ -132,7 +132,7 @@ impl ActivatableScreen for ScreenSaverScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         let hostname = ui.res.network.hostname.clone();
         let bounce = BounceAnimation::new(Rectangle::with_corners(
             Point::new(0, 8),
@@ -195,8 +195,8 @@ impl ActivatableScreen for ScreenSaverScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
+    async fn deactivate(mut self: Box<Self>) -> Display {
         self.buttons_handle.unsubscribe();
-        self.widgets.destroy().await;
+        self.widgets.destroy().await
     }
 }

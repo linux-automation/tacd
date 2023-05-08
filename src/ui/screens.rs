@@ -99,12 +99,12 @@ impl Screen {
 
 #[async_trait]
 pub(super) trait ActiveScreen {
-    async fn deactivate(self: Box<Self>);
+    async fn deactivate(self: Box<Self>) -> Display;
 }
 
 pub(super) trait ActivatableScreen: Sync + Send {
     fn my_type(&self) -> Screen;
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen>;
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen>;
 }
 
 /// Draw static screen border containing a title and an indicator for the

@@ -15,8 +15,6 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::sync::Arc;
-
 use async_std::prelude::*;
 use async_std::task::spawn;
 use async_trait::async_trait;
@@ -56,7 +54,7 @@ impl ActivatableScreen for PowerScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         draw_border("DUT Power", SCREEN_TYPE, &display);
 
         let mut widgets = WidgetContainer::new(display);
@@ -181,8 +179,8 @@ impl ActivatableScreen for PowerScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
+    async fn deactivate(mut self: Box<Self>) -> Display {
         self.buttons_handle.unsubscribe();
-        self.widgets.destroy().await;
+        self.widgets.destroy().await
     }
 }

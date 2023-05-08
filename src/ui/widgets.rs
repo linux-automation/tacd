@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::anyhow;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::{spawn, JoinHandle};
@@ -47,9 +48,9 @@ pub struct WidgetContainer {
 }
 
 impl WidgetContainer {
-    pub fn new(display: Arc<Display>) -> Self {
+    pub fn new(display: Display) -> Self {
         Self {
-            display,
+            display: Arc::new(display),
             widgets: Vec::new(),
         }
     }
@@ -64,10 +65,19 @@ impl WidgetContainer {
         self.widgets.push(Box::new(widget));
     }
 
-    pub async fn destroy(self) {
-        for mut widget in self.widgets.into_iter() {
+    pub async fn destroy(self) -> Display {
+        for widget in self.widgets.into_iter() {
             widget.unmount().await;
         }
+
+        Arc::try_unwrap(self.display)
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to re-unite display references. Have {} references instead of 1",
+                    Arc::strong_count(&e)
+                )
+            })
+            .unwrap()
     }
 }
 
@@ -84,7 +94,8 @@ pub trait FractionFormatFn<T>: Fn(&T) -> f32 {}
 impl<T, U> FractionFormatFn<T> for U where U: Fn(&T) -> f32 {}
 
 pub struct DynamicWidget<T: Sync + Send + 'static> {
-    handles: Option<(SubscriptionHandle<T, Native>, JoinHandle<()>)>,
+    subscription_handle: SubscriptionHandle<T, Native>,
+    join_handle: JoinHandle<Arc<Display>>,
 }
 
 impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWidget<T> {
@@ -107,7 +118,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
         display: Arc<Display>,
         draw_fn: Box<dyn DrawFn<T> + Sync + Send>,
     ) -> Self {
-        let (mut rx, sub_handle) = topic.subscribe_unbounded();
+        let (mut rx, subscription_handle) = topic.subscribe_unbounded();
 
         let join_handle = spawn(async move {
             let mut prev_bb: Option<Rectangle> = None;
@@ -117,17 +128,20 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
                     if let Some(bb) = prev_bb.take() {
                         // Clear the bounding box by painting it black
                         bb.into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
-                            .draw(target)
+                            .draw(&mut *target)
                             .unwrap();
                     }
 
-                    prev_bb = draw_fn(&val, target);
+                    prev_bb = draw_fn(&val, &mut *target);
                 });
             }
+
+            display
         });
 
         Self {
-            handles: Some((sub_handle, join_handle)),
+            subscription_handle,
+            join_handle,
         }
     }
 
@@ -315,7 +329,7 @@ impl DynamicWidget<i32> {
 
 #[async_trait]
 pub trait AnyWidget: Send + Sync {
-    async fn unmount(&mut self);
+    async fn unmount(self: Box<Self>) -> Arc<Display>;
 }
 
 #[async_trait]
@@ -324,10 +338,8 @@ impl<T: Sync + Send + Serialize + DeserializeOwned + 'static> AnyWidget for Dyna
     ///
     /// This has to be async, which is why it can not be performed by
     /// implementing the Drop trait.
-    async fn unmount(&mut self) {
-        if let Some((sh, jh)) = self.handles.take() {
-            sh.unsubscribe();
-            jh.await;
-        }
+    async fn unmount(mut self: Box<Self>) -> Arc<Display> {
+        self.subscription_handle.unsubscribe();
+        self.join_handle.await
     }
 }

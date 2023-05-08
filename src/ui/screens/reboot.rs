@@ -15,10 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::sync::Arc;
-
 use async_std::prelude::*;
-use async_std::task::spawn;
+use async_std::task::{spawn, JoinHandle};
 use async_trait::async_trait;
 
 use crate::broker::{Native, SubscriptionHandle};
@@ -77,6 +75,7 @@ fn brb(display: &Display) {
 
 struct Active {
     buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+    task_handle: JoinHandle<Display>,
 }
 
 impl ActivatableScreen for RebootConfirmScreen {
@@ -84,14 +83,14 @@ impl ActivatableScreen for RebootConfirmScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         rly(&display);
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let screen = ui.screen.clone();
         let reboot = ui.res.systemd.reboot.clone();
 
-        spawn(async move {
+        let task_handle = spawn(async move {
             while let Some(ev) = button_events.next().await {
                 match ev {
                     ButtonEvent::Release {
@@ -107,9 +106,14 @@ impl ActivatableScreen for RebootConfirmScreen {
                     _ => screen.set(SCREEN_TYPE.next()),
                 }
             }
+
+            display
         });
 
-        let active = Active { buttons_handle };
+        let active = Active {
+            buttons_handle,
+            task_handle,
+        };
 
         Box::new(active)
     }
@@ -117,7 +121,8 @@ impl ActivatableScreen for RebootConfirmScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
+    async fn deactivate(mut self: Box<Self>) -> Display {
         self.buttons_handle.unsubscribe();
+        self.task_handle.await
     }
 }

@@ -77,7 +77,7 @@ impl ActivatableScreen for SetupScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         /* We want to display hints on how to connect to this TAC.
          * We want to show:
          * - An URL based on the hostname, e.g. http://lxatac-12345
@@ -173,9 +173,9 @@ impl ActivatableScreen for SetupScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
+    async fn deactivate(mut self: Box<Self>) -> Display {
         self.hostname_update_handle.unsubscribe();
         self.ip_update_handle.unsubscribe();
-        self.widgets.destroy().await;
+        self.widgets.destroy().await
     }
 }

@@ -60,10 +60,19 @@ impl ActivatableScreen for UsbScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         draw_border("USB Host", SCREEN_TYPE, &display);
 
-        let mut widgets = WidgetContainer::new(display.clone());
+        let ui_text_style: MonoTextStyle<BinaryColor> =
+            MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+        display.with_lock(|target| {
+            Text::new("Total", row_anchor(0), ui_text_style)
+                .draw(target)
+                .unwrap();
+        });
+
+        let mut widgets = WidgetContainer::new(display);
 
         widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
@@ -87,15 +96,6 @@ impl ActivatableScreen for UsbScreen {
                 &ui.res.adc.usb_host3_curr.topic,
             ),
         ];
-
-        display.with_lock(|target| {
-            let ui_text_style: MonoTextStyle<BinaryColor> =
-                MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
-
-            Text::new("Total", row_anchor(0), ui_text_style)
-                .draw(target)
-                .unwrap();
-        });
 
         widgets.push(|display| {
             DynamicWidget::bar(
@@ -198,8 +198,8 @@ impl ActivatableScreen for UsbScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
+    async fn deactivate(mut self: Box<Self>) -> Display {
         self.buttons_handle.unsubscribe();
-        self.widgets.destroy().await;
+        self.widgets.destroy().await
     }
 }

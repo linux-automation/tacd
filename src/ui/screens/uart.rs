@@ -52,7 +52,7 @@ impl ActivatableScreen for UartScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         draw_border("DUT UART", SCREEN_TYPE, &display);
 
         let mut widgets = WidgetContainer::new(display);
@@ -140,8 +140,8 @@ impl ActivatableScreen for UartScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
+    async fn deactivate(mut self: Box<Self>) -> Display {
         self.buttons_handle.unsubscribe();
-        self.widgets.destroy().await;
+        self.widgets.destroy().await
     }
 }

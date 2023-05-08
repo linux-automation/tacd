@@ -59,12 +59,8 @@ impl ActivatableScreen for DigOutScreen {
         SCREEN_TYPE
     }
 
-    fn activate(&mut self, ui: &Ui, display: Arc<Display>) -> Box<dyn ActiveScreen> {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         draw_border("Digital Out", SCREEN_TYPE, &display);
-
-        let mut widgets = WidgetContainer::new(display.clone());
-
-        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
 
         let ports = [
             (
@@ -81,22 +77,29 @@ impl ActivatableScreen for DigOutScreen {
             ),
         ];
 
-        for (idx, name, status, voltage) in ports {
-            let anchor_name = row_anchor(idx * 4);
+        let ui_text_style: MonoTextStyle<BinaryColor> =
+            MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+        display.with_lock(|target| {
+            for (idx, name, _, _) in ports {
+                let anchor_name = row_anchor(idx * 4);
+
+                Text::new(name, anchor_name, ui_text_style)
+                    .draw(target)
+                    .unwrap();
+            }
+        });
+
+        let mut widgets = WidgetContainer::new(display);
+
+        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
+
+        for (idx, _, status, voltage) in ports {
             let anchor_assert = row_anchor(idx * 4 + 1);
             let anchor_indicator = anchor_assert + OFFSET_INDICATOR;
 
             let anchor_voltage = row_anchor(idx * 4 + 2);
             let anchor_bar = anchor_voltage + OFFSET_BAR;
-
-            display.with_lock(|target| {
-                let ui_text_style: MonoTextStyle<BinaryColor> =
-                    MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
-
-                Text::new(name, anchor_name, ui_text_style)
-                    .draw(target)
-                    .unwrap();
-            });
 
             widgets.push(|display| {
                 DynamicWidget::text(
@@ -193,8 +196,8 @@ impl ActivatableScreen for DigOutScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
-    async fn deactivate(mut self: Box<Self>) {
+    async fn deactivate(mut self: Box<Self>) -> Display {
         self.button_handle.unsubscribe();
-        self.widgets.destroy().await;
+        self.widgets.destroy().await
     }
 }
