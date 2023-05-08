@@ -15,6 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::sync::Arc;
+
 use async_std::prelude::*;
 use async_std::task::spawn;
 use async_trait::async_trait;
@@ -22,7 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::dbus::networkmanager::LinkInfo;
 use crate::measurement::Measurement;
@@ -66,26 +68,26 @@ impl MountableScreen for SystemScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("System Status", SCREEN_TYPE, &ui.display).await;
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+        draw_border("System Status", SCREEN_TYPE, &display).await;
 
         let highlighted = Topic::anonymous(Some(Action::Reboot));
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.display.clone(),
+            display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.temperatures.soc_temperature.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(0),
             Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.uplink_interface.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(1),
             Box::new(|info: &LinkInfo| match info.carrier {
                 true => format!("Uplink: {}MBit/s", info.speed),
@@ -95,7 +97,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.dut_interface.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(2),
             Box::new(|info: &LinkInfo| match info.carrier {
                 true => format!("DUT:    {}MBit/s", info.speed),
@@ -105,7 +107,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.network.bridge_interface.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(3),
             Box::new(|ips: &Vec<String>| {
                 let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
@@ -115,7 +117,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(5),
             Box::new(|action| match action {
                 Action::Reboot => "> Reboot".into(),
@@ -125,7 +127,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(6),
             Box::new(|action| match action {
                 Action::Help => "> Help".into(),
@@ -135,7 +137,7 @@ impl MountableScreen for SystemScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             highlighted.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(7),
             Box::new(|action| match action {
                 Action::SetupMode => "> Setup Mode".into(),

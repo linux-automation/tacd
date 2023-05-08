@@ -26,7 +26,7 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::measurement::Measurement;
 
@@ -60,12 +60,12 @@ impl MountableScreen for UsbScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("USB Host", SCREEN_TYPE, &ui.display).await;
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+        draw_border("USB Host", SCREEN_TYPE, &display).await;
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.display.clone(),
+            display.clone(),
         )));
 
         let ports = [
@@ -89,7 +89,7 @@ impl MountableScreen for UsbScreen {
             ),
         ];
 
-        ui.display.with_lock(|target| {
+        display.with_lock(|target| {
             let ui_text_style: MonoTextStyle<BinaryColor> =
                 MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
@@ -100,7 +100,7 @@ impl MountableScreen for UsbScreen {
 
         self.widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.usb_host_curr.topic.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(0) + OFFSET_BAR,
             WIDTH_BAR,
             HEIGHT_BAR,
@@ -114,7 +114,7 @@ impl MountableScreen for UsbScreen {
 
             self.widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
-                ui.display.clone(),
+                display.clone(),
                 anchor_text,
                 Box::new(move |highlight: &u8| {
                     format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
@@ -123,7 +123,7 @@ impl MountableScreen for UsbScreen {
 
             self.widgets.push(Box::new(DynamicWidget::indicator(
                 status.clone(),
-                ui.display.clone(),
+                display.clone(),
                 anchor_indicator,
                 Box::new(|state: &bool| match *state {
                     true => IndicatorState::On,
@@ -133,7 +133,7 @@ impl MountableScreen for UsbScreen {
 
             self.widgets.push(Box::new(DynamicWidget::bar(
                 current.clone(),
-                ui.display.clone(),
+                display.clone(),
                 anchor_bar,
                 WIDTH_BAR,
                 HEIGHT_BAR,

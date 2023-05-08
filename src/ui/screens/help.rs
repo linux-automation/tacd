@@ -15,6 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::sync::Arc;
+
 use async_std::prelude::*;
 use async_std::task::spawn;
 use async_trait::async_trait;
@@ -22,7 +24,7 @@ use embedded_graphics::prelude::Point;
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{MountableScreen, Screen, Ui};
+use super::{Display, MountableScreen, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
 const SCREEN_TYPE: Screen = Screen::Help;
@@ -72,20 +74,20 @@ impl MountableScreen for HelpScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
         let up = Topic::anonymous(Some(false));
         let page = Topic::anonymous(Some(0));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             page.clone(),
-            ui.display.clone(),
+            display.clone(),
             Point::new(8, 24),
             Box::new(|page| PAGES[*page].into()),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             up.clone(),
-            ui.display.clone(),
+            display.clone(),
             Point::new(8, 200),
             Box::new(|up| match up {
                 false => "  Scroll up".into(),
@@ -95,7 +97,7 @@ impl MountableScreen for HelpScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             up.clone(),
-            ui.display.clone(),
+            display,
             Point::new(8, 220),
             Box::new(|up| match up {
                 false => "> Scroll down".into(),

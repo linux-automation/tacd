@@ -32,7 +32,7 @@ mod widgets;
 
 use buttons::{handle_buttons, ButtonEvent};
 use display::{Display, ScreenShooter};
-use screens::{MountableScreen, Screen};
+use screens::{splash, MountableScreen, Screen};
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,
@@ -51,7 +51,6 @@ pub struct UiResources {
 }
 
 pub struct Ui {
-    display: Arc<Display>,
     screen: Arc<Topic<Screen>>,
     locator: Arc<Topic<bool>>,
     locator_dance: Arc<Topic<i32>>,
@@ -60,8 +59,17 @@ pub struct Ui {
     res: UiResources,
 }
 
+pub fn setup_display() -> Display {
+    let display = Display::new();
+
+    display.clear();
+    display.with_lock(splash);
+
+    display
+}
+
 /// Add a web endpoint that serves the current display content as png
-fn serve_display(server: &mut Server<()>, screenshooter: ScreenShooter) {
+pub fn serve_display(server: &mut Server<()>, screenshooter: ScreenShooter) {
     server.at("/v1/tac/display/content").get(move |_| {
         let png = screenshooter.as_png();
 
@@ -76,7 +84,7 @@ fn serve_display(server: &mut Server<()>, screenshooter: ScreenShooter) {
 }
 
 impl Ui {
-    pub fn new(bb: &mut BrokerBuilder, res: UiResources, server: &mut Server<()>) -> Self {
+    pub fn new(bb: &mut BrokerBuilder, res: UiResources) -> Self {
         let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
         let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));
@@ -146,13 +154,7 @@ impl Ui {
             }
         });
 
-        let display = Arc::new(Display::new());
-
-        // Expose the display content as png via the web interface
-        serve_display(server, display.screenshooter());
-
         Self {
-            display,
             screen,
             locator,
             locator_dance,
@@ -162,8 +164,9 @@ impl Ui {
         }
     }
 
-    pub async fn run(mut self) -> Result<(), std::io::Error> {
+    pub async fn run(mut self, display: Display) -> Result<(), std::io::Error> {
         let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded();
+        let display = Arc::new(display);
 
         // Take the screens out of self so we can hand out references to self
         // to the screen mounting methods.
@@ -191,12 +194,12 @@ impl Ui {
 
                 // Clear the screen as static elements are not cleared by the
                 // widget framework magic
-                self.display.clear();
+                display.clear();
 
                 // Find the screen to show (if any) and "mount" it
                 // (e.g. tell it to handle the screen by itself).
                 if let Some(screen) = screens.iter_mut().find(|s| s.is_my_type(next_screen_type)) {
-                    screen.mount(&self).await;
+                    screen.mount(&self, display.clone()).await;
                 }
 
                 curr_screen_type = Some(next_screen_type);

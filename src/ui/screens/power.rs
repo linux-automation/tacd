@@ -15,6 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::sync::Arc;
+
 use async_std::prelude::*;
 use async_std::task::spawn;
 use async_trait::async_trait;
@@ -23,7 +25,7 @@ use embedded_graphics::prelude::*;
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle};
 use crate::dut_power::{OutputRequest, OutputState};
 use crate::measurement::Measurement;
@@ -56,24 +58,24 @@ impl MountableScreen for PowerScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("DUT Power", SCREEN_TYPE, &ui.display).await;
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+        draw_border("DUT Power", SCREEN_TYPE, &display).await;
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.display.clone(),
+            display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.adc.pwr_volt.topic.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(0),
             Box::new(|meas: &Measurement| format!("V: {:-6.3}V", meas.value)),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.pwr_volt.topic.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(0) + OFFSET_BAR,
             WIDTH_BAR,
             HEIGHT_BAR,
@@ -82,14 +84,14 @@ impl MountableScreen for PowerScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.adc.pwr_curr.topic.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(1),
             Box::new(|meas: &Measurement| format!("I: {:-6.3}A", meas.value)),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.pwr_curr.topic.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(1) + OFFSET_BAR,
             WIDTH_BAR,
             HEIGHT_BAR,
@@ -98,7 +100,7 @@ impl MountableScreen for PowerScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.dut_pwr.state.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(3),
             Box::new(|state: &OutputState| match state {
                 OutputState::On => "> On".into(),
@@ -114,7 +116,7 @@ impl MountableScreen for PowerScreen {
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.dut_pwr.state.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(3) + OFFSET_INDICATOR,
             Box::new(|state: &OutputState| match state {
                 OutputState::On => IndicatorState::On,

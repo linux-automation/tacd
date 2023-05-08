@@ -26,7 +26,7 @@ use crate::broker::Topic;
 use crate::dbus::rauc::Progress;
 
 use super::widgets::*;
-use super::{MountableScreen, Screen, Ui};
+use super::{Display, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::Rauc;
 
@@ -67,15 +67,15 @@ impl MountableScreen for RaucScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.display.clone(),
+            display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::text_center(
             ui.res.rauc.progress.clone(),
-            ui.display.clone(),
+            display.clone(),
             Point::new(120, 100),
             Box::new(|progress: &Progress| {
                 let (_, text) = progress.message.split_whitespace().fold(
@@ -104,7 +104,7 @@ impl MountableScreen for RaucScreen {
 
         self.widgets.push(Box::new(DynamicWidget::bar(
             ui.res.rauc.progress.clone(),
-            ui.display.clone(),
+            display,
             Point::new(20, 180),
             200,
             18,

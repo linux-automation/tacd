@@ -15,6 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::sync::Arc;
+
 use async_std::prelude::*;
 use async_std::task::spawn;
 use async_trait::async_trait;
@@ -28,7 +30,7 @@ use crate::iobus::{LSSState, Nodes, ServerInfo};
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::IoBus;
 const OFFSET_INDICATOR: Point = Point::new(180, -10);
@@ -53,10 +55,10 @@ impl MountableScreen for IoBusScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("IOBus", SCREEN_TYPE, &ui.display).await;
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+        draw_border("IOBus", SCREEN_TYPE, &display).await;
 
-        ui.display.with_lock(|target| {
+        display.with_lock(|target| {
             let ui_text_style: MonoTextStyle<BinaryColor> =
                 MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
@@ -79,19 +81,19 @@ impl MountableScreen for IoBusScreen {
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.iobus.nodes.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(3),
             Box::new(move |nodes: &Nodes| format!("Connected Nodes:  {}", nodes.result.len())),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.display.clone(),
+            display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.iobus.server_info.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(0) + OFFSET_INDICATOR,
             Box::new(|info: &ServerInfo| match info.can_tx_error {
                 false => IndicatorState::On,
@@ -101,7 +103,7 @@ impl MountableScreen for IoBusScreen {
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.iobus.server_info.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(1) + OFFSET_INDICATOR,
             Box::new(|info: &ServerInfo| match info.lss_state {
                 LSSState::Scanning => IndicatorState::On,
@@ -111,7 +113,7 @@ impl MountableScreen for IoBusScreen {
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.dig_io.iobus_flt_fb.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(2) + OFFSET_INDICATOR,
             Box::new(|state: &bool| match *state {
                 true => IndicatorState::Error,
@@ -121,7 +123,7 @@ impl MountableScreen for IoBusScreen {
 
         self.widgets.push(Box::new(DynamicWidget::indicator(
             ui.res.regulators.iobus_pwr_en.clone(),
-            ui.display.clone(),
+            display.clone(),
             row_anchor(5) + OFFSET_INDICATOR,
             Box::new(|state: &bool| match *state {
                 true => IndicatorState::On,

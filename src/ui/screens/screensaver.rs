@@ -35,7 +35,7 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{MountableScreen, Screen, Ui};
+use super::{Display, MountableScreen, Screen, Ui};
 
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
@@ -134,7 +134,7 @@ impl MountableScreen for ScreenSaverScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
         let hostname = ui.res.network.hostname.get().await;
         let bounce = BounceAnimation::new(Rectangle::with_corners(
             Point::new(0, 8),
@@ -143,12 +143,12 @@ impl MountableScreen for ScreenSaverScreen {
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.display.clone(),
+            display.clone(),
         )));
 
         self.widgets.push(Box::new(DynamicWidget::new(
             ui.res.adc.time.clone(),
-            ui.display.clone(),
+            display.clone(),
             Box::new(move |_, target| {
                 let ui_text_style: MonoTextStyle<BinaryColor> =
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);

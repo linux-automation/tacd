@@ -15,6 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::sync::Arc;
+
 use async_std::prelude::*;
 use async_std::task::spawn;
 use async_trait::async_trait;
@@ -83,8 +85,7 @@ impl MountableScreen for RebootConfirmScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        let display = ui.display.clone();
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
         rly(&display);
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();

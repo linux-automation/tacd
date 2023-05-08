@@ -26,7 +26,7 @@ use crate::broker::{Native, SubscriptionHandle, Topic};
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, MountableScreen, Screen, Ui};
+use super::{draw_border, Display, MountableScreen, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::Uart;
 
@@ -52,12 +52,12 @@ impl MountableScreen for UartScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("DUT UART", SCREEN_TYPE, &ui.display).await;
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+        draw_border("DUT UART", SCREEN_TYPE, &display).await;
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.display.clone(),
+            display.clone(),
         )));
 
         let ports = [
@@ -68,7 +68,7 @@ impl MountableScreen for UartScreen {
         for (idx, name, y, status) in ports {
             self.widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
-                ui.display.clone(),
+                display.clone(),
                 Point::new(8, y),
                 Box::new(move |highlight: &u8| {
                     format!(
@@ -81,7 +81,7 @@ impl MountableScreen for UartScreen {
 
             self.widgets.push(Box::new(DynamicWidget::indicator(
                 status.clone(),
-                ui.display.clone(),
+                display.clone(),
                 Point::new(160, y - 10),
                 Box::new(|state: &bool| match *state {
                     true => IndicatorState::On,

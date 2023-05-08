@@ -26,7 +26,7 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
+use super::{draw_border, row_anchor, Display, MountableScreen, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::measurement::Measurement;
 
@@ -59,12 +59,12 @@ impl MountableScreen for DigOutScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("Digital Out", SCREEN_TYPE, &ui.display).await;
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
+        draw_border("Digital Out", SCREEN_TYPE, &display).await;
 
         self.widgets.push(Box::new(DynamicWidget::locator(
             ui.locator_dance.clone(),
-            ui.display.clone(),
+            display.clone(),
         )));
 
         let ports = [
@@ -90,7 +90,7 @@ impl MountableScreen for DigOutScreen {
             let anchor_voltage = row_anchor(idx * 4 + 2);
             let anchor_bar = anchor_voltage + OFFSET_BAR;
 
-            ui.display.with_lock(|target| {
+            display.with_lock(|target| {
                 let ui_text_style: MonoTextStyle<BinaryColor> =
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
@@ -101,7 +101,7 @@ impl MountableScreen for DigOutScreen {
 
             self.widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),
-                ui.display.clone(),
+                display.clone(),
                 anchor_assert,
                 Box::new(move |highlight: &u8| {
                     if *highlight == idx {
@@ -114,7 +114,7 @@ impl MountableScreen for DigOutScreen {
 
             self.widgets.push(Box::new(DynamicWidget::indicator(
                 status.clone(),
-                ui.display.clone(),
+                display.clone(),
                 anchor_indicator,
                 Box::new(|state: &bool| match *state {
                     true => IndicatorState::On,
@@ -124,14 +124,14 @@ impl MountableScreen for DigOutScreen {
 
             self.widgets.push(Box::new(DynamicWidget::text(
                 voltage.clone(),
-                ui.display.clone(),
+                display.clone(),
                 anchor_voltage,
                 Box::new(|meas: &Measurement| format!("  Volt: {:>4.1}V", meas.value)),
             )));
 
             self.widgets.push(Box::new(DynamicWidget::bar(
                 voltage.clone(),
-                ui.display.clone(),
+                display.clone(),
                 anchor_bar,
                 WIDTH_BAR,
                 HEIGHT_BAR,

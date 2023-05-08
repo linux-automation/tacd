@@ -21,8 +21,8 @@ use embedded_graphics::{
     mono_font::MonoTextStyle,
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Line, PrimitiveStyle},
-    text::Text,
+    primitives::{Line, PrimitiveStyle, Rectangle},
+    text::{Alignment, Text},
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,8 +52,9 @@ use usb::UsbScreen;
 
 use super::buttons;
 use super::widgets;
-use super::{Display, Ui, UiResources};
+use super::{Ui, UiResources};
 use crate::broker::Topic;
+use crate::ui::display::{Display, DisplayExclusive};
 use buttons::ButtonEvent;
 use widgets::UI_TEXT_FONT;
 
@@ -99,7 +100,7 @@ impl Screen {
 #[async_trait]
 pub(super) trait MountableScreen: Sync + Send {
     fn is_my_type(&self, screen: Screen) -> bool;
-    async fn mount(&mut self, ui: &Ui);
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>);
     async fn unmount(&mut self);
 }
 
@@ -136,6 +137,22 @@ const fn row_anchor(row_num: u8) -> Point {
     assert!(row_num < 8);
 
     Point::new(8, 52 + (row_num as i32) * 20)
+}
+
+pub(super) fn splash(target: &mut DisplayExclusive) -> Rectangle {
+    let ui_text_style: MonoTextStyle<BinaryColor> =
+        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+    let text = Text::with_alignment(
+        "Welcome",
+        Point::new(120, 120),
+        ui_text_style,
+        Alignment::Center,
+    );
+
+    text.draw(target).unwrap();
+
+    text.bounding_box()
 }
 
 pub(super) fn init(

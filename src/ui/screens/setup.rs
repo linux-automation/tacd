@@ -24,7 +24,7 @@ use embedded_graphics::{prelude::Point, text::Alignment};
 use serde::{Deserialize, Serialize};
 
 use super::widgets::*;
-use super::{MountableScreen, Screen, Ui};
+use super::{Display, MountableScreen, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
 const SCREEN_TYPE: Screen = Screen::Setup;
@@ -80,7 +80,7 @@ impl MountableScreen for SetupScreen {
         screen == SCREEN_TYPE
     }
 
-    async fn mount(&mut self, ui: &Ui) {
+    async fn mount(&mut self, ui: &Ui, display: Arc<Display>) {
         /* We want to display hints on how to connect to this TAC.
          * We want to show:
          * - An URL based on the hostname, e.g. http://lxatac-12345
@@ -146,7 +146,7 @@ impl MountableScreen for SetupScreen {
         self.widgets.push(Box::new(
             DynamicWidget::text_aligned(
                 connectivity_topic,
-                ui.display.clone(),
+                display,
                 Point::new(120, 55),
                 Box::new(|connectivity| match connectivity {
                     Connectivity::Nothing => {
