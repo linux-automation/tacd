@@ -28,11 +28,11 @@ use crate::dbus::rauc::Progress;
 use super::widgets::*;
 use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 
-const SCREEN_TYPE: Screen = Screen::Rauc;
+const SCREEN_TYPE: Screen = Screen::UpdateInstallation;
 
-pub struct RaucScreen;
+pub struct UpdateInstallationScreen;
 
-impl RaucScreen {
+impl UpdateInstallationScreen {
     pub fn new(screen: &Arc<Topic<Screen>>, operation: &Arc<Topic<String>>) -> Self {
         // Activate the rauc screen if an update is started and deactivate
         // if it is done
@@ -61,7 +61,7 @@ struct Active {
     widgets: Vec<Box<dyn AnyWidget>>,
 }
 
-impl ActivatableScreen for RaucScreen {
+impl ActivatableScreen for UpdateInstallationScreen {
     fn my_type(&self) -> Screen {
         SCREEN_TYPE
     }

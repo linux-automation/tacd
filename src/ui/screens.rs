@@ -30,24 +30,24 @@ mod dig_out;
 mod help;
 mod iobus;
 mod power;
-mod rauc;
 mod reboot;
 mod screensaver;
 mod setup;
 mod system;
 mod uart;
+mod update_installation;
 mod usb;
 
 use dig_out::DigOutScreen;
 use help::HelpScreen;
 use iobus::IoBusScreen;
 use power::PowerScreen;
-use rauc::RaucScreen;
 use reboot::RebootConfirmScreen;
 use screensaver::ScreenSaverScreen;
 use setup::SetupScreen;
 use system::SystemScreen;
 use uart::UartScreen;
+use update_installation::UpdateInstallationScreen;
 use usb::UsbScreen;
 
 use super::buttons;
@@ -68,7 +68,7 @@ pub enum Screen {
     Uart,
     ScreenSaver,
     RebootConfirm,
-    Rauc,
+    UpdateInstallation,
     Setup,
     Help,
 }
@@ -85,7 +85,7 @@ impl Screen {
             Self::Uart => Self::ScreenSaver,
             Self::ScreenSaver => Self::DutPower,
             Self::RebootConfirm => Self::System,
-            Self::Rauc => Self::ScreenSaver,
+            Self::UpdateInstallation => Self::ScreenSaver,
             Self::Setup => Self::ScreenSaver,
             Self::Help => Self::ScreenSaver,
         }
@@ -93,7 +93,7 @@ impl Screen {
 
     /// Should screensaver be automatically enabled when in this screen?
     fn use_screensaver(&self) -> bool {
-        !matches!(self, Self::Rauc | Self::Setup | Self::Help)
+        !matches!(self, Self::UpdateInstallation | Self::Setup | Self::Help)
     }
 }
 
@@ -168,12 +168,12 @@ pub(super) fn init(
         Box::new(HelpScreen::new()),
         Box::new(IoBusScreen::new()),
         Box::new(PowerScreen::new()),
-        Box::new(RaucScreen::new(screen, &res.rauc.operation)),
         Box::new(RebootConfirmScreen::new()),
         Box::new(ScreenSaverScreen::new(buttons, screen)),
         Box::new(SetupScreen::new(screen, &res.setup_mode.setup_mode)),
         Box::new(SystemScreen::new()),
         Box::new(UartScreen::new()),
+        Box::new(UpdateInstallationScreen::new(screen, &res.rauc.operation)),
         Box::new(UsbScreen::new()),
     ]
 }
