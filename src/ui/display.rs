@@ -16,6 +16,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use std::io::Cursor;
+use std::sync::{Arc, Mutex};
 
 use embedded_graphics::{pixelcolor::BinaryColor, prelude::*};
 use png::{BitDepth, ColorType, Encoder};
@@ -62,34 +63,64 @@ mod backend {
 
 use backend::Framebuffer;
 
+pub struct DisplayExclusive(Framebuffer);
+
 pub struct Display {
-    fb: Framebuffer,
+    inner: Arc<Mutex<DisplayExclusive>>,
+}
+
+pub struct ScreenShooter {
+    inner: Arc<Mutex<DisplayExclusive>>,
 }
 
 impl Display {
-    pub fn new() -> Display {
+    pub fn new() -> Self {
         let mut fb = Framebuffer::new("/dev/fb0").unwrap();
         fb.var_screen_info.activate = 128; // FB_ACTIVATE_FORCE
         Framebuffer::put_var_screeninfo(&fb.device, &fb.var_screen_info).unwrap();
 
-        Display { fb }
+        let de = DisplayExclusive(fb);
+        let inner = Arc::new(Mutex::new(de));
+
+        Self { inner }
     }
 
-    pub fn clear(&mut self) {
-        self.fb.frame.iter_mut().for_each(|p| *p = 0x00);
+    pub fn with_lock<F, R>(&self, cb: F) -> R
+    where
+        F: FnOnce(&mut DisplayExclusive) -> R,
+    {
+        cb(&mut self.inner.lock().unwrap())
     }
 
+    pub fn clear(&self) {
+        self.with_lock(|target| target.0.frame.iter_mut().for_each(|p| *p = 0x00));
+    }
+
+    pub fn screenshooter(&self) -> ScreenShooter {
+        ScreenShooter {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl ScreenShooter {
     pub fn as_png(&self) -> Vec<u8> {
+        let (image, xres, yres) = {
+            let fb = &self.inner.lock().unwrap().0;
+
+            let bpp = (fb.var_screen_info.bits_per_pixel / 8) as usize;
+            let xres = fb.var_screen_info.xres;
+            let yres = fb.var_screen_info.yres;
+            let res = (xres as usize) * (yres as usize);
+
+            let image: Vec<u8> = (0..res)
+                .map(|i| if fb.frame[i * bpp] != 0 { 0xff } else { 0 })
+                .collect();
+
+            (image, xres, yres)
+        };
+
         let mut dst = Cursor::new(Vec::new());
-
-        let bpp = (self.fb.var_screen_info.bits_per_pixel / 8) as usize;
-        let xres = self.fb.var_screen_info.xres;
-        let yres = self.fb.var_screen_info.yres;
-        let res = (xres as usize) * (yres as usize);
-
-        let image: Vec<u8> = (0..res)
-            .map(|i| if self.fb.frame[i * bpp] != 0 { 0xff } else { 0 })
-            .collect();
 
         let mut writer = {
             let mut enc = Encoder::new(&mut dst, xres, yres);
@@ -105,7 +136,7 @@ impl Display {
     }
 }
 
-impl DrawTarget for Display {
+impl DrawTarget for DisplayExclusive {
     type Color = BinaryColor;
     type Error = core::convert::Infallible;
 
@@ -113,10 +144,10 @@ impl DrawTarget for Display {
     where
         I: IntoIterator<Item = Pixel<Self::Color>>,
     {
-        let bpp = self.fb.var_screen_info.bits_per_pixel / 8;
-        let xres = self.fb.var_screen_info.xres;
-        let yres = self.fb.var_screen_info.yres;
-        let line_length = self.fb.fix_screen_info.line_length;
+        let bpp = self.0.var_screen_info.bits_per_pixel / 8;
+        let xres = self.0.var_screen_info.xres;
+        let yres = self.0.var_screen_info.yres;
+        let line_length = self.0.fix_screen_info.line_length;
 
         for Pixel(coord, color) in pixels {
             let x = coord.x as u32;
@@ -129,7 +160,7 @@ impl DrawTarget for Display {
             let offset = line_length * y + bpp * x;
 
             for b in 0..bpp {
-                self.fb.frame[(offset + b) as usize] = match color {
+                self.0.frame[(offset + b) as usize] = match color {
                     BinaryColor::Off => 0x00,
                     BinaryColor::On => 0xff,
                 }
@@ -140,8 +171,8 @@ impl DrawTarget for Display {
     }
 }
 
-impl OriginDimensions for Display {
+impl OriginDimensions for DisplayExclusive {
     fn size(&self) -> Size {
-        Size::new(self.fb.var_screen_info.xres, self.fb.var_screen_info.yres)
+        Size::new(self.0.var_screen_info.xres, self.0.var_screen_info.yres)
     }
 }

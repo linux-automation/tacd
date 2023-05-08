@@ -90,16 +90,14 @@ impl MountableScreen for DigOutScreen {
             let anchor_voltage = row_anchor(idx * 4 + 2);
             let anchor_bar = anchor_voltage + OFFSET_BAR;
 
-            {
-                let mut display = ui.display.lock().await;
-
+            ui.display.with_lock(|target| {
                 let ui_text_style: MonoTextStyle<BinaryColor> =
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
                 Text::new(name, anchor_name, ui_text_style)
-                    .draw(&mut *display)
+                    .draw(target)
                     .unwrap();
-            }
+            });
 
             self.widgets.push(Box::new(DynamicWidget::text(
                 self.highlighted.clone(),

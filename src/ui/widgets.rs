@@ -16,7 +16,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use async_std::prelude::*;
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use async_std::task::{spawn, JoinHandle};
 use async_trait::async_trait;
 use embedded_graphics::{
@@ -29,8 +29,8 @@ use embedded_graphics::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use super::Display;
 use crate::broker::{Native, SubscriptionHandle, Topic};
+use crate::ui::display::{Display, DisplayExclusive};
 
 pub const UI_TEXT_FONT: MonoFont = FONT_10X20;
 
@@ -41,8 +41,8 @@ pub enum IndicatorState {
     Unkown,
 }
 
-pub trait DrawFn<T>: Fn(&T, &mut Display) -> Option<Rectangle> {}
-impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut Display) -> Option<Rectangle> {}
+pub trait DrawFn<T>: Fn(&T, &mut DisplayExclusive) -> Option<Rectangle> {}
+impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut DisplayExclusive) -> Option<Rectangle> {}
 
 pub trait IndicatorFormatFn<T>: Fn(&T) -> IndicatorState {}
 impl<T, U> IndicatorFormatFn<T> for U where U: Fn(&T) -> IndicatorState {}
@@ -74,7 +74,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     ///   The widget system takes care of clearing this area before redrawing.
     pub fn new(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<Display>>,
+        display: Arc<Display>,
         draw_fn: Box<dyn DrawFn<T> + Sync + Send>,
     ) -> Self {
         let (mut rx, sub_handle) = topic.subscribe_unbounded();
@@ -83,16 +83,16 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
             let mut prev_bb: Option<Rectangle> = None;
 
             while let Some(val) = rx.next().await {
-                let mut target = target.lock().await;
+                display.with_lock(|target| {
+                    if let Some(bb) = prev_bb.take() {
+                        // Clear the bounding box by painting it black
+                        bb.into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+                            .draw(target)
+                            .unwrap();
+                    }
 
-                if let Some(bb) = prev_bb.take() {
-                    // Clear the bounding box by painting it black
-                    bb.into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
-                        .draw(&mut *target)
-                        .unwrap();
-                }
-
-                prev_bb = draw_fn(&val, &mut *target);
+                    prev_bb = draw_fn(&val, target);
+                });
             }
         });
 
@@ -107,7 +107,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// the fraction of the graph to fill.
     pub fn bar(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<Display>>,
+        display: Arc<Display>,
         anchor: Point,
         width: u32,
         height: u32,
@@ -115,7 +115,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     ) -> Self {
         Self::new(
             topic,
-            target,
+            display,
             Box::new(move |msg, target| {
                 let val = format_fn(msg).clamp(0.0, 1.0);
                 let fill_width = ((width as f32) * val) as u32;
@@ -141,13 +141,13 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw an indicator bubble in an "On", "Off" or "Error" state
     pub fn indicator(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<Display>>,
+        display: Arc<Display>,
         anchor: Point,
         format_fn: Box<dyn IndicatorFormatFn<T> + Sync + Send>,
     ) -> Self {
         Self::new(
             topic,
-            target,
+            display,
             Box::new(move |msg, target| {
                 let ui_text_style: MonoTextStyle<BinaryColor> =
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
@@ -207,14 +207,14 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw self-updating text with configurable alignment
     pub fn text_aligned(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<Display>>,
+        display: Arc<Display>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
         alignment: Alignment,
     ) -> Self {
         Self::new(
             topic,
-            target,
+            display,
             Box::new(move |msg, target| {
                 let text = format_fn(msg);
 
@@ -235,31 +235,31 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw self-updating left aligned text
     pub fn text(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<Display>>,
+        display: Arc<Display>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
     ) -> Self {
-        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Left)
+        Self::text_aligned(topic, display, anchor, format_fn, Alignment::Left)
     }
 
     /// Draw self-updating centered text
     pub fn text_center(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<Display>>,
+        display: Arc<Display>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
     ) -> Self {
-        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Center)
+        Self::text_aligned(topic, display, anchor, format_fn, Alignment::Center)
     }
 }
 
 impl DynamicWidget<i32> {
     /// Draw an animated locator widget at the side of the screen
     /// (if the locator is active).
-    pub fn locator(topic: Arc<Topic<i32>>, target: Arc<Mutex<Display>>) -> Self {
+    pub fn locator(topic: Arc<Topic<i32>>, display: Arc<Display>) -> Self {
         Self::new(
             topic,
-            target,
+            display,
             Box::new(move |val, target| {
                 let size = 128 - (*val - 32).abs() * 4;
 

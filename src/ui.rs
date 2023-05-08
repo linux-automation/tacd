@@ -18,7 +18,7 @@
 use std::time::Duration;
 
 use async_std::prelude::*;
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use async_std::task::{sleep, spawn};
 use tide::{Response, Server};
 
@@ -31,7 +31,7 @@ mod screens;
 mod widgets;
 
 use buttons::{handle_buttons, ButtonEvent};
-use display::Display;
+use display::{Display, ScreenShooter};
 use screens::{MountableScreen, Screen};
 
 pub struct UiResources {
@@ -51,7 +51,7 @@ pub struct UiResources {
 }
 
 pub struct Ui {
-    display: Arc<Mutex<Display>>,
+    display: Arc<Display>,
     screen: Arc<Topic<Screen>>,
     locator: Arc<Topic<bool>>,
     locator_dance: Arc<Topic<i32>>,
@@ -61,15 +61,15 @@ pub struct Ui {
 }
 
 /// Add a web endpoint that serves the current framebuffer as png
-fn serve_framebuffer(server: &mut Server<()>, display: Arc<Mutex<Display>>) {
+fn serve_framebuffer(server: &mut Server<()>, screenshooter: ScreenShooter) {
     server.at("/v1/tac/display/content").get(move |_| {
-        let display = display.clone();
+        let png = screenshooter.as_png();
 
         async move {
             Ok(Response::builder(200)
                 .content_type("image/png")
                 .header("Cache-Control", "no-store")
-                .body(display.lock().await.as_png())
+                .body(png)
                 .build())
         }
     });
@@ -146,10 +146,10 @@ impl Ui {
             }
         });
 
-        let display = Arc::new(Mutex::new(Display::new()));
+        let display = Arc::new(Display::new());
 
         // Expose the framebuffer as png via the web interface
-        serve_framebuffer(server, display.clone());
+        serve_framebuffer(server, display.screenshooter());
 
         Self {
             display,
@@ -191,7 +191,7 @@ impl Ui {
 
                 // Clear the screen as static elements are not cleared by the
                 // widget framework magic
-                self.display.lock().await.clear();
+                self.display.clear();
 
                 // Find the screen to show (if any) and "mount" it
                 // (e.g. tell it to handle the screen by itself).

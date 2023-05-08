@@ -56,28 +56,26 @@ impl MountableScreen for IoBusScreen {
     async fn mount(&mut self, ui: &Ui) {
         draw_border("IOBus", SCREEN_TYPE, &ui.display).await;
 
-        {
-            let mut display = ui.display.lock().await;
-
+        ui.display.with_lock(|target| {
             let ui_text_style: MonoTextStyle<BinaryColor> =
                 MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
             Text::new("CAN Status:", row_anchor(0), ui_text_style)
-                .draw(&mut *display)
+                .draw(target)
                 .unwrap();
 
             Text::new("LSS Scan Status:", row_anchor(1), ui_text_style)
-                .draw(&mut *display)
+                .draw(target)
                 .unwrap();
 
             Text::new("Power Fault:", row_anchor(2), ui_text_style)
-                .draw(&mut *display)
+                .draw(target)
                 .unwrap();
 
             Text::new("> Power On:", row_anchor(5), ui_text_style)
-                .draw(&mut *display)
+                .draw(target)
                 .unwrap();
-        }
+        });
 
         self.widgets.push(Box::new(DynamicWidget::text(
             ui.res.iobus.nodes.clone(),

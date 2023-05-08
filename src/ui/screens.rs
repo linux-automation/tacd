@@ -15,7 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle,
@@ -105,31 +105,31 @@ pub(super) trait MountableScreen: Sync + Send {
 
 /// Draw static screen border containing a title and an indicator for the
 /// position of the screen in the list of screens.
-async fn draw_border(text: &str, screen: Screen, display: &Mutex<Display>) {
-    let mut display = display.lock().await;
-
-    Text::new(
-        text,
-        Point::new(8, 17),
-        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On),
-    )
-    .draw(&mut *display)
-    .unwrap();
-
-    Line::new(Point::new(0, 24), Point::new(230, 24))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-        .draw(&mut *display)
+async fn draw_border(text: &str, screen: Screen, display: &Display) {
+    display.with_lock(|target| {
+        Text::new(
+            text,
+            Point::new(8, 17),
+            MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On),
+        )
+        .draw(target)
         .unwrap();
 
-    let screen_idx = screen as i32;
-    let num_screens = Screen::ScreenSaver as i32;
-    let x_start = screen_idx * 240 / num_screens;
-    let x_end = (screen_idx + 1) * 240 / num_screens;
+        Line::new(Point::new(0, 24), Point::new(230, 24))
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
+            .draw(target)
+            .unwrap();
 
-    Line::new(Point::new(x_start, 238), Point::new(x_end, 238))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
-        .draw(&mut *display)
-        .unwrap();
+        let screen_idx = screen as i32;
+        let num_screens = Screen::ScreenSaver as i32;
+        let x_start = screen_idx * 240 / num_screens;
+        let x_end = (screen_idx + 1) * 240 / num_screens;
+
+        Line::new(Point::new(x_start, 238), Point::new(x_end, 238))
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
+            .draw(target)
+            .unwrap();
+    });
 }
 
 const fn row_anchor(row_num: u8) -> Point {

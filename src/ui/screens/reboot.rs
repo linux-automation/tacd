@@ -45,32 +45,36 @@ impl RebootConfirmScreen {
     }
 }
 
-fn rly(display: &mut Display) {
+fn rly(display: &Display) {
     let text_style: MonoTextStyle<BinaryColor> = MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-    Text::with_alignment(
-        "Really reboot?\nLong press lower\nbutton to confirm.",
-        Point::new(120, 120),
-        text_style,
-        Alignment::Center,
-    )
-    .draw(display)
-    .unwrap();
+    display.with_lock(|target| {
+        Text::with_alignment(
+            "Really reboot?\nLong press lower\nbutton to confirm.",
+            Point::new(120, 120),
+            text_style,
+            Alignment::Center,
+        )
+        .draw(target)
+        .unwrap();
+    });
 }
 
-fn brb(display: &mut Display) {
+fn brb(display: &Display) {
     let text_style: MonoTextStyle<BinaryColor> = MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
     display.clear();
 
-    Text::with_alignment(
-        "Hold tight\nBe right back",
-        Point::new(120, 120),
-        text_style,
-        Alignment::Center,
-    )
-    .draw(display)
-    .unwrap();
+    display.with_lock(|target| {
+        Text::with_alignment(
+            "Hold tight\nBe right back",
+            Point::new(120, 120),
+            text_style,
+            Alignment::Center,
+        )
+        .draw(target)
+        .unwrap();
+    });
 }
 
 #[async_trait]
@@ -81,7 +85,7 @@ impl MountableScreen for RebootConfirmScreen {
 
     async fn mount(&mut self, ui: &Ui) {
         let display = ui.display.clone();
-        rly(&mut *display.lock().await);
+        rly(&display);
 
         let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let screen = ui.screen.clone();
@@ -95,7 +99,7 @@ impl MountableScreen for RebootConfirmScreen {
                         dur: PressDuration::Long,
                         src: _,
                     } => {
-                        brb(&mut *display.lock().await);
+                        brb(&display);
                         reboot.set(true);
                         break;
                     }

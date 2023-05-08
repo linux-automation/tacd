@@ -89,16 +89,14 @@ impl MountableScreen for UsbScreen {
             ),
         ];
 
-        {
-            let mut display = ui.display.lock().await;
-
+        ui.display.with_lock(|target| {
             let ui_text_style: MonoTextStyle<BinaryColor> =
                 MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
             Text::new("Total", row_anchor(0), ui_text_style)
-                .draw(&mut *display)
+                .draw(target)
                 .unwrap();
-        }
+        });
 
         self.widgets.push(Box::new(DynamicWidget::bar(
             ui.res.adc.usb_host_curr.topic.clone(),
