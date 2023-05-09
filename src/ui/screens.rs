@@ -128,17 +128,17 @@ fn draw_border(text: &str, screen: NormalScreen, display: &Display) {
         .draw(target)
         .unwrap();
 
-        Line::new(Point::new(0, 24), Point::new(230, 24))
+        Line::new(Point::new(0, 24), Point::new(240, 24))
             .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
             .draw(target)
             .unwrap();
 
         let screen_idx = screen as i32;
-        let num_screens = NormalScreen::Uart as i32 + 1;
+        let num_screens = (NormalScreen::Uart as i32) + 1;
         let x_start = screen_idx * 240 / num_screens;
         let x_end = (screen_idx + 1) * 240 / num_screens;
 
-        Line::new(Point::new(x_start, 238), Point::new(x_end, 238))
+        Line::new(Point::new(x_start, 240), Point::new(x_end, 240))
             .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
             .draw(target)
             .unwrap();
