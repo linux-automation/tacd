@@ -240,6 +240,28 @@ export function ProgressNotification() {
   );
 }
 
+export function RebootNotification() {
+  const should_reboot = useMqttSubscription<boolean>(
+    "/v1/tac/update/should_reboot"
+  );
+
+  return (
+    <Alert
+      statusIconAriaLabel="Info"
+      visible={should_reboot === true}
+      action={
+        <MqttButton iconName="refresh" topic="/v1/tac/reboot" send={true}>
+          Reboot
+        </MqttButton>
+      }
+      header="Reboot into other slot"
+    >
+      There is a newer operating system bundle installed in the other boot slot.
+      Reboot now to use it.
+    </Alert>
+  );
+}
+
 export function UpdateContainer() {
   return (
     <Container
