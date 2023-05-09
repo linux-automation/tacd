@@ -36,6 +36,7 @@ png = "0.17"
 rand = { version = "0.8", optional = true}
 serde_json = "1.0"
 serde_repr = "0.1"
+serde_yaml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 sha-1 = "0.10"
 surf = { version = "2.3", default-features = false, features = ["h1-client-no-tls"] }

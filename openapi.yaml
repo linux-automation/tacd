@@ -747,6 +747,43 @@ paths:
         '400':
           description: The value could not be parsed as string
 
+  /v1/tac/update/channels:
+    get:
+      summary: Get a list of update channels and available updates
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateChannels'
+
+  /v1/tac/update/channels/reload:
+    put:
+      summary: Request an update of the channels list and update availability
+      tags: [Updating]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: An update was requested (if true was sent)
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/tac/update/should_reboot:
+    get:
+      summary: Should the system be rebooted as there is a new bundle in the other slot?
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
   /v1/tac/network/hostname:
     get:
       summary: Get the systems hostname
@@ -969,6 +1006,38 @@ components:
           type: string
         nesting_depth:
           type: number
+
+    UpdateChannels:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          display_name:
+            type: string
+          description:
+            type: string
+          url:
+            type: string
+          polling_interval:
+            type: object
+            properties:
+              secs:
+                type: integer
+              nanos:
+                type: integer
+          enabled:
+            type: boolean
+          bundle:
+            type: object
+            properties:
+              compatible:
+                type: string
+              version:
+                type: string,
+              newer_than_installed:
+                type: boolean
 
     ServiceStatus:
       type: object
