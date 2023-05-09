@@ -179,7 +179,7 @@ export function SlotStatus() {
   }
 }
 
-export function UpdateStatus() {
+export function ProgressNotification() {
   const operation = useMqttSubscription<string>("/v1/tac/update/operation");
   const progress = useMqttSubscription<RaucProgress>("/v1/tac/update/progress");
   const last_error = useMqttSubscription<string>("/v1/tac/update/last_error");
@@ -199,12 +199,14 @@ export function UpdateStatus() {
     prev_operation.current = operation;
   }, [operation]);
 
+  let inner = null;
+
   if (installStep === RaucInstallStep.Installing) {
     let valid = progress !== undefined;
     let value = progress === undefined ? 0 : progress.percentage;
     let message = progress === undefined ? "" : progress.message;
 
-    return (
+    inner = (
       <ProgressBar
         status={valid ? "in-progress" : "error"}
         value={value}
@@ -215,17 +217,8 @@ export function UpdateStatus() {
   }
 
   if (installStep === RaucInstallStep.Done) {
-    if (last_error === undefined || last_error === "") {
-      return (
-        <ProgressBar
-          status={"success"}
-          value={100}
-          description="Done"
-          additionalInfo="Bundle installed successfully"
-        />
-      );
-    } else {
-      return (
+    if (last_error !== undefined && last_error !== "") {
+      inner = (
         <ProgressBar
           status={"error"}
           value={100}
@@ -237,12 +230,13 @@ export function UpdateStatus() {
   }
 
   return (
-    <ProgressBar
-      status={"in-progress"}
-      value={0}
-      description="Idle"
-      additionalInfo="No bundle is being installed"
-    />
+    <Alert
+      statusIconAriaLabel="Info"
+      header="Installing Operating System Update"
+      visible={inner !== null}
+    >
+      {inner}
+    </Alert>
   );
 }
 
@@ -259,7 +253,6 @@ export function UpdateContainer() {
       }
     >
       <SpaceBetween size="m">
-        <UpdateStatus />
         <SlotStatus />
       </SpaceBetween>
     </Container>

@@ -30,7 +30,7 @@ import "@cloudscape-design/global-styles/index.css";
 import "./App.css";
 import { useMqttSubscription } from "./mqtt";
 import { ApiPickerButton, MqttButton } from "./MqttComponents";
-import { LocatorNotification } from "./TacComponents";
+import { ProgressNotification, LocatorNotification } from "./TacComponents";
 
 function Navigation() {
   const [activeHref, setActiveHref] = useState("#/");
@@ -128,6 +128,7 @@ function Notifications() {
   return (
     <>
       <ConnectionNotification />
+      <ProgressNotification />
       <LocatorNotification />
     </>
   );
