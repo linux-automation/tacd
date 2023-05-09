@@ -113,32 +113,6 @@ export function SlotStatus() {
           header={
             <Header
               variant="h3"
-              description="The bootloader is responsible for loading the Linux kernel"
-            >
-              Bootloader Slot
-            </Header>
-          }
-        >
-          <ColumnLayout columns={3} variant="text-grid">
-            <Box>
-              <Box variant="awsui-key-label">Status</Box>
-              <Box>{slot_status.bootloader_0.status}</Box>
-            </Box>
-            <Box>
-              <Box variant="awsui-key-label">Build Date</Box>
-              <Box>{slot_status.bootloader_0.bundle_build}</Box>
-            </Box>
-            <Box>
-              <Box variant="awsui-key-label">Installation Date</Box>
-              <Box>{slot_status.bootloader_0.installed_timestamp}</Box>
-            </Box>
-          </ColumnLayout>
-        </Container>
-
-        <Container
-          header={
-            <Header
-              variant="h3"
               description="The root file system contains your applications and settings"
             >
               Root Filesystem Slots
@@ -178,6 +152,32 @@ export function SlotStatus() {
             selectionType="single"
             trackBy="name"
           />
+        </Container>
+
+        <Container
+          header={
+            <Header
+              variant="h3"
+              description="The bootloader is responsible for loading the Linux kernel"
+            >
+              Bootloader Slot
+            </Header>
+          }
+        >
+          <ColumnLayout columns={3} variant="text-grid">
+            <Box>
+              <Box variant="awsui-key-label">Status</Box>
+              <Box>{slot_status.bootloader_0.status}</Box>
+            </Box>
+            <Box>
+              <Box variant="awsui-key-label">Build Date</Box>
+              <Box>{slot_status.bootloader_0.bundle_build}</Box>
+            </Box>
+            <Box>
+              <Box variant="awsui-key-label">Installation Date</Box>
+              <Box>{slot_status.bootloader_0.installed_timestamp}</Box>
+            </Box>
+          </ColumnLayout>
         </Container>
       </SpaceBetween>
     );
