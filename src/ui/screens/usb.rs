@@ -74,8 +74,6 @@ impl ActivatableScreen for UsbScreen {
 
         let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
-
         let ports = [
             (
                 0,

@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::{sleep, spawn};
+use async_std::task::spawn;
 use futures::{select, FutureExt};
 use tide::{Response, Server};
 
@@ -57,7 +57,6 @@ pub struct Ui {
     screen: Arc<Topic<NormalScreen>>,
     alerts: Arc<Topic<AlertList>>,
     locator: Arc<Topic<bool>>,
-    locator_dance: Arc<Topic<i32>>,
     buttons: Arc<Topic<ButtonEvent>>,
     screens: Vec<Box<dyn ActivatableScreen>>,
     reboot_message: Arc<Topic<Option<String>>>,
@@ -121,7 +120,6 @@ impl Ui {
     pub fn new(bb: &mut BrokerBuilder, res: UiResources) -> Self {
         let screen = bb.topic_rw("/v1/tac/display/screen", Some(NormalScreen::first()));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
-        let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, false, None, 0);
         let alerts = bb.topic_ro("/v1/tac/display/alerts", Some(AlertList::new()));
         let reboot_message = Topic::anonymous(None);
@@ -129,41 +127,12 @@ impl Ui {
         alerts.assert(AlertScreen::ScreenSaver);
 
         // Initialize all the screens now so they can be activated later
-        let screens = screens::init(&res, &alerts, &buttons, &reboot_message);
+        let screens = screens::init(&res, &alerts, &buttons, &reboot_message, &locator);
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",
             buttons.clone(),
         );
-
-        // Animated Locator for the locator widget
-        let locator_task = locator.clone();
-        let locator_dance_task = locator_dance.clone();
-        spawn(async move {
-            let (mut rx, _) = locator_task.clone().subscribe_unbounded();
-
-            loop {
-                // As long as the locator is active:
-                // count down the value in locator_dance from 63 to 0
-                // with some pause in between in a loop.
-                while locator_task.try_get().unwrap_or(false) {
-                    locator_dance_task.modify(|v| match v {
-                        None | Some(0) => Some(63),
-                        Some(v) => Some(v - 1),
-                    });
-                    sleep(Duration::from_millis(100)).await;
-                }
-
-                // If the locator is empty stop the animation
-                locator_dance_task.set(0);
-
-                match rx.next().await {
-                    Some(true) => {}
-                    Some(false) => continue,
-                    None => break,
-                }
-            }
-        });
 
         // Blink the status LED when locator is active
         let led_status_pattern = res.led.status.clone();
@@ -196,7 +165,6 @@ impl Ui {
             screen,
             alerts,
             locator,
-            locator_dance,
             buttons,
             screens,
             reboot_message,

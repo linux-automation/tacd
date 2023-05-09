@@ -60,8 +60,6 @@ impl ActivatableScreen for PowerScreen {
 
         let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
-
         widgets.push(|display| {
             DynamicWidget::text(
                 ui.res.adc.pwr_volt.topic.clone(),

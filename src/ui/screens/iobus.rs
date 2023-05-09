@@ -85,8 +85,6 @@ impl ActivatableScreen for IoBusScreen {
             )
         });
 
-        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
-
         widgets.push(|display| {
             DynamicWidget::indicator(
                 ui.res.iobus.server_info.clone(),

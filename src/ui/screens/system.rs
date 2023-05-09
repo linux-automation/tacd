@@ -75,8 +75,6 @@ impl ActivatableScreen for SystemScreen {
         let mut widgets = WidgetContainer::new(display);
         let highlighted = Topic::anonymous(Some(Action::Reboot));
 
-        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
-
         widgets.push(|display| {
             DynamicWidget::text(
                 ui.res.temperatures.soc_temperature.clone(),

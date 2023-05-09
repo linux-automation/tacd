@@ -297,36 +297,6 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     }
 }
 
-impl DynamicWidget<i32> {
-    /// Draw an animated locator widget at the side of the screen
-    /// (if the locator is active).
-    pub fn locator(topic: Arc<Topic<i32>>, display: Arc<Display>) -> Self {
-        Self::new(
-            topic,
-            display,
-            Box::new(move |val, target| {
-                let size = 128 - (*val - 32).abs() * 4;
-
-                if size != 0 {
-                    let bounding = Rectangle::with_center(
-                        Point::new(240 - 5, 120),
-                        Size::new(10, size as u32),
-                    );
-
-                    bounding
-                        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
-                        .draw(&mut *target)
-                        .unwrap();
-
-                    Some(bounding)
-                } else {
-                    None
-                }
-            }),
-        )
-    }
-}
-
 #[async_trait]
 pub trait AnyWidget: Send + Sync {
     async fn unmount(self: Box<Self>) -> Arc<Display>;

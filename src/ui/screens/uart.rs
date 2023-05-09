@@ -55,8 +55,6 @@ impl ActivatableScreen for UartScreen {
 
         let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
-
         let ports = [
             (0, "UART RX EN", 52, &ui.res.dig_io.uart_rx_en),
             (1, "UART TX EN", 72, &ui.res.dig_io.uart_tx_en),

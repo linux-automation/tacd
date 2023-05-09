@@ -63,8 +63,6 @@ impl ActivatableScreen for UpdateInstallationScreen {
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
-
         widgets.push(|display| {
             DynamicWidget::text_center(
                 ui.res.rauc.progress.clone(),

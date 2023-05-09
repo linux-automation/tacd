@@ -92,8 +92,6 @@ impl ActivatableScreen for DigOutScreen {
 
         let mut widgets = WidgetContainer::new(display);
 
-        widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
-
         for (idx, _, status, voltage) in ports {
             let anchor_assert = row_anchor(idx * 4 + 1);
             let anchor_indicator = anchor_assert + OFFSET_INDICATOR;
