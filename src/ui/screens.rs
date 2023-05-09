@@ -105,7 +105,7 @@ pub(super) trait MountableScreen: Sync + Send {
 
 /// Draw static screen border containing a title and an indicator for the
 /// position of the screen in the list of screens.
-async fn draw_border(text: &str, screen: Screen, display: &Arc<Mutex<Display>>) {
+async fn draw_border(text: &str, screen: Screen, display: &Mutex<Display>) {
     let mut display = display.lock().await;
 
     Text::new(
