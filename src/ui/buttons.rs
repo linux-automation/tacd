@@ -18,12 +18,12 @@
 use std::time::Duration;
 
 use async_std::sync::Arc;
-use async_std::task::spawn_blocking;
+use async_std::task::{block_on, sleep, spawn, spawn_blocking, JoinHandle};
 use serde::{Deserialize, Serialize};
 
 use crate::broker::Topic;
 
-pub const LONG_PRESS: Duration = Duration::from_millis(750);
+pub const LONG_PRESS: Duration = Duration::from_millis(500);
 
 #[cfg(feature = "demo_mode")]
 mod evd {
@@ -51,6 +51,12 @@ mod evd {
 }
 
 use evd::{Device, EventType, InputEventKind, Key};
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+pub enum Direction {
+    Press,
+    Release,
+}
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub enum Button {
@@ -97,30 +103,27 @@ pub enum Source {
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
-pub enum ButtonEvent {
-    Press {
-        btn: Button,
-        #[serde(skip)]
-        src: Source,
-    },
-    Release {
-        btn: Button,
-        dur: PressDuration,
-        #[serde(skip)]
-        src: Source,
-    },
+pub struct ButtonEvent {
+    pub dir: Direction,
+    pub btn: Button,
+    pub dur: PressDuration,
+    #[serde(skip)]
+    pub src: Source,
 }
 
 impl ButtonEvent {
-    fn press_from_id(id: usize) -> Self {
-        ButtonEvent::Press {
+    fn press_from_id(id: usize, dur: PressDuration) -> Self {
+        Self {
+            dir: Direction::Press,
             btn: Button::from_id(id),
+            dur,
             src: Source::Local,
         }
     }
 
     fn release_from_id_duration(id: usize, duration: Duration) -> Self {
-        ButtonEvent::Release {
+        Self {
+            dir: Direction::Release,
             btn: Button::from_id(id),
             dur: PressDuration::from_duration(duration),
             src: Source::Local,
@@ -131,10 +134,9 @@ impl ButtonEvent {
 /// Spawn a thread that blockingly reads user input and pushes them into
 /// a broker framework topic.
 pub fn handle_buttons(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
-    use super::*;
-
     spawn_blocking(move || {
         let mut device = Device::open(path).unwrap();
+        let mut press_task: [Option<JoinHandle<()>>; 2] = [None, None];
         let mut start_time = [None, None];
 
         loop {
@@ -149,6 +151,10 @@ pub fn handle_buttons(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
                     _ => continue,
                 };
 
+                if let Some(task) = press_task[id].take() {
+                    block_on(task.cancel());
+                }
+
                 if ev.value() == 0 {
                     // Button release -> send event
                     if let Some(start) = start_time[id].take() {
@@ -160,7 +166,16 @@ pub fn handle_buttons(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
                 } else {
                     // Button press -> register start time and send event
                     start_time[id] = Some(ev.timestamp());
-                    topic.set(ButtonEvent::press_from_id(id));
+
+                    let topic = topic.clone();
+                    topic.set(ButtonEvent::press_from_id(id, PressDuration::Short));
+
+                    // This task will either run to completion (in case of a long press)
+                    // or will be canceled while sleep()ing (in case of a short press).
+                    press_task[id] = Some(spawn(async move {
+                        sleep(LONG_PRESS).await;
+                        topic.set(ButtonEvent::press_from_id(id, PressDuration::Long));
+                    }));
                 }
             }
         }

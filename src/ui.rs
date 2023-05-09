@@ -33,7 +33,7 @@ mod screens;
 mod widgets;
 
 use alerts::{AlertList, Alerter};
-use buttons::{handle_buttons, Button, ButtonEvent, PressDuration, Source};
+use buttons::{handle_buttons, Button, ButtonEvent, Direction, PressDuration, Source};
 pub use display::{Display, ScreenShooter};
 use screens::{splash, ActivatableScreen, AlertScreen, NormalScreen, Screen};
 
@@ -72,17 +72,20 @@ enum InputEvent {
 impl InputEvent {
     fn from_button(ev: ButtonEvent) -> Option<Self> {
         match ev {
-            ButtonEvent::Release {
+            ButtonEvent {
+                dir: Direction::Press,
                 btn: Button::Upper,
-                dur: _,
+                dur: PressDuration::Short,
                 src: _,
             } => Some(Self::NextScreen),
-            ButtonEvent::Release {
+            ButtonEvent {
+                dir: Direction::Release,
                 btn: Button::Lower,
                 dur: PressDuration::Short,
                 src,
             } => Some(Self::ToggleAction(src)),
-            ButtonEvent::Release {
+            ButtonEvent {
+                dir: Direction::Press,
                 btn: Button::Lower,
                 dur: PressDuration::Long,
                 src,

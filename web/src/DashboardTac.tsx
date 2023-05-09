@@ -166,38 +166,31 @@ export default function DashboardTac() {
           />
           <SpaceBetween size="m">
             <Box>
-              <Box variant="awsui-key-label">Upper Button</Box>
-              <SpaceBetween direction="horizontal" size="xs">
-                <MqttButton
-                  topic="/v1/tac/display/buttons"
-                  send={{ Release: { btn: "Upper", dur: "Short" } }}
-                >
-                  Short press
-                </MqttButton>
-                <MqttButton
-                  topic="/v1/tac/display/buttons"
-                  send={{ Release: { btn: "Upper", dur: "Long" } }}
-                >
-                  Long press
-                </MqttButton>
-              </SpaceBetween>
+              <Box variant="awsui-key-label">Next Screen</Box>
+              <MqttButton
+                topic="/v1/tac/display/buttons"
+                send={{ dir: "Press", btn: "Upper", dur: "Short" }}
+              >
+                Next Screen
+              </MqttButton>
             </Box>
             <Box>
-              <Box variant="awsui-key-label">Lower Button</Box>
-              <SpaceBetween direction="horizontal" size="xs">
-                <MqttButton
-                  topic="/v1/tac/display/buttons"
-                  send={{ Release: { btn: "Lower", dur: "Short" } }}
-                >
-                  Short press
-                </MqttButton>
-                <MqttButton
-                  topic="/v1/tac/display/buttons"
-                  send={{ Release: { btn: "Lower", dur: "Long" } }}
-                >
-                  Long press
-                </MqttButton>
-              </SpaceBetween>
+              <Box variant="awsui-key-label">Toggle Action</Box>
+              <MqttButton
+                topic="/v1/tac/display/buttons"
+                send={{ dir: "Release", btn: "Lower", dur: "Short" }}
+              >
+                Toggle Action
+              </MqttButton>
+            </Box>
+            <Box>
+              <Box variant="awsui-key-label">Perform Action</Box>
+              <MqttButton
+                topic="/v1/tac/display/buttons"
+                send={{ dir: "Press", btn: "Lower", dur: "Long" }}
+              >
+                Perform Action
+              </MqttButton>
             </Box>
             <Box>
               <Box variant="awsui-key-label">Locator</Box>

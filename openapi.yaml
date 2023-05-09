@@ -824,30 +824,23 @@ components:
     ButtonEvent:
       type: object
       properties:
-        Press:
-          type: object
-          properties:
-            btn:
-              type: string
-              enum:
-                - Upper
-                - Lower
-        Release:
-          type: object
-          properties:
-            btn:
-              type: string
-              enum:
-                - Upper
-                - Lower
-            dur:
-              type: string
-              enum:
-                - Short
-                - Long
-      oneOf:
-        - required: [Press]
-        - required: [Release]
+        type: object
+        properties:
+          dir:
+            type: string
+            enum:
+              - Press
+              - Release
+          btn:
+            type: string
+            enum:
+              - Upper
+              - Lower
+          dur:
+            type: string
+            enum:
+              - Short
+              - Long
 
     BlinkPattern:
       type: object
