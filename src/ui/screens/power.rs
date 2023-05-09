@@ -21,13 +21,14 @@ use embedded_graphics::prelude::*;
 
 use super::widgets::*;
 use super::{
-    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
+    Screen, Ui,
 };
 use crate::broker::Topic;
 use crate::dut_power::{OutputRequest, OutputState};
 use crate::measurement::Measurement;
 
-const SCREEN_TYPE: Screen = Screen::DutPower;
+const SCREEN_TYPE: NormalScreen = NormalScreen::DutPower;
 const CURRENT_LIMIT: f32 = 5.0;
 const VOLTAGE_LIMIT: f32 = 48.0;
 const OFFSET_INDICATOR: Point = Point::new(155, -10);
@@ -47,12 +48,11 @@ struct Active {
     widgets: WidgetContainer,
     power_state: Arc<Topic<OutputState>>,
     power_request: Arc<Topic<OutputRequest>>,
-    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for PowerScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Normal(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -136,13 +136,11 @@ impl ActivatableScreen for PowerScreen {
 
         let power_state = ui.res.dut_pwr.state.clone();
         let power_request = ui.res.dut_pwr.request.clone();
-        let screen = ui.screen.clone();
 
         let active = Active {
             widgets,
             power_state,
             power_request,
-            screen,
         };
 
         Box::new(active)
@@ -151,14 +149,17 @@ impl ActivatableScreen for PowerScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
 
     fn input(&mut self, ev: InputEvent) {
         match ev {
-            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
-            InputEvent::ToggleAction(_) => {}
+            InputEvent::NextScreen | InputEvent::ToggleAction(_) => {}
             InputEvent::PerformAction(_) => {
                 let req = match self.power_state.try_get() {
                     Some(OutputState::On) => OutputRequest::Off,

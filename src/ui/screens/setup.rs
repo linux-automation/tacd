@@ -23,10 +23,13 @@ use embedded_graphics::{prelude::Point, text::Alignment};
 use serde::{Deserialize, Serialize};
 
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use super::{
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
+    Ui,
+};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
-const SCREEN_TYPE: Screen = Screen::Setup;
+const SCREEN_TYPE: AlertScreen = AlertScreen::Setup;
 
 #[derive(Serialize, Deserialize, Clone)]
 enum Connectivity {
@@ -38,26 +41,24 @@ enum Connectivity {
 
 pub struct SetupScreen;
 
+struct Active {
+    widgets: WidgetContainer,
+    hostname_update_handle: SubscriptionHandle<String, Native>,
+    ip_update_handle: SubscriptionHandle<Vec<String>, Native>,
+}
+
 impl SetupScreen {
-    pub fn new(screen: &Arc<Topic<Screen>>, setup_mode: &Arc<Topic<bool>>) -> Self {
+    pub fn new(alerts: &Arc<Topic<AlertList>>, setup_mode: &Arc<Topic<bool>>) -> Self {
         let (mut setup_mode_events, _) = setup_mode.clone().subscribe_unbounded();
-        let screen_task = screen.clone();
+        let alerts = alerts.clone();
+
         spawn(async move {
             while let Some(setup_mode) = setup_mode_events.next().await {
-                /* If the setup mode is enabled and we are on the setup mode screen
-                 * => Do nothing.
-                 * If the setup mode is enabled and we are not on the setup mode screen
-                 * => Go to the setup mode screen.
-                 * If the setup mode is not enabled but we are on its screen
-                 * => Go the "next" screen, as specified in screens.rs.
-                 * None of the above
-                 * => Do nothing. */
-                screen_task.modify(|screen| match (setup_mode, screen) {
-                    (true, Some(Screen::Setup)) => None,
-                    (true, _) => Some(Screen::Setup),
-                    (false, Some(Screen::Setup)) => Some(Screen::Setup.next()),
-                    (false, _) => None,
-                });
+                if setup_mode {
+                    alerts.assert(AlertScreen::Setup);
+                } else {
+                    alerts.deassert(AlertScreen::Setup);
+                }
             }
         });
 
@@ -65,15 +66,9 @@ impl SetupScreen {
     }
 }
 
-struct Active {
-    widgets: WidgetContainer,
-    hostname_update_handle: SubscriptionHandle<String, Native>,
-    ip_update_handle: SubscriptionHandle<Vec<String>, Native>,
-}
-
 impl ActivatableScreen for SetupScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Alert(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -172,6 +167,10 @@ impl ActivatableScreen for SetupScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.hostname_update_handle.unsubscribe();
         self.ip_update_handle.unsubscribe();

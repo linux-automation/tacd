@@ -52,53 +52,58 @@ use usb::UsbScreen;
 
 use super::buttons;
 use super::widgets;
-use super::{InputEvent, Ui, UiResources};
+use super::{AlertList, Alerter, InputEvent, Ui, UiResources};
 use crate::broker::Topic;
 use crate::ui::display::{Display, DisplayExclusive};
 use buttons::ButtonEvent;
 use widgets::UI_TEXT_FONT;
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
-pub enum Screen {
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Debug)]
+pub enum NormalScreen {
     DutPower,
     Usb,
     DigOut,
     System,
     IoBus,
     Uart,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Debug)]
+pub enum AlertScreen {
     ScreenSaver,
     RebootConfirm,
     UpdateInstallation,
-    Setup,
     Help,
+    Setup,
 }
 
-impl Screen {
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Debug)]
+pub enum Screen {
+    Normal(NormalScreen),
+    Alert(AlertScreen),
+}
+
+impl NormalScreen {
+    pub fn first() -> Self {
+        Self::DutPower
+    }
+
     /// What is the next screen to transition to when e.g. the button is  pressed?
-    fn next(&self) -> Self {
+    pub fn next(&self) -> Self {
         match self {
             Self::DutPower => Self::Usb,
             Self::Usb => Self::DigOut,
             Self::DigOut => Self::System,
             Self::System => Self::IoBus,
             Self::IoBus => Self::Uart,
-            Self::Uart => Self::ScreenSaver,
-            Self::ScreenSaver => Self::DutPower,
-            Self::RebootConfirm => Self::System,
-            Self::UpdateInstallation => Self::ScreenSaver,
-            Self::Setup => Self::ScreenSaver,
-            Self::Help => Self::ScreenSaver,
+            Self::Uart => Self::DutPower,
         }
-    }
-
-    /// Should screensaver be automatically enabled when in this screen?
-    fn use_screensaver(&self) -> bool {
-        !matches!(self, Self::UpdateInstallation | Self::Setup | Self::Help)
     }
 }
 
 #[async_trait]
 pub(super) trait ActiveScreen {
+    fn my_type(&self) -> Screen;
     async fn deactivate(self: Box<Self>) -> Display;
     fn input(&mut self, ev: InputEvent);
 }
@@ -110,7 +115,7 @@ pub(super) trait ActivatableScreen: Sync + Send {
 
 /// Draw static screen border containing a title and an indicator for the
 /// position of the screen in the list of screens.
-fn draw_border(text: &str, screen: Screen, display: &Display) {
+fn draw_border(text: &str, screen: NormalScreen, display: &Display) {
     display.with_lock(|target| {
         Text::new(
             text,
@@ -126,7 +131,7 @@ fn draw_border(text: &str, screen: Screen, display: &Display) {
             .unwrap();
 
         let screen_idx = screen as i32;
-        let num_screens = Screen::ScreenSaver as i32;
+        let num_screens = NormalScreen::Uart as i32 + 1;
         let x_start = screen_idx * 240 / num_screens;
         let x_end = (screen_idx + 1) * 240 / num_screens;
 
@@ -161,20 +166,21 @@ pub(super) fn splash(target: &mut DisplayExclusive) -> Rectangle {
 
 pub(super) fn init(
     res: &UiResources,
-    screen: &Arc<Topic<Screen>>,
+    alerts: &Arc<Topic<AlertList>>,
     buttons: &Arc<Topic<ButtonEvent>>,
+    reboot_message: &Arc<Topic<Option<String>>>,
 ) -> Vec<Box<dyn ActivatableScreen>> {
     vec![
         Box::new(DigOutScreen::new()),
-        Box::new(HelpScreen::new()),
         Box::new(IoBusScreen::new()),
         Box::new(PowerScreen::new()),
-        Box::new(RebootConfirmScreen::new()),
-        Box::new(ScreenSaverScreen::new(buttons, screen)),
-        Box::new(SetupScreen::new(screen, &res.setup_mode.setup_mode)),
         Box::new(SystemScreen::new()),
         Box::new(UartScreen::new()),
-        Box::new(UpdateInstallationScreen::new(screen, &res.rauc.operation)),
         Box::new(UsbScreen::new()),
+        Box::new(HelpScreen::new(alerts, &res.setup_mode.show_help)),
+        Box::new(UpdateInstallationScreen::new(alerts, &res.rauc.operation)),
+        Box::new(RebootConfirmScreen::new(alerts, reboot_message)),
+        Box::new(ScreenSaverScreen::new(buttons, alerts)),
+        Box::new(SetupScreen::new(alerts, &res.setup_mode.setup_mode)),
     ]
 }

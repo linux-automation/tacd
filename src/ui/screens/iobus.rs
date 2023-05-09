@@ -23,12 +23,13 @@ use embedded_graphics::{
 
 use super::widgets::*;
 use super::{
-    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
+    Screen, Ui,
 };
 use crate::broker::Topic;
 use crate::iobus::{LSSState, Nodes, ServerInfo};
 
-const SCREEN_TYPE: Screen = Screen::IoBus;
+const SCREEN_TYPE: NormalScreen = NormalScreen::IoBus;
 const OFFSET_INDICATOR: Point = Point::new(180, -10);
 
 pub struct IoBusScreen;
@@ -42,12 +43,11 @@ impl IoBusScreen {
 struct Active {
     widgets: WidgetContainer,
     iobus_pwr_en: Arc<Topic<bool>>,
-    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for IoBusScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Normal(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -136,12 +136,10 @@ impl ActivatableScreen for IoBusScreen {
         });
 
         let iobus_pwr_en = ui.res.regulators.iobus_pwr_en.clone();
-        let screen = ui.screen.clone();
 
         let active = Active {
             widgets,
             iobus_pwr_en,
-            screen,
         };
 
         Box::new(active)
@@ -150,14 +148,17 @@ impl ActivatableScreen for IoBusScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
 
     fn input(&mut self, ev: InputEvent) {
         match ev {
-            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
-            InputEvent::ToggleAction(_) => {}
+            InputEvent::NextScreen | InputEvent::ToggleAction(_) => {}
             InputEvent::PerformAction(_) => self.iobus_pwr_en.toggle(true),
         }
     }

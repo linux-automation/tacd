@@ -22,32 +22,28 @@ use async_trait::async_trait;
 use embedded_graphics::prelude::*;
 
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use super::{
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
+    Ui,
+};
 use crate::broker::Topic;
 use crate::dbus::rauc::Progress;
 
-const SCREEN_TYPE: Screen = Screen::UpdateInstallation;
+const SCREEN_TYPE: AlertScreen = AlertScreen::UpdateInstallation;
 
 pub struct UpdateInstallationScreen;
 
 impl UpdateInstallationScreen {
-    pub fn new(screen: &Arc<Topic<Screen>>, operation: &Arc<Topic<String>>) -> Self {
-        // Activate the rauc screen if an update is started and deactivate
-        // if it is done
-        let screen = screen.clone();
+    pub fn new(alerts: &Arc<Topic<AlertList>>, operation: &Arc<Topic<String>>) -> Self {
         let (mut operation_events, _) = operation.clone().subscribe_unbounded();
+        let alerts = alerts.clone();
 
         spawn(async move {
-            let mut operation_prev = operation_events.next().await.unwrap();
-
             while let Some(ev) = operation_events.next().await {
-                match (operation_prev.as_str(), ev.as_str()) {
-                    (_, "installing") => screen.set(SCREEN_TYPE),
-                    ("installing", _) => screen.set(SCREEN_TYPE.next()),
-                    _ => {}
+                match ev.as_str() {
+                    "installing" => alerts.assert(SCREEN_TYPE),
+                    _ => alerts.deassert(SCREEN_TYPE),
                 };
-
-                operation_prev = ev;
             }
         });
 
@@ -61,7 +57,7 @@ struct Active {
 
 impl ActivatableScreen for UpdateInstallationScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Alert(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -111,14 +107,16 @@ impl ActivatableScreen for UpdateInstallationScreen {
             )
         });
 
-        let active = Active { widgets };
-
-        Box::new(active)
+        Box::new(Active { widgets })
     }
 }
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }

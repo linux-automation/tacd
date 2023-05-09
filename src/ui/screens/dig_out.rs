@@ -23,12 +23,13 @@ use embedded_graphics::{
 
 use super::widgets::*;
 use super::{
-    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
+    Screen, Ui,
 };
 use crate::broker::Topic;
 use crate::measurement::Measurement;
 
-const SCREEN_TYPE: Screen = Screen::DigOut;
+const SCREEN_TYPE: NormalScreen = NormalScreen::DigOut;
 const VOLTAGE_MAX: f32 = 5.0;
 const OFFSET_INDICATOR: Point = Point::new(170, -10);
 const OFFSET_BAR: Point = Point::new(140, -14);
@@ -51,12 +52,11 @@ struct Active {
     widgets: WidgetContainer,
     port_enables: [Arc<Topic<bool>>; 2],
     highlighted: Arc<Topic<usize>>,
-    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for DigOutScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Normal(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -151,13 +151,11 @@ impl ActivatableScreen for DigOutScreen {
 
         let port_enables = [ui.res.dig_io.out_0.clone(), ui.res.dig_io.out_1.clone()];
         let highlighted = self.highlighted.clone();
-        let screen = ui.screen.clone();
 
         let active = Active {
             widgets,
             port_enables,
             highlighted,
-            screen,
         };
 
         Box::new(active)
@@ -166,6 +164,10 @@ impl ActivatableScreen for DigOutScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
@@ -174,7 +176,7 @@ impl ActiveScreen for Active {
         let highlighted = self.highlighted.try_get().unwrap_or(0);
 
         match ev {
-            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::NextScreen => {}
             InputEvent::ToggleAction(_) => {
                 self.highlighted.set((highlighted + 1) % 2);
             }

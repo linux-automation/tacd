@@ -15,7 +15,9 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use async_std::prelude::*;
 use async_std::sync::Arc;
+use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle,
@@ -25,31 +27,49 @@ use embedded_graphics::{
 };
 
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use super::{
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
+    Ui,
+};
 use crate::broker::Topic;
 
-const SCREEN_TYPE: Screen = Screen::RebootConfirm;
+const SCREEN_TYPE: AlertScreen = AlertScreen::RebootConfirm;
 
-pub struct RebootConfirmScreen;
+pub struct RebootConfirmScreen {
+    reboot_message: Arc<Topic<Option<String>>>,
+}
 
 impl RebootConfirmScreen {
-    pub fn new() -> Self {
-        Self
+    pub fn new(
+        alerts: &Arc<Topic<AlertList>>,
+        reboot_message: &Arc<Topic<Option<String>>>,
+    ) -> Self {
+        // Receive questions like Some("Do you want to reboot?") and activate this screen
+        let (mut reboot_message_events, _) = reboot_message.clone().subscribe_unbounded();
+        let reboot_message = reboot_message.clone();
+        let alerts = alerts.clone();
+
+        spawn(async move {
+            while let Some(reboot_message) = reboot_message_events.next().await {
+                if reboot_message.is_some() {
+                    alerts.assert(SCREEN_TYPE);
+                } else {
+                    alerts.deassert(SCREEN_TYPE);
+                }
+            }
+        });
+
+        Self { reboot_message }
     }
 }
 
-fn rly(display: &Display) {
+fn rly(text: &str, display: &Display) {
     let text_style: MonoTextStyle<BinaryColor> = MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
     display.with_lock(|target| {
-        Text::with_alignment(
-            "Really reboot?\nLong press lower\nbutton to confirm.",
-            Point::new(120, 120),
-            text_style,
-            Alignment::Center,
-        )
-        .draw(target)
-        .unwrap();
+        Text::with_alignment(text, Point::new(120, 80), text_style, Alignment::Center)
+            .draw(target)
+            .unwrap()
     });
 }
 
@@ -73,24 +93,26 @@ fn brb(display: &Display) {
 struct Active {
     display: Display,
     reboot: Arc<Topic<bool>>,
-    screen: Arc<Topic<Screen>>,
+    reboot_message: Arc<Topic<Option<String>>>,
 }
 
 impl ActivatableScreen for RebootConfirmScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Alert(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        rly(&display);
+        let text = self.reboot_message.try_get().unwrap().unwrap();
+
+        rly(&text, &display);
 
         let reboot = ui.res.systemd.reboot.clone();
-        let screen = ui.screen.clone();
+        let reboot_message = self.reboot_message.clone();
 
         let active = Active {
             display,
             reboot,
-            screen,
+            reboot_message,
         };
 
         Box::new(active)
@@ -99,15 +121,17 @@ impl ActivatableScreen for RebootConfirmScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.display
     }
 
     fn input(&mut self, ev: InputEvent) {
         match ev {
-            InputEvent::NextScreen | InputEvent::ToggleAction(_) => {
-                self.screen.set(SCREEN_TYPE.next())
-            }
+            InputEvent::NextScreen | InputEvent::ToggleAction(_) => self.reboot_message.set(None),
             InputEvent::PerformAction(_) => {
                 brb(&self.display);
                 self.reboot.set(true);

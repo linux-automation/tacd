@@ -23,12 +23,13 @@ use embedded_graphics::{
 
 use super::widgets::*;
 use super::{
-    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
+    Screen, Ui,
 };
 use crate::broker::Topic;
 use crate::measurement::Measurement;
 
-const SCREEN_TYPE: Screen = Screen::Usb;
+const SCREEN_TYPE: NormalScreen = NormalScreen::Usb;
 const CURRENT_LIMIT_PER_PORT: f32 = 0.5;
 const CURRENT_LIMIT_TOTAL: f32 = 0.7;
 const OFFSET_INDICATOR: Point = Point::new(92, -10);
@@ -52,12 +53,11 @@ struct Active {
     widgets: WidgetContainer,
     port_enables: [Arc<Topic<bool>>; 3],
     highlighted: Arc<Topic<usize>>,
-    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for UsbScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Normal(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -155,13 +155,11 @@ impl ActivatableScreen for UsbScreen {
             ui.res.usb_hub.port3.powered.clone(),
         ];
         let highlighted = self.highlighted.clone();
-        let screen = ui.screen.clone();
 
         let active = Active {
             widgets,
             port_enables,
             highlighted,
-            screen,
         };
 
         Box::new(active)
@@ -170,6 +168,10 @@ impl ActivatableScreen for UsbScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
@@ -178,7 +180,7 @@ impl ActiveScreen for Active {
         let highlighted = self.highlighted.try_get().unwrap_or(0);
 
         match ev {
-            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::NextScreen => {}
             InputEvent::ToggleAction(_) => {
                 self.highlighted.set((highlighted + 1) % 3);
             }

@@ -30,6 +30,17 @@ paths:
         '400':
           description: The value could not be parsed into a screen name
 
+  /v1/tac/display/alerts:
+    get:
+      summary: A list of currently pending alerts shown on the local UI
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alerts'
+
   /v1/tac/display/buttons:
     put:
       summary: Simulate a button press/release on the device
@@ -77,6 +88,30 @@ paths:
           description: The locator status was set sucessfully
         '400':
           description: The value could not be parsed into a boolean
+
+  /v1/tac/display/show_help:
+    get:
+      summary: Display a help menu on the local screen
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+    put:
+      summary: Display a help menu on the local screen
+      tags: [User Interface]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: Help will be shown or hidden as requested
+        '400':
+          description: The request could not be parsed as boolean
 
   /v1/tac/led/{led}/pattern:
     parameters:
@@ -772,10 +807,19 @@ components:
         - System
         - IoBus
         - Uart
-        - ScreenSaver
-        - Breakout
-        - RebootConfirm
-        - Rauc
+
+    Alerts:
+      type: array
+      items:
+        type: string
+        enum:
+          - ScreenSaver
+          - Locator
+          - RebootConfirm
+          - UpdateAvailable
+          - UpdateInstallation
+          - Help
+          - Setup
 
     ButtonEvent:
       type: object

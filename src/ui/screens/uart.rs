@@ -20,10 +20,12 @@ use async_trait::async_trait;
 use embedded_graphics::prelude::*;
 
 use super::widgets::*;
-use super::{draw_border, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use super::{
+    draw_border, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen, Screen, Ui,
+};
 use crate::broker::Topic;
 
-const SCREEN_TYPE: Screen = Screen::Uart;
+const SCREEN_TYPE: NormalScreen = NormalScreen::Uart;
 
 pub struct UartScreen {
     highlighted: Arc<Topic<usize>>,
@@ -41,12 +43,11 @@ struct Active {
     widgets: WidgetContainer,
     dir_enables: [Arc<Topic<bool>>; 2],
     highlighted: Arc<Topic<usize>>,
-    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for UartScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Normal(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -91,13 +92,11 @@ impl ActivatableScreen for UartScreen {
             ui.res.dig_io.uart_tx_en.clone(),
         ];
         let highlighted = self.highlighted.clone();
-        let screen = ui.screen.clone();
 
         let active = Active {
             widgets,
             dir_enables,
             highlighted,
-            screen,
         };
 
         Box::new(active)
@@ -106,6 +105,10 @@ impl ActivatableScreen for UartScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
@@ -114,7 +117,7 @@ impl ActiveScreen for Active {
         let highlighted = self.highlighted.try_get().unwrap_or(0);
 
         match ev {
-            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::NextScreen => {}
             InputEvent::ToggleAction(_) => {
                 self.highlighted.set((highlighted + 1) % 2);
             }

@@ -19,16 +19,17 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::buttons::*;
+use super::buttons::Source;
 use super::widgets::*;
 use super::{
-    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
+    Screen, Ui,
 };
 use crate::broker::Topic;
 use crate::dbus::networkmanager::LinkInfo;
 use crate::measurement::Measurement;
 
-const SCREEN_TYPE: Screen = Screen::System;
+const SCREEN_TYPE: NormalScreen = NormalScreen::System;
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 enum Action {
@@ -59,12 +60,13 @@ struct Active {
     widgets: WidgetContainer,
     setup_mode: Arc<Topic<bool>>,
     highlighted: Arc<Topic<Action>>,
-    screen: Arc<Topic<Screen>>,
+    reboot_message: Arc<Topic<Option<String>>>,
+    show_help: Arc<Topic<bool>>,
 }
 
 impl ActivatableScreen for SystemScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Normal(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -156,14 +158,16 @@ impl ActivatableScreen for SystemScreen {
             )
         });
 
+        let reboot_message = ui.reboot_message.clone();
         let setup_mode = ui.res.setup_mode.setup_mode.clone();
-        let screen = ui.screen.clone();
+        let show_help = ui.res.setup_mode.show_help.clone();
 
         let active = Active {
             widgets,
             highlighted,
+            reboot_message,
             setup_mode,
-            screen,
+            show_help,
         };
 
         Box::new(active)
@@ -172,6 +176,10 @@ impl ActivatableScreen for SystemScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
@@ -184,11 +192,12 @@ impl ActiveScreen for Active {
         // re-enabling the setup mode.
 
         match ev {
-            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
             InputEvent::ToggleAction(Source::Local) => self.highlighted.set(action.next()),
             InputEvent::PerformAction(Source::Local) => match action {
-                Action::Reboot => self.screen.set(Screen::RebootConfirm),
-                Action::Help => self.screen.set(Screen::Help),
+                Action::Reboot => self.reboot_message.set(Some(
+                    "Really reboot?\nLong press lower\nbutton to confirm.".to_string(),
+                )),
+                Action::Help => self.show_help.set(true),
                 Action::SetupMode => self.setup_mode.set(true),
             },
             _ => {}

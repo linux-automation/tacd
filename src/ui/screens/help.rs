@@ -15,15 +15,20 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use async_std::prelude::*;
 use async_std::sync::Arc;
+use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::prelude::Point;
 
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use super::Display;
+use super::{
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, InputEvent, Screen, Ui,
+};
 use crate::broker::Topic;
 
-const SCREEN_TYPE: Screen = Screen::Help;
+const SCREEN_TYPE: AlertScreen = AlertScreen::Help;
 const PAGES: &[&str] = &[
     "Hey there!
 
@@ -52,22 +57,35 @@ this guide",
 
 pub struct HelpScreen;
 
-impl HelpScreen {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
 struct Active {
     widgets: WidgetContainer,
     up: Arc<Topic<bool>>,
     page: Arc<Topic<usize>>,
-    screen: Arc<Topic<Screen>>,
+    show_help: Arc<Topic<bool>>,
+}
+
+impl HelpScreen {
+    pub fn new(alerts: &Arc<Topic<AlertList>>, show_help: &Arc<Topic<bool>>) -> Self {
+        let (mut show_help_events, _) = show_help.clone().subscribe_unbounded();
+        let alerts = alerts.clone();
+
+        spawn(async move {
+            while let Some(show_help) = show_help_events.next().await {
+                if show_help {
+                    alerts.assert(AlertScreen::Help);
+                } else {
+                    alerts.deassert(AlertScreen::Help);
+                }
+            }
+        });
+
+        Self
+    }
 }
 
 impl ActivatableScreen for HelpScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Alert(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
@@ -109,13 +127,13 @@ impl ActivatableScreen for HelpScreen {
             )
         });
 
-        let screen = ui.screen.clone();
+        let show_help = ui.res.setup_mode.show_help.clone();
 
         let active = Active {
             widgets,
             up,
             page,
-            screen,
+            show_help,
         };
 
         Box::new(active)
@@ -124,13 +142,19 @@ impl ActivatableScreen for HelpScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
 
     fn input(&mut self, ev: InputEvent) {
         match ev {
-            InputEvent::NextScreen => self.screen.set(Screen::ScreenSaver),
+            InputEvent::NextScreen => {
+                self.show_help.set(false);
+            }
             InputEvent::ToggleAction(_) => self.up.toggle(false),
             InputEvent::PerformAction(_) => {
                 let up = self.up.try_get().unwrap_or(false);

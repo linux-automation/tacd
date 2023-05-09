@@ -26,14 +26,16 @@ use tide::{Response, Server};
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
 
+mod alerts;
 mod buttons;
 mod display;
 mod screens;
 mod widgets;
 
+use alerts::{AlertList, Alerter};
 use buttons::{handle_buttons, Button, ButtonEvent, PressDuration, Source};
-use display::{Display, ScreenShooter};
-use screens::{splash, ActivatableScreen, Screen};
+pub use display::{Display, ScreenShooter};
+use screens::{splash, ActivatableScreen, AlertScreen, NormalScreen, Screen};
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,
@@ -52,11 +54,13 @@ pub struct UiResources {
 }
 
 pub struct Ui {
-    screen: Arc<Topic<Screen>>,
+    screen: Arc<Topic<NormalScreen>>,
+    alerts: Arc<Topic<AlertList>>,
     locator: Arc<Topic<bool>>,
     locator_dance: Arc<Topic<i32>>,
     buttons: Arc<Topic<ButtonEvent>>,
     screens: Vec<Box<dyn ActivatableScreen>>,
+    reboot_message: Arc<Topic<Option<String>>>,
     res: UiResources,
 }
 
@@ -115,13 +119,17 @@ pub fn serve_display(server: &mut Server<()>, screenshooter: ScreenShooter) {
 
 impl Ui {
     pub fn new(bb: &mut BrokerBuilder, res: UiResources) -> Self {
-        let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
+        let screen = bb.topic_rw("/v1/tac/display/screen", Some(NormalScreen::first()));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
         let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, false, None, 0);
+        let alerts = bb.topic_ro("/v1/tac/display/alerts", Some(AlertList::new()));
+        let reboot_message = Topic::anonymous(None);
 
-        // Initialize all the screens now so they can be mounted later
-        let screens: Vec<Box<_>> = screens::init(&res, &screen, &buttons);
+        alerts.assert(AlertScreen::ScreenSaver);
+
+        // Initialize all the screens now so they can be activated later
+        let screens = screens::init(&res, &alerts, &buttons, &reboot_message);
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",
@@ -186,17 +194,37 @@ impl Ui {
 
         Self {
             screen,
+            alerts,
             locator,
             locator_dance,
             buttons,
             screens,
+            reboot_message,
             res,
         }
     }
 
     pub async fn run(mut self, display: Display) -> Result<(), std::io::Error> {
         let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded();
+        let (mut alerts_rx, _) = self.alerts.clone().subscribe_unbounded();
         let (mut button_events, _) = self.buttons.clone().subscribe_unbounded();
+
+        // Helper to go to the next screen and activate the screensaver after
+        // cycling once.
+        let cycle_screen = {
+            let screen = self.screen.clone();
+            let alerts = self.alerts.clone();
+
+            move || {
+                let cur = screen.try_get().unwrap_or_else(NormalScreen::first);
+                let next = cur.next();
+                screen.set(next);
+
+                if next == NormalScreen::first() {
+                    alerts.assert(AlertScreen::ScreenSaver);
+                }
+            }
+        };
 
         // Take the screens out of self so we can hand out references to self
         // to the screen mounting methods.
@@ -206,7 +234,14 @@ impl Ui {
             decoy
         };
 
-        let mut showing = screen_rx.next().await.unwrap();
+        let mut screen = screen_rx.next().await.unwrap();
+        let mut alerts = alerts_rx.next().await.unwrap();
+
+        let mut showing = alerts
+            .highest_priority()
+            .map(Screen::Alert)
+            .unwrap_or(Screen::Normal(screen));
+
         let mut display = Some(display);
 
         'exit: loop {
@@ -224,23 +259,47 @@ impl Ui {
             'this_screen: loop {
                 select! {
                     new = screen_rx.next().fuse() => match new {
-                        Some(new) => {
-                            showing = new;
-                            break 'this_screen;
-                        }
+                        Some(new) => screen = new,
+                        None => break 'exit,
+                    },
+                    new = alerts_rx.next().fuse() => match new {
+                        Some(new) => alerts = new,
                         None => break 'exit,
                     },
                     ev = button_events.next().fuse() => match ev {
                         Some(ev) => {
+                            let st = active_screen.my_type();
                             let ev = InputEvent::from_button(ev);
 
-                            if let Some(ev) = ev {
-                                active_screen.input(ev);
+                            // The NextScreen event for normal screens can be handled
+                            // here.
+                            // The situation for alerts is a bit more complicated.
+                            // (Some ignore all input. Some acknoledge via the upper button).
+                            // Leave handling for NextScreen to them.
+
+                            match (st, ev) {
+                                 (Screen::Normal(_), Some(InputEvent::NextScreen)) => cycle_screen(),
+                                 (_, Some(ev)) => active_screen.input(ev),
+                                 (_, None) => {}
                             }
                         },
                         None => break 'exit,
                     },
 
+                }
+
+                // Show the highest priority alert (if one is asserted)
+                // or a normal screen instead.
+                let showing_next = alerts
+                    .highest_priority()
+                    .map(Screen::Alert)
+                    .unwrap_or(Screen::Normal(screen));
+
+                // Tear down this screen if another one should be shown.
+                // Otherwise just continue looping.
+                if showing_next != showing {
+                    showing = showing_next;
+                    break 'this_screen;
                 }
             }
 

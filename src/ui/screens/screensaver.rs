@@ -33,11 +33,14 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use super::{
+    splash, ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent,
+    Screen, Ui,
+};
 use crate::broker::Topic;
 
 const UI_TEXT_FONT: MonoFont = FONT_10X20;
-const SCREEN_TYPE: Screen = Screen::ScreenSaver;
+const SCREEN_TYPE: AlertScreen = AlertScreen::ScreenSaver;
 const SCREENSAVER_TIMEOUT: Duration = Duration::from_secs(600);
 
 struct BounceAnimation {
@@ -88,10 +91,11 @@ impl BounceAnimation {
 pub struct ScreenSaverScreen;
 
 impl ScreenSaverScreen {
-    pub fn new(buttons: &Arc<Topic<ButtonEvent>>, screen: &Arc<Topic<Screen>>) -> Self {
+    pub fn new(buttons: &Arc<Topic<ButtonEvent>>, alerts: &Arc<Topic<AlertList>>) -> Self {
         // Activate screensaver if no button is pressed for some time
         let (mut buttons_events, _) = buttons.clone().subscribe_unbounded();
-        let screen_task = screen.clone();
+        let alerts = alerts.clone();
+
         spawn(async move {
             loop {
                 let ev = timeout(SCREENSAVER_TIMEOUT, buttons_events.next()).await;
@@ -102,15 +106,7 @@ impl ScreenSaverScreen {
                 };
 
                 if activate_screensaver {
-                    screen_task.modify(|screen| {
-                        screen.and_then(|s| {
-                            if s.use_screensaver() {
-                                Some(Screen::ScreenSaver)
-                            } else {
-                                None
-                            }
-                        })
-                    });
+                    alerts.assert(SCREEN_TYPE);
                 }
             }
         });
@@ -122,24 +118,25 @@ impl ScreenSaverScreen {
 struct Active {
     widgets: WidgetContainer,
     locator: Arc<Topic<bool>>,
-    screen: Arc<Topic<Screen>>,
+    alerts: Arc<Topic<AlertList>>,
 }
 
 impl ActivatableScreen for ScreenSaverScreen {
     fn my_type(&self) -> Screen {
-        SCREEN_TYPE
+        Screen::Alert(SCREEN_TYPE)
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        let hostname = ui.res.network.hostname.clone();
         let bounce = BounceAnimation::new(Rectangle::with_corners(
             Point::new(0, 8),
-            Point::new(230, 240),
+            Point::new(240, 240),
         ));
 
         let mut widgets = WidgetContainer::new(display);
 
         widgets.push(|display| DynamicWidget::locator(ui.locator_dance.clone(), display));
+
+        let hostname = ui.res.network.hostname.clone();
 
         widgets.push(|display| {
             DynamicWidget::new(
@@ -149,24 +146,26 @@ impl ActivatableScreen for ScreenSaverScreen {
                     let ui_text_style: MonoTextStyle<BinaryColor> =
                         MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-                    let hostname = hostname.try_get().unwrap_or_default();
-                    let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
-                    let text = bounce.bounce(text);
+                    if let Some(hn) = hostname.try_get() {
+                        let text = Text::new(&hn, Point::new(0, 0), ui_text_style);
+                        let text = bounce.bounce(text);
+                        text.draw(target).unwrap();
 
-                    text.draw(target).unwrap();
-
-                    Some(text.bounding_box())
+                        Some(text.bounding_box())
+                    } else {
+                        Some(splash(target))
+                    }
                 }),
             )
         });
 
         let locator = ui.locator.clone();
-        let screen = ui.screen.clone();
+        let alerts = ui.alerts.clone();
 
         let active = Active {
             widgets,
             locator,
-            screen,
+            alerts,
         };
 
         Box::new(active)
@@ -175,13 +174,17 @@ impl ActivatableScreen for ScreenSaverScreen {
 
 #[async_trait]
 impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
+    }
+
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
 
     fn input(&mut self, ev: InputEvent) {
         match ev {
-            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::NextScreen => self.alerts.deassert(SCREEN_TYPE),
             InputEvent::ToggleAction(_) => {}
             InputEvent::PerformAction(_) => self.locator.toggle(false),
         }
