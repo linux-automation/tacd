@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use super::buttons::Source;
 use super::widgets::*;
 use super::{
-    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
-    Screen, Ui,
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter,
+    Display, InputEvent, NormalScreen, Screen, Ui,
 };
 use crate::broker::Topic;
 use crate::dbus::networkmanager::LinkInfo;
@@ -36,6 +36,7 @@ enum Action {
     Reboot,
     Help,
     SetupMode,
+    Updates,
 }
 
 impl Action {
@@ -43,7 +44,8 @@ impl Action {
         match self {
             Self::Reboot => Self::Help,
             Self::Help => Self::SetupMode,
-            Self::SetupMode => Self::Reboot,
+            Self::SetupMode => Self::Updates,
+            Self::Updates => Self::Reboot,
         }
     }
 }
@@ -62,6 +64,7 @@ struct Active {
     highlighted: Arc<Topic<Action>>,
     reboot_message: Arc<Topic<Option<String>>>,
     show_help: Arc<Topic<bool>>,
+    alerts: Arc<Topic<AlertList>>,
 }
 
 impl ActivatableScreen for SystemScreen {
@@ -156,9 +159,22 @@ impl ActivatableScreen for SystemScreen {
             )
         });
 
+        widgets.push(|display| {
+            DynamicWidget::text(
+                highlighted.clone(),
+                display,
+                row_anchor(8),
+                Box::new(|action| match action {
+                    Action::Updates => "> Updates".into(),
+                    _ => "  Updates".into(),
+                }),
+            )
+        });
+
         let reboot_message = ui.reboot_message.clone();
         let setup_mode = ui.res.setup_mode.setup_mode.clone();
         let show_help = ui.res.setup_mode.show_help.clone();
+        let alerts = ui.alerts.clone();
 
         let active = Active {
             widgets,
@@ -166,6 +182,7 @@ impl ActivatableScreen for SystemScreen {
             reboot_message,
             setup_mode,
             show_help,
+            alerts,
         };
 
         Box::new(active)
@@ -197,6 +214,7 @@ impl ActiveScreen for Active {
                 )),
                 Action::Help => self.show_help.set(true),
                 Action::SetupMode => self.setup_mode.set(true),
+                Action::Updates => self.alerts.assert(AlertScreen::UpdateAvailable),
             },
             _ => {}
         }

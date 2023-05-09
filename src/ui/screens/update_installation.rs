@@ -30,11 +30,27 @@ use crate::broker::Topic;
 use crate::dbus::rauc::Progress;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UpdateInstallation;
+const REBOOT_MESSAGE: &str = "There is a newer
+OS install in
+another slot.
+
+Long Press to
+boot it.
+";
 
 pub struct UpdateInstallationScreen;
 
+struct Active {
+    widgets: WidgetContainer,
+}
+
 impl UpdateInstallationScreen {
-    pub fn new(alerts: &Arc<Topic<AlertList>>, operation: &Arc<Topic<String>>) -> Self {
+    pub fn new(
+        alerts: &Arc<Topic<AlertList>>,
+        operation: &Arc<Topic<String>>,
+        reboot_message: &Arc<Topic<Option<String>>>,
+        should_reboot: &Arc<Topic<bool>>,
+    ) -> Self {
         let (mut operation_events, _) = operation.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
@@ -47,12 +63,19 @@ impl UpdateInstallationScreen {
             }
         });
 
+        let (mut should_reboot_events, _) = should_reboot.clone().subscribe_unbounded();
+        let reboot_message = reboot_message.clone();
+
+        spawn(async move {
+            while let Some(should_reboot) = should_reboot_events.next().await {
+                if should_reboot {
+                    reboot_message.set(Some(REBOOT_MESSAGE.to_string()))
+                }
+            }
+        });
+
         Self
     }
-}
-
-struct Active {
-    widgets: WidgetContainer,
 }
 
 impl ActivatableScreen for UpdateInstallationScreen {

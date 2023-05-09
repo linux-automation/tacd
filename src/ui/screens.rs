@@ -36,6 +36,7 @@ mod screensaver;
 mod setup;
 mod system;
 mod uart;
+mod update_available;
 mod update_installation;
 mod usb;
 
@@ -49,6 +50,7 @@ use screensaver::ScreenSaverScreen;
 use setup::SetupScreen;
 use system::SystemScreen;
 use uart::UartScreen;
+use update_available::UpdateAvailableScreen;
 use update_installation::UpdateInstallationScreen;
 use usb::UsbScreen;
 
@@ -75,6 +77,7 @@ pub enum AlertScreen {
     ScreenSaver,
     Locator,
     RebootConfirm,
+    UpdateAvailable,
     UpdateInstallation,
     Help,
     Setup,
@@ -146,7 +149,7 @@ fn draw_border(text: &str, screen: NormalScreen, display: &Display) {
 }
 
 const fn row_anchor(row_num: u8) -> Point {
-    assert!(row_num < 8);
+    assert!(row_num < 9);
 
     Point::new(8, 52 + (row_num as i32) * 20)
 }
@@ -182,7 +185,13 @@ pub(super) fn init(
         Box::new(UartScreen::new()),
         Box::new(UsbScreen::new()),
         Box::new(HelpScreen::new(alerts, &res.setup_mode.show_help)),
-        Box::new(UpdateInstallationScreen::new(alerts, &res.rauc.operation)),
+        Box::new(UpdateInstallationScreen::new(
+            alerts,
+            &res.rauc.operation,
+            reboot_message,
+            &res.rauc.should_reboot,
+        )),
+        Box::new(UpdateAvailableScreen::new(alerts, &res.rauc.channels)),
         Box::new(RebootConfirmScreen::new(alerts, reboot_message)),
         Box::new(ScreenSaverScreen::new(buttons, alerts)),
         Box::new(SetupScreen::new(alerts, &res.setup_mode.setup_mode)),
