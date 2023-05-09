@@ -22,9 +22,7 @@ use async_std::future::timeout;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
-
 use async_trait::async_trait;
-
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoFont, MonoTextStyle},
     pixelcolor::BinaryColor,
@@ -35,9 +33,8 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
-
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use crate::broker::Topic;
 
 const UI_TEXT_FONT: MonoFont = FONT_10X20;
 const SCREEN_TYPE: Screen = Screen::ScreenSaver;
@@ -124,7 +121,8 @@ impl ScreenSaverScreen {
 
 struct Active {
     widgets: WidgetContainer,
-    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+    locator: Arc<Topic<bool>>,
+    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for ScreenSaverScreen {
@@ -162,31 +160,13 @@ impl ActivatableScreen for ScreenSaverScreen {
             )
         });
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let locator = ui.locator.clone();
         let screen = ui.screen.clone();
 
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: _,
-                        src: _,
-                    } => locator.toggle(false),
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => screen.set(SCREEN_TYPE.next()),
-                    _ => {}
-                }
-            }
-        });
-
         let active = Active {
             widgets,
-            buttons_handle,
+            locator,
+            screen,
         };
 
         Box::new(active)
@@ -196,7 +176,14 @@ impl ActivatableScreen for ScreenSaverScreen {
 #[async_trait]
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) -> Display {
-        self.buttons_handle.unsubscribe();
         self.widgets.destroy().await
+    }
+
+    fn input(&mut self, ev: InputEvent) {
+        match ev {
+            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::ToggleAction(_) => {}
+            InputEvent::PerformAction(_) => self.locator.toggle(false),
+        }
     }
 }

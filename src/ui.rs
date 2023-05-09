@@ -20,6 +20,7 @@ use std::time::Duration;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::{sleep, spawn};
+use futures::{select, FutureExt};
 use tide::{Response, Server};
 
 use crate::broker::{BrokerBuilder, Topic};
@@ -30,9 +31,9 @@ mod display;
 mod screens;
 mod widgets;
 
-use buttons::{handle_buttons, ButtonEvent};
+use buttons::{handle_buttons, Button, ButtonEvent, PressDuration, Source};
 use display::{Display, ScreenShooter};
-use screens::{splash, ActivatableScreen, ActiveScreen, Screen};
+use screens::{splash, ActivatableScreen, Screen};
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,
@@ -57,6 +58,35 @@ pub struct Ui {
     buttons: Arc<Topic<ButtonEvent>>,
     screens: Vec<Box<dyn ActivatableScreen>>,
     res: UiResources,
+}
+
+enum InputEvent {
+    NextScreen,
+    ToggleAction(Source),
+    PerformAction(Source),
+}
+
+impl InputEvent {
+    fn from_button(ev: ButtonEvent) -> Option<Self> {
+        match ev {
+            ButtonEvent::Release {
+                btn: Button::Upper,
+                dur: _,
+                src: _,
+            } => Some(Self::NextScreen),
+            ButtonEvent::Release {
+                btn: Button::Lower,
+                dur: PressDuration::Short,
+                src,
+            } => Some(Self::ToggleAction(src)),
+            ButtonEvent::Release {
+                btn: Button::Lower,
+                dur: PressDuration::Long,
+                src,
+            } => Some(Self::PerformAction(src)),
+            _ => None,
+        }
+    }
 }
 
 pub fn setup_display() -> Display {
@@ -166,6 +196,7 @@ impl Ui {
 
     pub async fn run(mut self, display: Display) -> Result<(), std::io::Error> {
         let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded();
+        let (mut button_events, _) = self.buttons.clone().subscribe_unbounded();
 
         // Take the screens out of self so we can hand out references to self
         // to the screen mounting methods.
@@ -175,36 +206,45 @@ impl Ui {
             decoy
         };
 
-        let mut active_screen: Option<Box<dyn ActiveScreen>> = None;
+        let mut showing = screen_rx.next().await.unwrap();
         let mut display = Some(display);
 
-        let mut curr_screen_type = None;
+        'exit: loop {
+            let mut active_screen = {
+                let display = display.take().unwrap();
+                display.clear();
 
-        while let Some(next_screen_type) = screen_rx.next().await {
-            // Only unmount / mount the shown screen if a change was requested
-            let should_change = curr_screen_type
-                .map(|c| c != next_screen_type)
-                .unwrap_or(true);
+                screens
+                    .iter_mut()
+                    .find(|s| s.my_type() == showing)
+                    .unwrap()
+                    .activate(&self, display)
+            };
 
-            if should_change {
-                // Deactivate the current screen if one is active
-                if let Some(active) = active_screen.take() {
-                    display = Some(active.deactivate().await);
+            'this_screen: loop {
+                select! {
+                    new = screen_rx.next().fuse() => match new {
+                        Some(new) => {
+                            showing = new;
+                            break 'this_screen;
+                        }
+                        None => break 'exit,
+                    },
+                    ev = button_events.next().fuse() => match ev {
+                        Some(ev) => {
+                            let ev = InputEvent::from_button(ev);
+
+                            if let Some(ev) = ev {
+                                active_screen.input(ev);
+                            }
+                        },
+                        None => break 'exit,
+                    },
+
                 }
-
-                // Find the screen to show (if any) and "mount" it
-                // (e.g. tell it to handle the screen by itself).
-                if let Some(screen) = screens.iter_mut().find(|s| s.my_type() == next_screen_type) {
-                    let display = display.take().unwrap();
-                    // Clear the screen as static elements are not cleared by the
-                    // widget framework magic
-                    display.clear();
-
-                    active_screen = Some(screen.activate(&self, display));
-                }
-
-                curr_screen_type = Some(next_screen_type);
             }
+
+            display = Some(active_screen.deactivate().await);
         }
 
         Ok(())

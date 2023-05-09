@@ -15,19 +15,17 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
-
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
 };
 
-use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::{
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+};
+use crate::broker::Topic;
 use crate::measurement::Measurement;
 
 const SCREEN_TYPE: Screen = Screen::Usb;
@@ -39,7 +37,7 @@ const WIDTH_BAR: u32 = 90;
 const HEIGHT_BAR: u32 = 18;
 
 pub struct UsbScreen {
-    highlighted: Arc<Topic<u8>>,
+    highlighted: Arc<Topic<usize>>,
 }
 
 impl UsbScreen {
@@ -52,7 +50,9 @@ impl UsbScreen {
 
 struct Active {
     widgets: WidgetContainer,
-    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+    port_enables: [Arc<Topic<bool>>; 3],
+    highlighted: Arc<Topic<usize>>,
+    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for UsbScreen {
@@ -118,8 +118,9 @@ impl ActivatableScreen for UsbScreen {
                     self.highlighted.clone(),
                     display,
                     anchor_text,
-                    Box::new(move |highlight: &u8| {
-                        format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
+                    Box::new(move |highlight| {
+                        let hl = *highlight == (idx as usize);
+                        format!("{} {}", if hl { ">" } else { " " }, name)
                     }),
                 )
             });
@@ -148,48 +149,19 @@ impl ActivatableScreen for UsbScreen {
             });
         }
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let port_enables = [
             ui.res.usb_hub.port1.powered.clone(),
             ui.res.usb_hub.port2.powered.clone(),
             ui.res.usb_hub.port3.powered.clone(),
         ];
-        let port_highlight = self.highlighted.clone();
+        let highlighted = self.highlighted.clone();
         let screen = ui.screen.clone();
-
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                let highlighted = port_highlight.get().await;
-                let port = &port_enables[highlighted as usize];
-
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => {
-                        port.toggle(true);
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: _,
-                    } => {
-                        port_highlight.set((highlighted + 1) % 3);
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                }
-            }
-        });
 
         let active = Active {
             widgets,
-            buttons_handle,
+            port_enables,
+            highlighted,
+            screen,
         };
 
         Box::new(active)
@@ -199,7 +171,18 @@ impl ActivatableScreen for UsbScreen {
 #[async_trait]
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) -> Display {
-        self.buttons_handle.unsubscribe();
         self.widgets.destroy().await
+    }
+
+    fn input(&mut self, ev: InputEvent) {
+        let highlighted = self.highlighted.try_get().unwrap_or(0);
+
+        match ev {
+            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::ToggleAction(_) => {
+                self.highlighted.set((highlighted + 1) % 3);
+            }
+            InputEvent::PerformAction(_) => self.port_enables[highlighted].toggle(false),
+        }
     }
 }

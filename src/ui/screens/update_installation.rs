@@ -19,14 +19,12 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
-
 use embedded_graphics::prelude::*;
 
+use super::widgets::*;
+use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
 use crate::broker::Topic;
 use crate::dbus::rauc::Progress;
-
-use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
 
 const SCREEN_TYPE: Screen = Screen::UpdateInstallation;
 
@@ -124,4 +122,6 @@ impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) -> Display {
         self.widgets.destroy().await
     }
+
+    fn input(&mut self, _ev: InputEvent) {}
 }

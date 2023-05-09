@@ -52,7 +52,7 @@ use usb::UsbScreen;
 
 use super::buttons;
 use super::widgets;
-use super::{Ui, UiResources};
+use super::{InputEvent, Ui, UiResources};
 use crate::broker::Topic;
 use crate::ui::display::{Display, DisplayExclusive};
 use buttons::ButtonEvent;
@@ -100,6 +100,7 @@ impl Screen {
 #[async_trait]
 pub(super) trait ActiveScreen {
     async fn deactivate(self: Box<Self>) -> Display;
+    fn input(&mut self, ev: InputEvent);
 }
 
 pub(super) trait ActivatableScreen: Sync + Send {

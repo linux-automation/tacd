@@ -15,20 +15,18 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
-use async_std::task::spawn;
+use async_std::sync::Arc;
 use async_trait::async_trait;
-
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
 };
 
-use crate::broker::{Native, SubscriptionHandle};
-use crate::iobus::{LSSState, Nodes, ServerInfo};
-
-use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
+use super::{
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+};
+use crate::broker::Topic;
+use crate::iobus::{LSSState, Nodes, ServerInfo};
 
 const SCREEN_TYPE: Screen = Screen::IoBus;
 const OFFSET_INDICATOR: Point = Point::new(180, -10);
@@ -43,7 +41,8 @@ impl IoBusScreen {
 
 struct Active {
     widgets: WidgetContainer,
-    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+    iobus_pwr_en: Arc<Topic<bool>>,
+    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for IoBusScreen {
@@ -136,36 +135,13 @@ impl ActivatableScreen for IoBusScreen {
             )
         });
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let iobus_pwr_en = ui.res.regulators.iobus_pwr_en.clone();
         let screen = ui.screen.clone();
 
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => iobus_pwr_en.toggle(true),
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: _,
-                    } => {}
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                }
-            }
-        });
-
         let active = Active {
             widgets,
-            buttons_handle,
+            iobus_pwr_en,
+            screen,
         };
 
         Box::new(active)
@@ -175,7 +151,14 @@ impl ActivatableScreen for IoBusScreen {
 #[async_trait]
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) -> Display {
-        self.buttons_handle.unsubscribe();
         self.widgets.destroy().await
+    }
+
+    fn input(&mut self, ev: InputEvent) {
+        match ev {
+            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::ToggleAction(_) => {}
+            InputEvent::PerformAction(_) => self.iobus_pwr_en.toggle(true),
+        }
     }
 }

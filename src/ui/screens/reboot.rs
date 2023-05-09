@@ -15,11 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
-use async_std::task::{spawn, JoinHandle};
+use async_std::sync::Arc;
 use async_trait::async_trait;
-
-use crate::broker::{Native, SubscriptionHandle};
 use embedded_graphics::{
     mono_font::MonoTextStyle,
     pixelcolor::BinaryColor,
@@ -27,9 +24,9 @@ use embedded_graphics::{
     text::{Alignment, Text},
 };
 
-use super::buttons::*;
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
+use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use crate::broker::Topic;
 
 const SCREEN_TYPE: Screen = Screen::RebootConfirm;
 
@@ -74,8 +71,9 @@ fn brb(display: &Display) {
 }
 
 struct Active {
-    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
-    task_handle: JoinHandle<Display>,
+    display: Display,
+    reboot: Arc<Topic<bool>>,
+    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for RebootConfirmScreen {
@@ -86,33 +84,13 @@ impl ActivatableScreen for RebootConfirmScreen {
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         rly(&display);
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
-        let screen = ui.screen.clone();
         let reboot = ui.res.systemd.reboot.clone();
-
-        let task_handle = spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => {
-                        brb(&display);
-                        reboot.set(true);
-                        break;
-                    }
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                    _ => screen.set(SCREEN_TYPE.next()),
-                }
-            }
-
-            display
-        });
+        let screen = ui.screen.clone();
 
         let active = Active {
-            buttons_handle,
-            task_handle,
+            display,
+            reboot,
+            screen,
         };
 
         Box::new(active)
@@ -122,7 +100,18 @@ impl ActivatableScreen for RebootConfirmScreen {
 #[async_trait]
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) -> Display {
-        self.buttons_handle.unsubscribe();
-        self.task_handle.await
+        self.display
+    }
+
+    fn input(&mut self, ev: InputEvent) {
+        match ev {
+            InputEvent::NextScreen | InputEvent::ToggleAction(_) => {
+                self.screen.set(SCREEN_TYPE.next())
+            }
+            InputEvent::PerformAction(_) => {
+                brb(&self.display);
+                self.reboot.set(true);
+            }
+        }
     }
 }

@@ -15,15 +15,13 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
-use async_std::task::spawn;
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use embedded_graphics::prelude::Point;
 
-use super::buttons::*;
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
+use crate::broker::Topic;
 
 const SCREEN_TYPE: Screen = Screen::Help;
 const PAGES: &[&str] = &[
@@ -62,7 +60,9 @@ impl HelpScreen {
 
 struct Active {
     widgets: WidgetContainer,
-    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+    up: Arc<Topic<bool>>,
+    page: Arc<Topic<usize>>,
+    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for HelpScreen {
@@ -109,46 +109,13 @@ impl ActivatableScreen for HelpScreen {
             )
         });
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let screen = ui.screen.clone();
-
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: _,
-                    } => up.toggle(false),
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => {
-                        let up = up.clone().get().await;
-
-                        page.modify(|page| match (page.unwrap_or(0), up) {
-                            (0, true) => Some(0),
-                            (p, true) => Some(p - 1),
-                            (2, false) => Some(2),
-                            (p, false) => Some(p + 1),
-                        });
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => {
-                        screen.set(SCREEN_TYPE.next());
-                    }
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                }
-            }
-        });
 
         let active = Active {
             widgets,
-            buttons_handle,
+            up,
+            page,
+            screen,
         };
 
         Box::new(active)
@@ -158,7 +125,23 @@ impl ActivatableScreen for HelpScreen {
 #[async_trait]
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) -> Display {
-        self.buttons_handle.unsubscribe();
         self.widgets.destroy().await
+    }
+
+    fn input(&mut self, ev: InputEvent) {
+        match ev {
+            InputEvent::NextScreen => self.screen.set(Screen::ScreenSaver),
+            InputEvent::ToggleAction(_) => self.up.toggle(false),
+            InputEvent::PerformAction(_) => {
+                let up = self.up.try_get().unwrap_or(false);
+
+                self.page.modify(|page| match (page.unwrap_or(0), up) {
+                    (0, true) => Some(0),
+                    (p, true) => Some(p - 1),
+                    (2, false) => Some(2),
+                    (p, false) => Some(p + 1),
+                });
+            }
+        }
     }
 }

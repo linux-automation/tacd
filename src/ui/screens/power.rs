@@ -15,16 +15,15 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
-use async_std::task::spawn;
+use async_std::sync::Arc;
 use async_trait::async_trait;
-
 use embedded_graphics::prelude::*;
 
-use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
-use crate::broker::{Native, SubscriptionHandle};
+use super::{
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+};
+use crate::broker::Topic;
 use crate::dut_power::{OutputRequest, OutputState};
 use crate::measurement::Measurement;
 
@@ -46,7 +45,9 @@ impl PowerScreen {
 
 struct Active {
     widgets: WidgetContainer,
-    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+    power_state: Arc<Topic<OutputState>>,
+    power_request: Arc<Topic<OutputRequest>>,
+    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for PowerScreen {
@@ -133,44 +134,15 @@ impl ActivatableScreen for PowerScreen {
             )
         });
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let power_state = ui.res.dut_pwr.state.clone();
         let power_request = ui.res.dut_pwr.request.clone();
         let screen = ui.screen.clone();
 
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => {
-                        let req = match power_state.get().await {
-                            OutputState::On => OutputRequest::Off,
-                            _ => OutputRequest::On,
-                        };
-
-                        power_request.set(req);
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: _,
-                    } => {}
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                }
-            }
-        });
-
         let active = Active {
             widgets,
-            buttons_handle,
+            power_state,
+            power_request,
+            screen,
         };
 
         Box::new(active)
@@ -180,7 +152,21 @@ impl ActivatableScreen for PowerScreen {
 #[async_trait]
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) -> Display {
-        self.buttons_handle.unsubscribe();
         self.widgets.destroy().await
+    }
+
+    fn input(&mut self, ev: InputEvent) {
+        match ev {
+            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::ToggleAction(_) => {}
+            InputEvent::PerformAction(_) => {
+                let req = match self.power_state.try_get() {
+                    Some(OutputState::On) => OutputRequest::Off,
+                    _ => OutputRequest::On,
+                };
+
+                self.power_request.set(req);
+            }
+        }
     }
 }

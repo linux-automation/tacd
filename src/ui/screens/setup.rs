@@ -19,12 +19,11 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
-
 use embedded_graphics::{prelude::Point, text::Alignment};
 use serde::{Deserialize, Serialize};
 
 use super::widgets::*;
-use super::{ActivatableScreen, ActiveScreen, Display, Screen, Ui};
+use super::{ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
 const SCREEN_TYPE: Screen = Screen::Setup;
@@ -178,4 +177,6 @@ impl ActiveScreen for Active {
         self.ip_update_handle.unsubscribe();
         self.widgets.destroy().await
     }
+
+    fn input(&mut self, _ev: InputEvent) {}
 }

@@ -15,15 +15,16 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
-use async_std::task::spawn;
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, Screen, Ui};
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::{
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, Screen, Ui,
+};
+use crate::broker::Topic;
 use crate::dbus::networkmanager::LinkInfo;
 use crate::measurement::Measurement;
 
@@ -56,7 +57,9 @@ impl SystemScreen {
 
 struct Active {
     widgets: WidgetContainer,
-    buttons_handle: SubscriptionHandle<ButtonEvent, Native>,
+    setup_mode: Arc<Topic<bool>>,
+    highlighted: Arc<Topic<Action>>,
+    screen: Arc<Topic<Screen>>,
 }
 
 impl ActivatableScreen for SystemScreen {
@@ -153,58 +156,14 @@ impl ActivatableScreen for SystemScreen {
             )
         });
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let setup_mode = ui.res.setup_mode.setup_mode.clone();
         let screen = ui.screen.clone();
 
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                let action = highlighted.get().await;
-
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: _,
-                        src: Source::Web,
-                    } => {
-                        /* Only allow upper button interaction (going to the next screen)
-                         * for inputs on the web.
-                         * Triggering Reboots is possible via the API, so we do not have to
-                         * protect against that and opening the help text is harmless as well,
-                         * but we could think of an attacker that tricks a local user into
-                         * long pressing the lower button right when the attacker goes to the
-                         * "Setup Mode" entry in the menu so that they can deploy new keys.
-                         * Prevent that by disabling navigation altogether. */
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: Source::Local,
-                    } => match action {
-                        Action::Reboot => screen.set(Screen::RebootConfirm),
-                        Action::Help => screen.set(Screen::Help),
-                        Action::SetupMode => setup_mode.set(true),
-                    },
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: Source::Local,
-                    } => highlighted.set(action.next()),
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => {
-                        screen.set(SCREEN_TYPE.next());
-                    }
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                }
-            }
-        });
-
         let active = Active {
             widgets,
-            buttons_handle,
+            highlighted,
+            setup_mode,
+            screen,
         };
 
         Box::new(active)
@@ -214,7 +173,25 @@ impl ActivatableScreen for SystemScreen {
 #[async_trait]
 impl ActiveScreen for Active {
     async fn deactivate(mut self: Box<Self>) -> Display {
-        self.buttons_handle.unsubscribe();
         self.widgets.destroy().await
+    }
+
+    fn input(&mut self, ev: InputEvent) {
+        let action = self.highlighted.try_get().unwrap_or(Action::Reboot);
+
+        // Actions on this page are only allowed with Source::Local
+        // (in contrast to Source::Web) to prevent e.g. an attacker from
+        // re-enabling the setup mode.
+
+        match ev {
+            InputEvent::NextScreen => self.screen.set(SCREEN_TYPE.next()),
+            InputEvent::ToggleAction(Source::Local) => self.highlighted.set(action.next()),
+            InputEvent::PerformAction(Source::Local) => match action {
+                Action::Reboot => self.screen.set(Screen::RebootConfirm),
+                Action::Help => self.screen.set(Screen::Help),
+                Action::SetupMode => self.setup_mode.set(true),
+            },
+            _ => {}
+        }
     }
 }
