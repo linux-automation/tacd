@@ -19,21 +19,16 @@ import { useEffect, useState, useRef } from "react";
 
 import Alert from "@cloudscape-design/components/alert";
 import Box from "@cloudscape-design/components/box";
-import Button from "@cloudscape-design/components/button";
 import Cards from "@cloudscape-design/components/cards";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 import Container from "@cloudscape-design/components/container";
-import Form from "@cloudscape-design/components/form";
-import FormField from "@cloudscape-design/components/form-field";
 import Header from "@cloudscape-design/components/header";
-import Input from "@cloudscape-design/components/input";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Spinner from "@cloudscape-design/components/spinner";
-import StatusIndicator from "@cloudscape-design/components/status-indicator";
 
 import { MqttButton } from "./MqttComponents";
-import { useMqttSubscription, useMqttState } from "./mqtt";
+import { useMqttSubscription } from "./mqtt";
 
 type RootfsSlot = {
   activated_count: string;
@@ -184,16 +179,11 @@ export function SlotStatus() {
   }
 }
 
-export function RaucInstall() {
-  // eslint-disable-next-line
-  const [_install_settled, _install_payload, triggerInstall] =
-    useMqttState<string>("/v1/tac/update/install");
-
+export function UpdateStatus() {
   const operation = useMqttSubscription<string>("/v1/tac/update/operation");
   const progress = useMqttSubscription<RaucProgress>("/v1/tac/update/progress");
   const last_error = useMqttSubscription<string>("/v1/tac/update/last_error");
 
-  const [installUrl, setInstallUrl] = useState("");
   const [installStep, setInstallStep] = useState(RaucInstallStep.Idle);
   const prev_operation = useRef<string | undefined>(undefined);
 
@@ -209,40 +199,12 @@ export function RaucInstall() {
     prev_operation.current = operation;
   }, [operation]);
 
-  let inner = null;
-
-  if (installStep === RaucInstallStep.Idle) {
-    inner = (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          triggerInstall(installUrl);
-          setInstallUrl("");
-        }}
-      >
-        <Form actions={<Button variant="primary">Install</Button>}>
-          <FormField
-            stretch
-            constraintText="Specify a http:// or https:// URL to install a bundle from"
-            label="Bundle URL"
-          >
-            <Input
-              onChange={({ detail }) => setInstallUrl(detail.value)}
-              value={installUrl}
-              placeholder="https://some-host.example/bundle.raucb"
-            />
-          </FormField>
-        </Form>
-      </form>
-    );
-  }
-
   if (installStep === RaucInstallStep.Installing) {
     let valid = progress !== undefined;
     let value = progress === undefined ? 0 : progress.percentage;
     let message = progress === undefined ? "" : progress.message;
 
-    inner = (
+    return (
       <ProgressBar
         status={valid ? "in-progress" : "error"}
         value={value}
@@ -254,50 +216,33 @@ export function RaucInstall() {
 
   if (installStep === RaucInstallStep.Done) {
     if (last_error === undefined || last_error === "") {
-      inner = (
-        <Form
-          actions={
-            <MqttButton iconName="refresh" topic="/v1/tac/reboot" send={true}>
-              Reboot
-            </MqttButton>
-          }
-        >
-          <StatusIndicator>Success</StatusIndicator>
-          <Box>Bundle installation finished successfully</Box>
-        </Form>
+      return (
+        <ProgressBar
+          status={"success"}
+          value={100}
+          description="Done"
+          additionalInfo="Bundle installed successfully"
+        />
       );
     } else {
-      inner = (
-        <Form
-          actions={
-            <Button
-              formAction="none"
-              onClick={(_) => setInstallStep(RaucInstallStep.Idle)}
-            >
-              Ok
-            </Button>
-          }
-        >
-          <StatusIndicator type="error">Failure</StatusIndicator>
-          <Box>Bundle installation failed: {last_error}</Box>
-        </Form>
+      return (
+        <ProgressBar
+          status={"error"}
+          value={100}
+          description="Failure"
+          additionalInfo="Bundle installation failed"
+        />
       );
     }
   }
 
   return (
-    <Container
-      header={
-        <Header
-          variant="h3"
-          description="Select a bundle to flash and watch the update process"
-        >
-          Update
-        </Header>
-      }
-    >
-      {inner}
-    </Container>
+    <ProgressBar
+      status={"in-progress"}
+      value={0}
+      description="Idle"
+      additionalInfo="No bundle is being installed"
+    />
   );
 }
 
@@ -314,7 +259,7 @@ export function UpdateContainer() {
       }
     >
       <SpaceBetween size="m">
-        <RaucInstall />
+        <UpdateStatus />
         <SlotStatus />
       </SpaceBetween>
     </Container>
