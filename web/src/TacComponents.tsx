@@ -20,12 +20,15 @@ import { useEffect, useState, useRef } from "react";
 import Alert from "@cloudscape-design/components/alert";
 import Box from "@cloudscape-design/components/box";
 import Cards from "@cloudscape-design/components/cards";
+import Checkbox from "@cloudscape-design/components/checkbox";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 import Container from "@cloudscape-design/components/container";
+import Form from "@cloudscape-design/components/form";
 import Header from "@cloudscape-design/components/header";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Spinner from "@cloudscape-design/components/spinner";
+import Table from "@cloudscape-design/components/table";
 
 import { MqttButton } from "./MqttComponents";
 import { useMqttSubscription } from "./mqtt";
@@ -85,6 +88,27 @@ enum RaucInstallStep {
   Installing,
   Done,
 }
+
+type Duration = {
+  secs: number;
+  nanos: number;
+};
+
+type UpstreamBundle = {
+  compatible: string;
+  version: string;
+  newer_than_installed: boolean;
+};
+
+type Channel = {
+  name: string;
+  display_name: string;
+  description: string;
+  url: string;
+  polling_interval?: Duration;
+  enabled: boolean;
+  bundle?: UpstreamBundle;
+};
 
 export function SlotStatus() {
   const slot_status = useMqttSubscription<RaucSlots>("/v1/tac/update/slots");
@@ -177,6 +201,123 @@ export function SlotStatus() {
       </SpaceBetween>
     );
   }
+}
+
+export function UpdateChannels() {
+  const channels_topic = useMqttSubscription<Array<Channel>>(
+    "/v1/tac/update/channels"
+  );
+
+  const channels = channels_topic !== undefined ? channels_topic : [];
+
+  return (
+    <Table
+      header={
+        <Header
+          variant="h3"
+          description="Enabled update channels are periodically checked for updates"
+        >
+          Update Channels
+        </Header>
+      }
+      footer={
+        <Form
+          actions={
+            <MqttButton
+              iconName="refresh"
+              topic="/v1/tac/update/channels/reload"
+              send={true}
+            >
+              Reload
+            </MqttButton>
+          }
+        />
+      }
+      columnDefinitions={[
+        {
+          id: "name",
+          header: "Name",
+          cell: (e) => e.display_name,
+        },
+        {
+          id: "enabled",
+          header: "Enabled",
+          cell: (e) => <Checkbox checked={e.enabled} />,
+        },
+        {
+          id: "description",
+          header: "Description",
+          cell: (e) => (
+            <SpaceBetween size="xs">
+              {e.description.split("\n").map((p) => (
+                <span>{p}</span>
+              ))}
+            </SpaceBetween>
+          ),
+        },
+        {
+          id: "interval",
+          header: "Update Interval",
+          cell: (e) => {
+            if (!e.polling_interval) {
+              return "Never";
+            }
+
+            let seconds = e.polling_interval.secs;
+            let minutes = seconds / 60;
+            let hours = minutes / 60;
+            let days = hours / 24;
+
+            if (Math.floor(days) === days) {
+              return days === 1 ? "Daily" : `Every ${days} Days`;
+            }
+
+            if (Math.floor(hours) === hours) {
+              return hours === 1 ? "Hourly" : `Every ${hours} Hours`;
+            }
+
+            if (Math.floor(days) === days) {
+              return minutes === 1
+                ? "Once a minute"
+                : `Every ${minutes} Minutes`;
+            }
+
+            return `Every ${seconds} Seconds`;
+          },
+        },
+        {
+          id: "upgrade",
+          header: "Upgrade",
+          cell: (e) => {
+            if (!e.enabled) {
+              return "Not enabled";
+            }
+
+            if (!e.bundle) {
+              return <Spinner />;
+            }
+
+            if (!e.bundle.newer_than_installed) {
+              return "Up to date";
+            }
+
+            return (
+              <MqttButton
+                iconName="download"
+                topic="/v1/tac/update/install"
+                send={e.url}
+              >
+                Upgrade
+              </MqttButton>
+            );
+          },
+        },
+      ]}
+      items={channels}
+      sortingDisabled
+      trackBy="name"
+    />
+  );
 }
 
 export function ProgressNotification() {
@@ -275,9 +416,56 @@ export function UpdateContainer() {
       }
     >
       <SpaceBetween size="m">
+        <UpdateChannels />
         <SlotStatus />
       </SpaceBetween>
     </Container>
+  );
+}
+
+export function UpdateNotification() {
+  const channels = useMqttSubscription<Array<Channel>>(
+    "/v1/tac/update/channels"
+  );
+
+  let updates = [];
+
+  if (channels !== undefined) {
+    for (let ch of channels) {
+      if (ch.enabled && ch.bundle && ch.bundle.newer_than_installed) {
+        updates.push(ch);
+      }
+    }
+  }
+
+  const install_buttons = updates.map((u) => (
+    <MqttButton
+      key={u.name}
+      iconName="download"
+      topic="/v1/tac/update/install"
+      send={u.url}
+    >
+      Install new {u.display_name} bundle
+    </MqttButton>
+  ));
+
+  let text =
+    "There is a new operating system update available for installation";
+
+  if (updates.length > 1) {
+    text =
+      "There are new operating system updates available available for installation";
+  }
+
+  return (
+    <Alert
+      statusIconAriaLabel="Info"
+      visible={updates.length > 0}
+      action={<SpaceBetween size="xs">{install_buttons}</SpaceBetween>}
+      header="Update your LXA TAC"
+    >
+      {text}
+    </Alert>
   );
 }
 

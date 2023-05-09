@@ -32,6 +32,7 @@ import { useMqttSubscription } from "./mqtt";
 import { ApiPickerButton, MqttButton } from "./MqttComponents";
 import {
   RebootNotification,
+  UpdateNotification,
   ProgressNotification,
   LocatorNotification,
 } from "./TacComponents";
@@ -134,6 +135,7 @@ function Notifications() {
       <ConnectionNotification />
       <RebootNotification />
       <ProgressNotification />
+      <UpdateNotification />
       <LocatorNotification />
     </>
   );
