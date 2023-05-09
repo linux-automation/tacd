@@ -29,7 +29,8 @@ import "@cloudscape-design/global-styles/index.css";
 
 import "./App.css";
 import { useMqttSubscription } from "./mqtt";
-import { ApiPickerButton } from "./MqttComponents";
+import { ApiPickerButton, MqttButton } from "./MqttComponents";
+import { LocatorNotification } from "./TacComponents";
 
 function Navigation() {
   const [activeHref, setActiveHref] = useState("#/");
@@ -92,6 +93,13 @@ function Navigation() {
         ]}
       />
       <div className="nav_footer">
+        <MqttButton
+          iconName="search"
+          topic="/v1/tac/display/locator"
+          send={true}
+        >
+          Find this TAC
+        </MqttButton>
         <ApiPickerButton />
       </div>
     </>
@@ -120,6 +128,7 @@ function Notifications() {
   return (
     <>
       <ConnectionNotification />
+      <LocatorNotification />
     </>
   );
 }

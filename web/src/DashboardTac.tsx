@@ -22,7 +22,7 @@ import Container from "@cloudscape-design/components/container";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 
-import { MqttBox, MqttToggle, MqttButton } from "./MqttComponents";
+import { MqttBox, MqttButton } from "./MqttComponents";
 import { RaucContainer } from "./TacComponents";
 
 import { useEffect, useState } from "react";
@@ -191,10 +191,6 @@ export default function DashboardTac() {
               >
                 Perform Action
               </MqttButton>
-            </Box>
-            <Box>
-              <Box variant="awsui-key-label">Locator</Box>
-              <MqttToggle topic="/v1/tac/display/locator">Locator</MqttToggle>
             </Box>
           </SpaceBetween>
         </ColumnLayout>

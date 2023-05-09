@@ -17,6 +17,7 @@
 
 import { useEffect, useState, useRef } from "react";
 
+import Alert from "@cloudscape-design/components/alert";
 import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
 import Cards from "@cloudscape-design/components/cards";
@@ -317,5 +318,24 @@ export function RaucContainer() {
         <RaucSlotStatus />
       </SpaceBetween>
     </Container>
+  );
+}
+
+export function LocatorNotification() {
+  const locator = useMqttSubscription<boolean>("/v1/tac/display/locator");
+
+  return (
+    <Alert
+      statusIconAriaLabel="Info"
+      visible={locator === true}
+      action={
+        <MqttButton topic="/v1/tac/display/locator" send={false}>
+          Found it!
+        </MqttButton>
+      }
+      header="Find this TAC"
+    >
+      Someone is looking for this TAC.
+    </Alert>
   );
 }
