@@ -16,6 +16,9 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import React from "react";
+
+import Alert from "@cloudscape-design/components/alert";
+import Button from "@cloudscape-design/components/button";
 import AppLayout from "@cloudscape-design/components/app-layout";
 import SideNavigation from "@cloudscape-design/components/side-navigation";
 
@@ -95,6 +98,32 @@ function Navigation() {
   );
 }
 
+function ConnectionNotification() {
+  const hostname = useMqttSubscription("/v1/tac/network/hostname");
+
+  return (
+    <Alert
+      statusIconAriaLabel="Info"
+      visible={hostname === undefined}
+      action={
+        <Button onClick={(ev) => window.location.reload()}>Reload</Button>
+      }
+      header="Connection Lost"
+    >
+      There is currently no connection to the TAC. Wait for the connection to be
+      re-established or reload the page.
+    </Alert>
+  );
+}
+
+function Notifications() {
+  return (
+    <>
+      <ConnectionNotification />
+    </>
+  );
+}
+
 export default function App() {
   const [runningVersion, setRunningVersion] = useState<string | undefined>();
   const hostname = useMqttSubscription("/v1/tac/network/hostname");
@@ -131,6 +160,8 @@ export default function App() {
 
   return (
     <AppLayout
+      notifications={<Notifications />}
+      stickyNotifications={true}
       navigation={<Navigation />}
       content={<Outlet />}
       toolsHide={true}
