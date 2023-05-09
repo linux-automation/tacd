@@ -23,7 +23,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 
 import { MqttBox, MqttButton } from "./MqttComponents";
-import { RaucContainer } from "./TacComponents";
+import { UpdateContainer } from "./TacComponents";
 
 import { useEffect, useState } from "react";
 
@@ -195,7 +195,8 @@ export default function DashboardTac() {
           </SpaceBetween>
         </ColumnLayout>
       </Container>
-      <RaucContainer />
+
+      <UpdateContainer />
 
       <Container
         header={

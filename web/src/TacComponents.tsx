@@ -91,7 +91,7 @@ enum RaucInstallStep {
   Done,
 }
 
-export function RaucSlotStatus() {
+export function SlotStatus() {
   const slot_status = useMqttSubscription<RaucSlots>("/v1/tac/update/slots");
 
   if (slot_status === undefined) {
@@ -301,7 +301,7 @@ export function RaucInstall() {
   );
 }
 
-export function RaucContainer() {
+export function UpdateContainer() {
   return (
     <Container
       header={
@@ -315,7 +315,7 @@ export function RaucContainer() {
     >
       <SpaceBetween size="m">
         <RaucInstall />
-        <RaucSlotStatus />
+        <SlotStatus />
       </SpaceBetween>
     </Container>
   );
