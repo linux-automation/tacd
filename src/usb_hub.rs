@@ -145,7 +145,8 @@ pub struct UsbDevice {
 
 #[derive(Clone)]
 pub struct UsbPort {
-    pub powered: Arc<Topic<bool>>,
+    pub request: Arc<Topic<bool>>,
+    pub status: Arc<Topic<bool>>,
     pub device: Arc<Topic<Option<UsbDevice>>>,
 }
 
@@ -157,11 +158,13 @@ pub struct UsbHub {
 
 fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -> UsbPort {
     let port = UsbPort {
-        powered: bb.topic_rw(format!("/v1/usb/host/{name}/powered").as_str(), None),
+        request: bb.topic_wo(format!("/v1/usb/host/{name}/powered").as_str(), None),
+        status: bb.topic_ro(format!("/v1/usb/host/{name}/powered").as_str(), None),
         device: bb.topic_ro(format!("/v1/usb/host/{name}/device").as_str(), Some(None)),
     };
 
-    let powered = port.powered.clone();
+    let request = port.request.clone();
+    let status = port.status.clone();
     let device = port.device.clone();
     let disable_path = Path::new(base).join("disable");
 
@@ -169,7 +172,7 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     // Also clears the device info upon power off so it does not contain stale
     // information until the next poll.
     spawn(async move {
-        let (mut src, _) = powered.subscribe_unbounded();
+        let (mut src, _) = request.subscribe_unbounded();
 
         while let Some(ev) = src.next().await {
             write(&disable_path, if ev { b"0" } else { b"1" }).unwrap();
@@ -177,10 +180,12 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
             if !ev {
                 device.set(None);
             }
+
+            status.set(ev);
         }
     });
 
-    let powered = port.powered.clone();
+    let status = port.status.clone();
     let device = port.device.clone();
     let disable_path = Path::new(base).join("disable");
     let (id_product_path, id_vendor_path, manufacturer_path, product_path) = {
@@ -204,7 +209,7 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
                     _ => panic!("Read unexpected value for USB port disable state"),
                 };
 
-                powered.set_if_changed(is_powered);
+                status.set_if_changed(is_powered);
             }
 
             let id_product = read_to_string(&id_product_path).ok();
