@@ -81,7 +81,7 @@ export default function SettingsLabgrid() {
         header={
           <Header
             variant="h2"
-            description="Restart the Labgrid exporter service and view its log"
+            description="Restart the labgrid exporter service and view its log"
           >
             Labgrid Exporter Status
           </Header>

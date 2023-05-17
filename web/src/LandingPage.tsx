@@ -65,7 +65,7 @@ export default function LandingPage() {
           {
             name: "Settings / Labgrid",
             href: "/#/settings/labgrid",
-            description: "Modify the Labgrid exporter config",
+            description: "Modify the labgrid exporter config",
           },
           {
             name: "Documentation / REST API",
