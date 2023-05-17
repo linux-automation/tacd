@@ -202,11 +202,15 @@ export default function DashboardDut() {
                     <>
                       <p>
                         The OUT_{port} voltage is measured between the two OUT_
-                        {port} pins. As the two pins can generally be used
-                        interchangeably, you will most likely not care about the
-                        polarity of this voltage. This is why the absolute is
-                        shown in the bar graph and the text representation. If
-                        you want to see the polarity you can refer to the plots.
+                        {port} pins. The bar graph and the text representation
+                        show the absolute voltage, because the two pins can
+                        generally be used interchangeably and we assume, that
+                        you will most likely not care about the polarity of this
+                        voltage.
+                      </p>
+                      <p>
+                        However, if you want to see the polarity you can refer
+                        to the plots.
                       </p>
                       <p>
                         The voltages on the OUT_{port} pins is isolated from the
