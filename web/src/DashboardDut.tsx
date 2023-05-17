@@ -150,7 +150,7 @@ export default function DashboardDut() {
         header={
           <Header
             variant="h2"
-            description="Set bootmodes or reset the DUT via jumper pins"
+            description="Set boot modes or reset the DUT via jumper pins"
           >
             Isolated Outputs
           </Header>
