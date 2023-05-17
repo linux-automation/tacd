@@ -49,7 +49,7 @@ fn rly(draw_target: &mut FramebufferDrawTarget) {
     let text_style: MonoTextStyle<BinaryColor> = MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
     Text::with_alignment(
-        "Really reboot?\nLong press to confirm",
+        "Really reboot?\nLong press lower\nbutton to confirm.",
         Point::new(120, 120),
         text_style,
         Alignment::Center,
