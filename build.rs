@@ -19,6 +19,7 @@ use std::env::var_os;
 use std::fs::{read_to_string, write};
 use std::path::Path;
 use std::process::Command;
+use std::time::SystemTime;
 
 use chrono::prelude::Utc;
 
@@ -88,7 +89,19 @@ fn generate_version_string() {
     )
 }
 
+/// Store the build date and time to have a lower bound on HTTP Last-Modified
+/// for files with faked timestamps.
+fn generate_build_date() {
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    println!("cargo:rustc-env=BUILD_TIMESTAMP={}", timestamp);
+}
+
 fn main() {
-    generate_version_string();
     generate_openapi_include();
+    generate_version_string();
+    generate_build_date();
 }

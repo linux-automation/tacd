@@ -15,9 +15,10 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::cmp::Ordering;
+use std::cmp::{max, Ordering};
 use std::fs::read_dir;
 use std::path::{Component, Path};
+use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Utc};
 use html_escape::{encode_double_quoted_attribute, encode_text};
@@ -26,9 +27,55 @@ use tide::{Body, Redirect, Request, Response, Result};
 mod templates;
 use templates::{DIR_LISTING, NOT_FOUND};
 
-async fn file(fs_path: &Path) -> Result {
+static BUILD_TIMESTAMP: &str = std::env!("BUILD_TIMESTAMP");
+
+fn clamp_timestamp(ts: SystemTime) -> SystemTime {
+    // timestamps in the filesystem are not necessarily reliable,
+    // as yocto will fake them to be older than they actually are for
+    // image reproducibility reasons.
+    // Clamp the timestamps to the build date of the tacd to make sure
+    // that files are reloaded on OS update.
+
+    let tacd_build_time = {
+        let seconds_since_epoch = BUILD_TIMESTAMP.parse().unwrap();
+        let since_epoch = Duration::from_secs(seconds_since_epoch);
+
+        SystemTime::UNIX_EPOCH + since_epoch
+    };
+
+    max(tacd_build_time, ts)
+}
+
+async fn file(req: &Request<()>, fs_path: &Path) -> Result {
+    // Check the files modification date and compare it to the one provided
+    // by the client (if any) to determine if we even need to send the file.
+    let modification_date = fs_path.metadata()?.modified()?;
+
+    let last_modified = {
+        let modified = clamp_timestamp(modification_date);
+        let modified: DateTime<Utc> = modified.into();
+
+        modified.to_rfc2822().replace("+0000", "GMT")
+    };
+
+    let if_modified_since = req
+        .header("If-Modified-Since")
+        .map(|imss| imss.last().as_str());
+
+    if Some(last_modified.as_str()) == if_modified_since {
+        // The client already has the correct file, but thank you for asking.
+        return Ok(Response::builder(304).build());
+    }
+
     let body = Body::from_file(fs_path).await?;
-    let res = Response::builder(200).body(body).build();
+
+    // Make sure the client re-validates quite regularily if its cached
+    // ressource is still up to date (every 30s).
+    let res = Response::builder(200)
+        .header("Last-Modified", last_modified)
+        .header("Cache-Control", "max-age=30, must-revalidate")
+        .body(body)
+        .build();
 
     Ok(res)
 }
@@ -181,13 +228,13 @@ pub async fn serve_dir(base_path: &str, directory_listings: bool, req: Request<(
 
     let res = {
         if !is_dir {
-            file(&path).await
+            file(&req, &path).await
         } else if !has_trailing_slash {
             redirect_dir(url_path)
         } else if directory_listings && !has_index {
             dir_listing(&path, is_root)
         } else {
-            file(&index_path).await
+            file(&req, &index_path).await
         }
     };
 
