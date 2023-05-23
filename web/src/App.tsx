@@ -95,6 +95,27 @@ function Navigation() {
             text: "Documentation",
             items: [{ type: "link", text: "REST API", href: "#/docs/api" }],
           },
+          {
+            type: "section",
+            text: "External Links",
+            items: [
+              {
+                type: "link",
+                text: "Files in /srv/www",
+                href: `/srv`,
+              },
+              {
+                type: "link",
+                text: "LXA IOBus Server",
+                href: `http://${window.location.hostname}:8080/`,
+              },
+              {
+                type: "link",
+                text: "LXA TAC Manual",
+                href: "https://www.linux-automation.com/lxatac-M02/index.html",
+              },
+            ],
+          },
         ]}
       />
       <div className="nav_footer">
