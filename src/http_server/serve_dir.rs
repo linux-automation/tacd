@@ -17,7 +17,7 @@
 
 use std::cmp::{max, Ordering};
 use std::fs::read_dir;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use chrono::{DateTime, Utc};
@@ -67,17 +67,63 @@ async fn file(req: &Request<()>, fs_path: &Path) -> Result {
         return Ok(Response::builder(304).build());
     }
 
-    let body = Body::from_file(fs_path).await?;
+    // fs_path = "/srv/www/file.html" -> gz_path = "/srv/www/file.html.gz"
+    let gz_path: Option<PathBuf> = fs_path.to_str().map(|p| {
+        let mut p = p.to_owned();
+        p += ".gz";
+        p.into()
+    });
+
+    // Serve a compressed variant of the file if it is available, the client
+    // accepts it and the modification dates are exactly the same.
+    let have_gz = gz_path
+        .as_ref()
+        .and_then(|p| p.metadata().ok())
+        .map(|meta| {
+            let is_file = meta.is_file();
+            let dates_match = meta
+                .modified()
+                .map(|md| md == modification_date)
+                .unwrap_or(false);
+
+            is_file && dates_match
+        })
+        .unwrap_or(false);
+
+    // There may be multiple Accept-Encoding headers (or none) and each one may
+    // contain a list of accepted encodings, which is why this search is a bit
+    // convoluted.
+    // TL;DR: Check if "gzip" is somewhere in the accepted encodings.
+    let accept_gz = req
+        .header("Accept-Encoding")
+        .map(|aes| {
+            aes.iter()
+                .flat_map(|ae| ae.as_str().split(','))
+                .any(|aee| aee.trim() == "gzip")
+        })
+        .unwrap_or(false);
 
     // Make sure the client re-validates quite regularily if its cached
     // ressource is still up to date (every 30s).
-    let res = Response::builder(200)
+    let res_builder = Response::builder(200)
         .header("Last-Modified", last_modified)
-        .header("Cache-Control", "max-age=30, must-revalidate")
-        .body(body)
-        .build();
+        .header("Cache-Control", "max-age=30, must-revalidate");
 
-    Ok(res)
+    let body = Body::from_file(fs_path).await?;
+
+    if have_gz && accept_gz {
+        let mut gz_body = Body::from_file(gz_path.unwrap()).await?;
+        gz_body.set_mime(body.mime().clone());
+
+        let res = res_builder
+            .header("Content-Encoding", "gzip")
+            .body(gz_body)
+            .build();
+
+        Ok(res)
+    } else {
+        Ok(res_builder.body(body).build())
+    }
 }
 
 /// If the URL provided by the user did not contain a trailing slash but the
