@@ -150,7 +150,7 @@ impl MountableScreen for SetupScreen {
                 Point::new(120, 55),
                 Box::new(|connectivity| match connectivity {
                     Connectivity::Nothing => {
-                        "Welcome to your TAC!\n\n\nPlease connect\nto a network\nto continue\n the setup".into()
+                        "Welcome to your TAC!\n\n\nPlease connect\nto a network\nto continue\nthe setup".into()
                     }
                     Connectivity::HostnameOnly(c) | Connectivity::IpOnly(c) => {
                         format!("Welcome to your TAC!\n\nPlease continue the\nsetup at:\n\n\nhttp://{c}")

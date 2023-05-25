@@ -138,7 +138,7 @@ export function RaucSlotStatus() {
           header={
             <Header
               variant="h3"
-              description="The root filesystem contains your applications and settings"
+              description="The root file system contains your applications and settings"
             >
               Root Filesystem Slots
             </Header>

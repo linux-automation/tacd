@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 info:
   title: LXA TAC HTTP API
-  description: Control and view inputs and outputs of you LXA TAC
+  description: Control and view inputs and outputs of your LXA TAC
   version: 0.1.0
 
 paths:
@@ -129,7 +129,7 @@ paths:
 
   /v1/dut/powered:
     get:
-      summary: Get the current Power Switch state
+      summary: Get the current power switch state
       tags: [DUT Power]
       responses:
         '200':
@@ -141,7 +141,7 @@ paths:
     put:
       summary: Try to set the power switch state
       description: >
-        While the request will return immediately with a sucessful response, this does not mean
+        While the request will return immediately with a successful response, this does not mean
         that the switch is actually on at this or a later point in time.
         You will always have to check with e.g. a GET request if you really want to know, as an
         error state could always take precedence.
@@ -259,7 +259,7 @@ paths:
 
   /v1/tac/setup_mode:
     get:
-      summary: Check if the TAC has completed the set up or still in setup mode
+      summary: Check if the TAC has completed the set up or is still in setup mode
       tags: [System]
       responses:
         '200':
@@ -366,7 +366,7 @@ paths:
   /v1/output/{out_n}/asserted:
     parameters:
       - name: out_n
-        description: The name of the output to get or modify
+        description: The name of the output, that shall be asserted
         required: true
         schema:
           type: string
@@ -710,7 +710,7 @@ paths:
         '204':
           description: The value was parsed as string and will be tried
         '400':
-          description: The value could not be parsed as boolean
+          description: The value could not be parsed as string
 
   /v1/tac/network/hostname:
     get:

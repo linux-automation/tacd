@@ -217,7 +217,7 @@ function SshWizard(props: WizardProps) {
           },
           {
             title: "Configure Labgrid",
-            description: "Configure your Labgrid Exporter",
+            description: "Configure your labgrid Exporter",
             isOptional: true,
             content: (
               <Container>
@@ -227,7 +227,7 @@ function SshWizard(props: WizardProps) {
           },
           {
             title: "Test Labgrid",
-            description: "Make sure your Labgrid Exporter Service looks healty",
+            description: "Make sure your labgrid Exporter Service looks healty",
             isOptional: true,
             content: (
               <Container>
