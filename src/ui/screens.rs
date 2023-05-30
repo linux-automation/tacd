@@ -15,145 +15,186 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle,
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Line, PrimitiveStyle},
-    text::Text,
+    primitives::{Line, PrimitiveStyle, Rectangle},
+    text::{Alignment, Text},
 };
 use serde::{Deserialize, Serialize};
 
 mod dig_out;
 mod help;
 mod iobus;
+mod locator;
 mod power;
-mod rauc;
 mod reboot;
 mod screensaver;
 mod setup;
 mod system;
 mod uart;
+mod update_available;
+mod update_installation;
 mod usb;
 
 use dig_out::DigOutScreen;
 use help::HelpScreen;
 use iobus::IoBusScreen;
+use locator::LocatorScreen;
 use power::PowerScreen;
-use rauc::RaucScreen;
 use reboot::RebootConfirmScreen;
 use screensaver::ScreenSaverScreen;
 use setup::SetupScreen;
 use system::SystemScreen;
 use uart::UartScreen;
+use update_available::UpdateAvailableScreen;
+use update_installation::UpdateInstallationScreen;
 use usb::UsbScreen;
 
 use super::buttons;
 use super::widgets;
-use super::{FramebufferDrawTarget, Ui, UiResources};
+use super::{AlertList, Alerter, InputEvent, Ui, UiResources};
 use crate::broker::Topic;
+use crate::ui::display::{Display, DisplayExclusive};
 use buttons::ButtonEvent;
 use widgets::UI_TEXT_FONT;
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Copy)]
-pub enum Screen {
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Debug)]
+pub enum NormalScreen {
     DutPower,
     Usb,
     DigOut,
     System,
     IoBus,
     Uart,
-    ScreenSaver,
-    RebootConfirm,
-    Rauc,
-    Setup,
-    Help,
 }
 
-impl Screen {
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Debug)]
+pub enum AlertScreen {
+    ScreenSaver,
+    Locator,
+    RebootConfirm,
+    UpdateAvailable,
+    UpdateInstallation,
+    Help,
+    Setup,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Debug)]
+pub enum Screen {
+    Normal(NormalScreen),
+    Alert(AlertScreen),
+}
+
+impl NormalScreen {
+    pub fn first() -> Self {
+        Self::DutPower
+    }
+
     /// What is the next screen to transition to when e.g. the button is  pressed?
-    fn next(&self) -> Self {
+    pub fn next(&self) -> Self {
         match self {
             Self::DutPower => Self::Usb,
             Self::Usb => Self::DigOut,
             Self::DigOut => Self::System,
             Self::System => Self::IoBus,
             Self::IoBus => Self::Uart,
-            Self::Uart => Self::ScreenSaver,
-            Self::ScreenSaver => Self::DutPower,
-            Self::RebootConfirm => Self::System,
-            Self::Rauc => Self::ScreenSaver,
-            Self::Setup => Self::ScreenSaver,
-            Self::Help => Self::ScreenSaver,
+            Self::Uart => Self::DutPower,
         }
-    }
-
-    /// Should screensaver be automatically enabled when in this screen?
-    fn use_screensaver(&self) -> bool {
-        !matches!(self, Self::Rauc | Self::Setup | Self::Help)
     }
 }
 
 #[async_trait]
-pub(super) trait MountableScreen: Sync + Send {
-    fn is_my_type(&self, screen: Screen) -> bool;
-    async fn mount(&mut self, ui: &Ui);
-    async fn unmount(&mut self);
+pub(super) trait ActiveScreen {
+    fn my_type(&self) -> Screen;
+    async fn deactivate(self: Box<Self>) -> Display;
+    fn input(&mut self, ev: InputEvent);
+}
+
+pub(super) trait ActivatableScreen: Sync + Send {
+    fn my_type(&self) -> Screen;
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen>;
 }
 
 /// Draw static screen border containing a title and an indicator for the
 /// position of the screen in the list of screens.
-async fn draw_border(text: &str, screen: Screen, draw_target: &Arc<Mutex<FramebufferDrawTarget>>) {
-    let mut draw_target = draw_target.lock().await;
-
-    Text::new(
-        text,
-        Point::new(8, 17),
-        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On),
-    )
-    .draw(&mut *draw_target)
-    .unwrap();
-
-    Line::new(Point::new(0, 24), Point::new(230, 24))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-        .draw(&mut *draw_target)
+fn draw_border(text: &str, screen: NormalScreen, display: &Display) {
+    display.with_lock(|target| {
+        Text::new(
+            text,
+            Point::new(8, 17),
+            MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On),
+        )
+        .draw(target)
         .unwrap();
 
-    let screen_idx = screen as i32;
-    let num_screens = Screen::ScreenSaver as i32;
-    let x_start = screen_idx * 240 / num_screens;
-    let x_end = (screen_idx + 1) * 240 / num_screens;
+        Line::new(Point::new(0, 24), Point::new(240, 24))
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
+            .draw(target)
+            .unwrap();
 
-    Line::new(Point::new(x_start, 238), Point::new(x_end, 238))
-        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
-        .draw(&mut *draw_target)
-        .unwrap();
+        let screen_idx = screen as i32;
+        let num_screens = (NormalScreen::Uart as i32) + 1;
+        let x_start = screen_idx * 240 / num_screens;
+        let x_end = (screen_idx + 1) * 240 / num_screens;
+
+        Line::new(Point::new(x_start, 240), Point::new(x_end, 240))
+            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
+            .draw(target)
+            .unwrap();
+    });
 }
 
 const fn row_anchor(row_num: u8) -> Point {
-    assert!(row_num < 8);
+    assert!(row_num < 9);
 
     Point::new(8, 52 + (row_num as i32) * 20)
 }
 
+pub(super) fn splash(target: &mut DisplayExclusive) -> Rectangle {
+    let ui_text_style: MonoTextStyle<BinaryColor> =
+        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+    let text = Text::with_alignment(
+        "Welcome",
+        Point::new(120, 120),
+        ui_text_style,
+        Alignment::Center,
+    );
+
+    text.draw(target).unwrap();
+
+    text.bounding_box()
+}
+
 pub(super) fn init(
     res: &UiResources,
-    screen: &Arc<Topic<Screen>>,
+    alerts: &Arc<Topic<AlertList>>,
     buttons: &Arc<Topic<ButtonEvent>>,
-) -> Vec<Box<dyn MountableScreen>> {
+    reboot_message: &Arc<Topic<Option<String>>>,
+    locator: &Arc<Topic<bool>>,
+) -> Vec<Box<dyn ActivatableScreen>> {
     vec![
         Box::new(DigOutScreen::new()),
-        Box::new(HelpScreen::new()),
         Box::new(IoBusScreen::new()),
         Box::new(PowerScreen::new()),
-        Box::new(RaucScreen::new(screen, &res.rauc.operation)),
-        Box::new(RebootConfirmScreen::new()),
-        Box::new(ScreenSaverScreen::new(buttons, screen)),
-        Box::new(SetupScreen::new(screen, &res.setup_mode.setup_mode)),
         Box::new(SystemScreen::new()),
         Box::new(UartScreen::new()),
         Box::new(UsbScreen::new()),
+        Box::new(HelpScreen::new(alerts, &res.setup_mode.show_help)),
+        Box::new(UpdateInstallationScreen::new(
+            alerts,
+            &res.rauc.operation,
+            reboot_message,
+            &res.rauc.should_reboot,
+        )),
+        Box::new(UpdateAvailableScreen::new(alerts, &res.rauc.channels)),
+        Box::new(RebootConfirmScreen::new(alerts, reboot_message)),
+        Box::new(ScreenSaverScreen::new(buttons, alerts)),
+        Box::new(SetupScreen::new(alerts, &res.setup_mode.setup_mode)),
+        Box::new(LocatorScreen::new(alerts, locator)),
     ]
 }

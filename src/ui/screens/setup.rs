@@ -19,15 +19,17 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
-
 use embedded_graphics::{prelude::Point, text::Alignment};
 use serde::{Deserialize, Serialize};
 
 use super::widgets::*;
-use super::{MountableScreen, Screen, Ui};
+use super::{
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
+    Ui,
+};
 use crate::broker::{Native, SubscriptionHandle, Topic};
 
-const SCREEN_TYPE: Screen = Screen::Setup;
+const SCREEN_TYPE: AlertScreen = AlertScreen::Setup;
 
 #[derive(Serialize, Deserialize, Clone)]
 enum Connectivity {
@@ -37,50 +39,39 @@ enum Connectivity {
     Both(String, String),
 }
 
-pub struct SetupScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    hostname_update_handle: Option<SubscriptionHandle<String, Native>>,
-    ip_update_handle: Option<SubscriptionHandle<Vec<String>, Native>>,
+pub struct SetupScreen;
+
+struct Active {
+    widgets: WidgetContainer,
+    hostname_update_handle: SubscriptionHandle<String, Native>,
+    ip_update_handle: SubscriptionHandle<Vec<String>, Native>,
 }
 
 impl SetupScreen {
-    pub fn new(screen: &Arc<Topic<Screen>>, setup_mode: &Arc<Topic<bool>>) -> Self {
+    pub fn new(alerts: &Arc<Topic<AlertList>>, setup_mode: &Arc<Topic<bool>>) -> Self {
         let (mut setup_mode_events, _) = setup_mode.clone().subscribe_unbounded();
-        let screen_task = screen.clone();
+        let alerts = alerts.clone();
+
         spawn(async move {
             while let Some(setup_mode) = setup_mode_events.next().await {
-                /* If the setup mode is enabled and we are on the setup mode screen
-                 * => Do nothing.
-                 * If the setup mode is enabled and we are not on the setup mode screen
-                 * => Go to the setup mode screen.
-                 * If the setup mode is not enabled but we are on its screen
-                 * => Go the "next" screen, as specified in screens.rs.
-                 * None of the above
-                 * => Do nothing. */
-                screen_task.modify(|screen| match (setup_mode, screen) {
-                    (true, Some(Screen::Setup)) => None,
-                    (true, _) => Some(Screen::Setup),
-                    (false, Some(Screen::Setup)) => Some(Screen::Setup.next()),
-                    (false, _) => None,
-                });
+                if setup_mode {
+                    alerts.assert(AlertScreen::Setup);
+                } else {
+                    alerts.deassert(AlertScreen::Setup);
+                }
             }
         });
 
-        Self {
-            widgets: Vec::new(),
-            hostname_update_handle: None,
-            ip_update_handle: None,
-        }
+        Self
     }
 }
 
-#[async_trait]
-impl MountableScreen for SetupScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+impl ActivatableScreen for SetupScreen {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
     }
 
-    async fn mount(&mut self, ui: &Ui) {
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
         /* We want to display hints on how to connect to this TAC.
          * We want to show:
          * - An URL based on the hostname, e.g. http://lxatac-12345
@@ -143,10 +134,12 @@ impl MountableScreen for SetupScreen {
             }
         });
 
-        self.widgets.push(Box::new(
+        let mut widgets = WidgetContainer::new(display);
+
+        widgets.push(|display|
             DynamicWidget::text_aligned(
                 connectivity_topic,
-                ui.draw_target.clone(),
+                display,
                 Point::new(120, 55),
                 Box::new(|connectivity| match connectivity {
                     Connectivity::Nothing => {
@@ -160,25 +153,29 @@ impl MountableScreen for SetupScreen {
                     ),
                 }),
                 Alignment::Center,
-            )
-            ,
         ));
 
-        self.hostname_update_handle = Some(hostname_update_handle);
-        self.ip_update_handle = Some(ip_update_handle);
+        let active = Active {
+            widgets,
+            hostname_update_handle,
+            ip_update_handle,
+        };
+
+        Box::new(active)
+    }
+}
+
+#[async_trait]
+impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
     }
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.hostname_update_handle.take() {
-            handle.unsubscribe();
-        }
-
-        if let Some(handle) = self.ip_update_handle.take() {
-            handle.unsubscribe();
-        }
-
-        for mut widget in self.widgets.drain(..) {
-            widget.unmount().await
-        }
+    async fn deactivate(mut self: Box<Self>) -> Display {
+        self.hostname_update_handle.unsubscribe();
+        self.ip_update_handle.unsubscribe();
+        self.widgets.destroy().await
     }
+
+    fn input(&mut self, _ev: InputEvent) {}
 }

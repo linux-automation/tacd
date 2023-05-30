@@ -15,22 +15,21 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
-
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
 };
 
-use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::{
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
+    Screen, Ui,
+};
+use crate::broker::Topic;
 use crate::measurement::Measurement;
 
-const SCREEN_TYPE: Screen = Screen::DigOut;
+const SCREEN_TYPE: NormalScreen = NormalScreen::DigOut;
 const VOLTAGE_MAX: f32 = 5.0;
 const OFFSET_INDICATOR: Point = Point::new(170, -10);
 const OFFSET_BAR: Point = Point::new(140, -14);
@@ -38,34 +37,30 @@ const WIDTH_BAR: u32 = 72;
 const HEIGHT_BAR: u32 = 18;
 
 pub struct DigOutScreen {
-    highlighted: Arc<Topic<u8>>,
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
+    highlighted: Arc<Topic<usize>>,
 }
 
 impl DigOutScreen {
     pub fn new() -> Self {
         Self {
             highlighted: Topic::anonymous(Some(0)),
-            widgets: Vec::new(),
-            buttons_handle: None,
         }
     }
 }
 
-#[async_trait]
-impl MountableScreen for DigOutScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: WidgetContainer,
+    port_enables: [Arc<Topic<bool>>; 2],
+    highlighted: Arc<Topic<usize>>,
+}
+
+impl ActivatableScreen for DigOutScreen {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("Digital Out", SCREEN_TYPE, &ui.draw_target).await;
-
-        self.widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            ui.draw_target.clone(),
-        )));
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        draw_border("Digital Out", SCREEN_TYPE, &display);
 
         let ports = [
             (
@@ -82,113 +77,110 @@ impl MountableScreen for DigOutScreen {
             ),
         ];
 
-        for (idx, name, status, voltage) in ports {
-            let anchor_name = row_anchor(idx * 4);
+        let ui_text_style: MonoTextStyle<BinaryColor> =
+            MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+        display.with_lock(|target| {
+            for (idx, name, _, _) in ports {
+                let anchor_name = row_anchor(idx * 4);
+
+                Text::new(name, anchor_name, ui_text_style)
+                    .draw(target)
+                    .unwrap();
+            }
+        });
+
+        let mut widgets = WidgetContainer::new(display);
+
+        for (idx, _, status, voltage) in ports {
             let anchor_assert = row_anchor(idx * 4 + 1);
             let anchor_indicator = anchor_assert + OFFSET_INDICATOR;
 
             let anchor_voltage = row_anchor(idx * 4 + 2);
             let anchor_bar = anchor_voltage + OFFSET_BAR;
 
-            {
-                let mut draw_target = ui.draw_target.lock().await;
+            widgets.push(|display| {
+                DynamicWidget::text(
+                    self.highlighted.clone(),
+                    display,
+                    anchor_assert,
+                    Box::new(move |highlight| {
+                        if *highlight == (idx as usize) {
+                            "> Asserted:".into()
+                        } else {
+                            "  Asserted:".into()
+                        }
+                    }),
+                )
+            });
 
-                let ui_text_style: MonoTextStyle<BinaryColor> =
-                    MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+            widgets.push(|display| {
+                DynamicWidget::indicator(
+                    status.clone(),
+                    display,
+                    anchor_indicator,
+                    Box::new(|state: &bool| match *state {
+                        true => IndicatorState::On,
+                        false => IndicatorState::Off,
+                    }),
+                )
+            });
 
-                Text::new(name, anchor_name, ui_text_style)
-                    .draw(&mut *draw_target)
-                    .unwrap();
-            }
+            widgets.push(|display| {
+                DynamicWidget::text(
+                    voltage.clone(),
+                    display,
+                    anchor_voltage,
+                    Box::new(|meas: &Measurement| format!("  Volt: {:>4.1}V", meas.value)),
+                )
+            });
 
-            self.widgets.push(Box::new(DynamicWidget::text(
-                self.highlighted.clone(),
-                ui.draw_target.clone(),
-                anchor_assert,
-                Box::new(move |highlight: &u8| {
-                    if *highlight == idx {
-                        "> Asserted:".into()
-                    } else {
-                        "  Asserted:".into()
-                    }
-                }),
-            )));
-
-            self.widgets.push(Box::new(DynamicWidget::indicator(
-                status.clone(),
-                ui.draw_target.clone(),
-                anchor_indicator,
-                Box::new(|state: &bool| match *state {
-                    true => IndicatorState::On,
-                    false => IndicatorState::Off,
-                }),
-            )));
-
-            self.widgets.push(Box::new(DynamicWidget::text(
-                voltage.clone(),
-                ui.draw_target.clone(),
-                anchor_voltage,
-                Box::new(|meas: &Measurement| format!("  Volt: {:>4.1}V", meas.value)),
-            )));
-
-            self.widgets.push(Box::new(DynamicWidget::bar(
-                voltage.clone(),
-                ui.draw_target.clone(),
-                anchor_bar,
-                WIDTH_BAR,
-                HEIGHT_BAR,
-                Box::new(|meas: &Measurement| meas.value.abs() / VOLTAGE_MAX),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::bar(
+                    voltage.clone(),
+                    display,
+                    anchor_bar,
+                    WIDTH_BAR,
+                    HEIGHT_BAR,
+                    Box::new(|meas: &Measurement| meas.value.abs() / VOLTAGE_MAX),
+                )
+            });
         }
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let port_enables = [ui.res.dig_io.out_0.clone(), ui.res.dig_io.out_1.clone()];
-        let port_highlight = self.highlighted.clone();
-        let screen = ui.screen.clone();
+        let highlighted = self.highlighted.clone();
 
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                let highlighted = port_highlight.get().await;
+        let active = Active {
+            widgets,
+            port_enables,
+            highlighted,
+        };
 
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => {
-                        let port = &port_enables[highlighted as usize];
+        Box::new(active)
+    }
+}
 
-                        port.modify(|prev| Some(!prev.unwrap_or(true)));
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: _,
-                    } => {
-                        port_highlight.set((highlighted + 1) % 2);
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => {
-                        screen.set(SCREEN_TYPE.next());
-                    }
-                    _ => {}
-                }
-            }
-        });
-
-        self.buttons_handle = Some(buttons_handle);
+#[async_trait]
+impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
     }
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+    async fn deactivate(mut self: Box<Self>) -> Display {
+        self.widgets.destroy().await
+    }
 
-        for mut widget in self.widgets.drain(..) {
-            widget.unmount().await
+    fn input(&mut self, ev: InputEvent) {
+        let highlighted = self.highlighted.try_get().unwrap_or(0);
+
+        match ev {
+            InputEvent::NextScreen => {}
+            InputEvent::ToggleAction(_) => {
+                self.highlighted.set((highlighted + 1) % 2);
+            }
+            InputEvent::PerformAction(_) => {
+                self.port_enables[highlighted].toggle(true);
+            }
         }
     }
 }

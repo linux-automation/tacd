@@ -15,8 +15,9 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::anyhow;
 use async_std::prelude::*;
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use async_std::task::{spawn, JoinHandle};
 use async_trait::async_trait;
 use embedded_graphics::{
@@ -29,8 +30,8 @@ use embedded_graphics::{
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use super::FramebufferDrawTarget;
 use crate::broker::{Native, SubscriptionHandle, Topic};
+use crate::ui::display::{Display, DisplayExclusive};
 
 pub const UI_TEXT_FONT: MonoFont = FONT_10X20;
 
@@ -41,8 +42,47 @@ pub enum IndicatorState {
     Unkown,
 }
 
-pub trait DrawFn<T>: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
-impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut FramebufferDrawTarget) -> Option<Rectangle> {}
+pub struct WidgetContainer {
+    display: Arc<Display>,
+    widgets: Vec<Box<dyn AnyWidget>>,
+}
+
+impl WidgetContainer {
+    pub fn new(display: Display) -> Self {
+        Self {
+            display: Arc::new(display),
+            widgets: Vec::new(),
+        }
+    }
+
+    pub fn push<F, W>(&mut self, create_fn: F)
+    where
+        F: FnOnce(Arc<Display>) -> W,
+        W: AnyWidget + 'static,
+    {
+        let display = self.display.clone();
+        let widget = create_fn(display);
+        self.widgets.push(Box::new(widget));
+    }
+
+    pub async fn destroy(self) -> Display {
+        for widget in self.widgets.into_iter() {
+            widget.unmount().await;
+        }
+
+        Arc::try_unwrap(self.display)
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to re-unite display references. Have {} references instead of 1",
+                    Arc::strong_count(&e)
+                )
+            })
+            .unwrap()
+    }
+}
+
+pub trait DrawFn<T>: Fn(&T, &mut DisplayExclusive) -> Option<Rectangle> {}
+impl<T, U> DrawFn<T> for U where U: Fn(&T, &mut DisplayExclusive) -> Option<Rectangle> {}
 
 pub trait IndicatorFormatFn<T>: Fn(&T) -> IndicatorState {}
 impl<T, U> IndicatorFormatFn<T> for U where U: Fn(&T) -> IndicatorState {}
@@ -54,7 +94,8 @@ pub trait FractionFormatFn<T>: Fn(&T) -> f32 {}
 impl<T, U> FractionFormatFn<T> for U where U: Fn(&T) -> f32 {}
 
 pub struct DynamicWidget<T: Sync + Send + 'static> {
-    handles: Option<(SubscriptionHandle<T, Native>, JoinHandle<()>)>,
+    subscription_handle: SubscriptionHandle<T, Native>,
+    join_handle: JoinHandle<Arc<Display>>,
 }
 
 impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWidget<T> {
@@ -74,30 +115,33 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     ///   The widget system takes care of clearing this area before redrawing.
     pub fn new(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        display: Arc<Display>,
         draw_fn: Box<dyn DrawFn<T> + Sync + Send>,
     ) -> Self {
-        let (mut rx, sub_handle) = topic.subscribe_unbounded();
+        let (mut rx, subscription_handle) = topic.subscribe_unbounded();
 
         let join_handle = spawn(async move {
             let mut prev_bb: Option<Rectangle> = None;
 
             while let Some(val) = rx.next().await {
-                let mut target = target.lock().await;
+                display.with_lock(|target| {
+                    if let Some(bb) = prev_bb.take() {
+                        // Clear the bounding box by painting it black
+                        bb.into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
+                            .draw(&mut *target)
+                            .unwrap();
+                    }
 
-                if let Some(bb) = prev_bb.take() {
-                    // Clear the bounding box by painting it black
-                    bb.into_styled(PrimitiveStyle::with_fill(BinaryColor::Off))
-                        .draw(&mut *target)
-                        .unwrap();
-                }
-
-                prev_bb = draw_fn(&val, &mut *target);
+                    prev_bb = draw_fn(&val, &mut *target);
+                });
             }
+
+            display
         });
 
         Self {
-            handles: Some((sub_handle, join_handle)),
+            subscription_handle,
+            join_handle,
         }
     }
 
@@ -107,7 +151,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// the fraction of the graph to fill.
     pub fn bar(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        display: Arc<Display>,
         anchor: Point,
         width: u32,
         height: u32,
@@ -115,7 +159,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     ) -> Self {
         Self::new(
             topic,
-            target,
+            display,
             Box::new(move |msg, target| {
                 let val = format_fn(msg).clamp(0.0, 1.0);
                 let fill_width = ((width as f32) * val) as u32;
@@ -141,13 +185,13 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw an indicator bubble in an "On", "Off" or "Error" state
     pub fn indicator(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        display: Arc<Display>,
         anchor: Point,
         format_fn: Box<dyn IndicatorFormatFn<T> + Sync + Send>,
     ) -> Self {
         Self::new(
             topic,
-            target,
+            display,
             Box::new(move |msg, target| {
                 let ui_text_style: MonoTextStyle<BinaryColor> =
                     MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
@@ -207,14 +251,14 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw self-updating text with configurable alignment
     pub fn text_aligned(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        display: Arc<Display>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
         alignment: Alignment,
     ) -> Self {
         Self::new(
             topic,
-            target,
+            display,
             Box::new(move |msg, target| {
                 let text = format_fn(msg);
 
@@ -235,57 +279,27 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
     /// Draw self-updating left aligned text
     pub fn text(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        display: Arc<Display>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
     ) -> Self {
-        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Left)
+        Self::text_aligned(topic, display, anchor, format_fn, Alignment::Left)
     }
 
     /// Draw self-updating centered text
     pub fn text_center(
         topic: Arc<Topic<T>>,
-        target: Arc<Mutex<FramebufferDrawTarget>>,
+        display: Arc<Display>,
         anchor: Point,
         format_fn: Box<dyn TextFormatFn<T> + Sync + Send>,
     ) -> Self {
-        Self::text_aligned(topic, target, anchor, format_fn, Alignment::Center)
-    }
-}
-
-impl DynamicWidget<i32> {
-    /// Draw an animated locator widget at the side of the screen
-    /// (if the locator is active).
-    pub fn locator(topic: Arc<Topic<i32>>, target: Arc<Mutex<FramebufferDrawTarget>>) -> Self {
-        Self::new(
-            topic,
-            target,
-            Box::new(move |val, target| {
-                let size = 128 - (*val - 32).abs() * 4;
-
-                if size != 0 {
-                    let bounding = Rectangle::with_center(
-                        Point::new(240 - 5, 120),
-                        Size::new(10, size as u32),
-                    );
-
-                    bounding
-                        .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
-                        .draw(&mut *target)
-                        .unwrap();
-
-                    Some(bounding)
-                } else {
-                    None
-                }
-            }),
-        )
+        Self::text_aligned(topic, display, anchor, format_fn, Alignment::Center)
     }
 }
 
 #[async_trait]
 pub trait AnyWidget: Send + Sync {
-    async fn unmount(&mut self);
+    async fn unmount(self: Box<Self>) -> Arc<Display>;
 }
 
 #[async_trait]
@@ -294,10 +308,8 @@ impl<T: Sync + Send + Serialize + DeserializeOwned + 'static> AnyWidget for Dyna
     ///
     /// This has to be async, which is why it can not be performed by
     /// implementing the Drop trait.
-    async fn unmount(&mut self) {
-        if let Some((sh, jh)) = self.handles.take() {
-            sh.unsubscribe();
-            jh.await;
-        }
+    async fn unmount(mut self: Box<Self>) -> Arc<Display> {
+        self.subscription_handle.unsubscribe();
+        self.join_handle.await
     }
 }

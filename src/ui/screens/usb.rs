@@ -15,22 +15,21 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
-
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
 };
 
-use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::{
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
+    Screen, Ui,
+};
+use crate::broker::Topic;
 use crate::measurement::Measurement;
 
-const SCREEN_TYPE: Screen = Screen::Usb;
+const SCREEN_TYPE: NormalScreen = NormalScreen::Usb;
 const CURRENT_LIMIT_PER_PORT: f32 = 0.5;
 const CURRENT_LIMIT_TOTAL: f32 = 0.7;
 const OFFSET_INDICATOR: Point = Point::new(92, -10);
@@ -39,34 +38,41 @@ const WIDTH_BAR: u32 = 90;
 const HEIGHT_BAR: u32 = 18;
 
 pub struct UsbScreen {
-    highlighted: Arc<Topic<u8>>,
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
+    highlighted: Arc<Topic<usize>>,
 }
 
 impl UsbScreen {
     pub fn new() -> Self {
         Self {
             highlighted: Topic::anonymous(Some(0)),
-            widgets: Vec::new(),
-            buttons_handle: None,
         }
     }
 }
 
-#[async_trait]
-impl MountableScreen for UsbScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: WidgetContainer,
+    port_enables: [Arc<Topic<bool>>; 3],
+    highlighted: Arc<Topic<usize>>,
+}
+
+impl ActivatableScreen for UsbScreen {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("USB Host", SCREEN_TYPE, &ui.draw_target).await;
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        draw_border("USB Host", SCREEN_TYPE, &display);
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            ui.draw_target.clone(),
-        )));
+        let ui_text_style: MonoTextStyle<BinaryColor> =
+            MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+        display.with_lock(|target| {
+            Text::new("Total", row_anchor(0), ui_text_style)
+                .draw(target)
+                .unwrap();
+        });
+
+        let mut widgets = WidgetContainer::new(display);
 
         let ports = [
             (
@@ -89,109 +95,94 @@ impl MountableScreen for UsbScreen {
             ),
         ];
 
-        {
-            let mut draw_target = ui.draw_target.lock().await;
-
-            let ui_text_style: MonoTextStyle<BinaryColor> =
-                MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
-
-            Text::new("Total", row_anchor(0), ui_text_style)
-                .draw(&mut *draw_target)
-                .unwrap();
-        }
-
-        self.widgets.push(Box::new(DynamicWidget::bar(
-            ui.res.adc.usb_host_curr.topic.clone(),
-            ui.draw_target.clone(),
-            row_anchor(0) + OFFSET_BAR,
-            WIDTH_BAR,
-            HEIGHT_BAR,
-            Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_TOTAL),
-        )));
+        widgets.push(|display| {
+            DynamicWidget::bar(
+                ui.res.adc.usb_host_curr.topic.clone(),
+                display,
+                row_anchor(0) + OFFSET_BAR,
+                WIDTH_BAR,
+                HEIGHT_BAR,
+                Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_TOTAL),
+            )
+        });
 
         for (idx, name, status, current) in ports {
             let anchor_text = row_anchor(idx + 2);
             let anchor_indicator = anchor_text + OFFSET_INDICATOR;
             let anchor_bar = anchor_text + OFFSET_BAR;
 
-            self.widgets.push(Box::new(DynamicWidget::text(
-                self.highlighted.clone(),
-                ui.draw_target.clone(),
-                anchor_text,
-                Box::new(move |highlight: &u8| {
-                    format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::text(
+                    self.highlighted.clone(),
+                    display,
+                    anchor_text,
+                    Box::new(move |highlight| {
+                        let hl = *highlight == (idx as usize);
+                        format!("{} {}", if hl { ">" } else { " " }, name)
+                    }),
+                )
+            });
 
-            self.widgets.push(Box::new(DynamicWidget::indicator(
-                status.clone(),
-                ui.draw_target.clone(),
-                anchor_indicator,
-                Box::new(|state: &bool| match *state {
-                    true => IndicatorState::On,
-                    false => IndicatorState::Off,
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::indicator(
+                    status.clone(),
+                    display,
+                    anchor_indicator,
+                    Box::new(|state: &bool| match *state {
+                        true => IndicatorState::On,
+                        false => IndicatorState::Off,
+                    }),
+                )
+            });
 
-            self.widgets.push(Box::new(DynamicWidget::bar(
-                current.clone(),
-                ui.draw_target.clone(),
-                anchor_bar,
-                WIDTH_BAR,
-                HEIGHT_BAR,
-                Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_PER_PORT),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::bar(
+                    current.clone(),
+                    display,
+                    anchor_bar,
+                    WIDTH_BAR,
+                    HEIGHT_BAR,
+                    Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_PER_PORT),
+                )
+            });
         }
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let port_enables = [
             ui.res.usb_hub.port1.powered.clone(),
             ui.res.usb_hub.port2.powered.clone(),
             ui.res.usb_hub.port3.powered.clone(),
         ];
-        let port_highlight = self.highlighted.clone();
-        let screen = ui.screen.clone();
+        let highlighted = self.highlighted.clone();
 
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                let highlighted = port_highlight.get().await;
-                let port = &port_enables[highlighted as usize];
+        let active = Active {
+            widgets,
+            port_enables,
+            highlighted,
+        };
 
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => {
-                        port.modify(|prev| Some(!prev.unwrap_or(true)));
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: _,
-                    } => {
-                        port_highlight.set((highlighted + 1) % 3);
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                }
-            }
-        });
+        Box::new(active)
+    }
+}
 
-        self.buttons_handle = Some(buttons_handle);
+#[async_trait]
+impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
     }
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+    async fn deactivate(mut self: Box<Self>) -> Display {
+        self.widgets.destroy().await
+    }
 
-        for mut widget in self.widgets.drain(..) {
-            widget.unmount().await
+    fn input(&mut self, ev: InputEvent) {
+        let highlighted = self.highlighted.try_get().unwrap_or(0);
+
+        match ev {
+            InputEvent::NextScreen => {}
+            InputEvent::ToggleAction(_) => {
+                self.highlighted.set((highlighted + 1) % 3);
+            }
+            InputEvent::PerformAction(_) => self.port_enables[highlighted].toggle(false),
         }
     }
 }

@@ -27,7 +27,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import Spinner from "@cloudscape-design/components/spinner";
 import Wizard from "@cloudscape-design/components/wizard";
 
-import { RaucSlotStatus, RaucInstall } from "./TacComponents";
+import { SlotStatus } from "./TacComponents";
 import { LabgridService, LabgridConfig } from "./SettingsLabgrid";
 import { ConfigEditor } from "./ConfigEditor";
 import { useMqttState, useMqttAction } from "./mqtt";
@@ -304,15 +304,10 @@ function CustomBundleWizard(props: WizardProps) {
             ),
           },
           {
-            title: "Install Bundle",
-            description: "Install your vendored RAUC bundle",
-            content: <RaucInstall />,
-          },
-          {
             title: "Check Slot Status",
             description: "Make sure everything look correct",
             isOptional: true,
-            content: <RaucSlotStatus />,
+            content: <SlotStatus />,
           },
           {
             title: "Complete Setup",

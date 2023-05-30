@@ -496,13 +496,8 @@ impl DutPwrThread {
             loop {
                 task::sleep(TASK_INTERVAL).await;
 
-                let curr_state = Some(state.load(Ordering::Relaxed).into());
-
-                // Only send publish events if the state changed
-                state_topic_task.modify(|prev_state| match prev_state != curr_state {
-                    true => curr_state,
-                    false => None,
-                });
+                let curr_state = state.load(Ordering::Relaxed).into();
+                state_topic_task.set_if_changed(curr_state);
             }
         });
 

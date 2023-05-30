@@ -16,6 +16,9 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import React from "react";
+
+import Alert from "@cloudscape-design/components/alert";
+import Button from "@cloudscape-design/components/button";
 import AppLayout from "@cloudscape-design/components/app-layout";
 import SideNavigation from "@cloudscape-design/components/side-navigation";
 
@@ -26,7 +29,13 @@ import "@cloudscape-design/global-styles/index.css";
 
 import "./App.css";
 import { useMqttSubscription } from "./mqtt";
-import { ApiPickerButton } from "./MqttComponents";
+import { ApiPickerButton, MqttButton } from "./MqttComponents";
+import {
+  RebootNotification,
+  UpdateNotification,
+  ProgressNotification,
+  LocatorNotification,
+} from "./TacComponents";
 
 function Navigation() {
   const [activeHref, setActiveHref] = useState("#/");
@@ -89,8 +98,45 @@ function Navigation() {
         ]}
       />
       <div className="nav_footer">
+        <MqttButton
+          iconName="search"
+          topic="/v1/tac/display/locator"
+          send={true}
+        >
+          Find this TAC
+        </MqttButton>
         <ApiPickerButton />
       </div>
+    </>
+  );
+}
+
+function ConnectionNotification() {
+  const hostname = useMqttSubscription("/v1/tac/network/hostname");
+
+  return (
+    <Alert
+      statusIconAriaLabel="Info"
+      visible={hostname === undefined}
+      action={
+        <Button onClick={(ev) => window.location.reload()}>Reload</Button>
+      }
+      header="Connection Lost"
+    >
+      There is currently no connection to the TAC. Wait for the connection to be
+      re-established or reload the page.
+    </Alert>
+  );
+}
+
+function Notifications() {
+  return (
+    <>
+      <ConnectionNotification />
+      <RebootNotification />
+      <ProgressNotification />
+      <UpdateNotification />
+      <LocatorNotification />
     </>
   );
 }
@@ -131,6 +177,8 @@ export default function App() {
 
   return (
     <AppLayout
+      notifications={<Notifications />}
+      stickyNotifications={true}
       navigation={<Navigation />}
       content={<Outlet />}
       toolsHide={true}

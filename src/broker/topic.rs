@@ -17,6 +17,7 @@
 
 use std::collections::VecDeque;
 use std::marker::PhantomData;
+use std::ops::Not;
 use std::sync::{Arc, Mutex, Weak};
 
 use async_std::channel::{unbounded, Receiver, Sender, TrySendError};
@@ -321,6 +322,30 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
     pub fn subscribe_unbounded(self: Arc<Self>) -> (Receiver<E>, SubscriptionHandle<E, Native>) {
         let (tx, rx) = unbounded();
         (rx, self.subscribe(tx))
+    }
+}
+
+impl<E: Serialize + DeserializeOwned + Clone + PartialEq> Topic<E> {
+    /// Set a new value for the topic and notify subscribers _if the value changed_
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - Value to set the topic to
+    pub fn set_if_changed(&self, msg: E) {
+        let msg = Some(msg);
+
+        self.modify(|prev| if prev != msg { msg } else { None });
+    }
+}
+
+impl<E: Serialize + DeserializeOwned + Clone + Not + Not<Output = E>> Topic<E> {
+    /// Toggle the value of a topic
+    ///
+    /// # Arguments
+    ///
+    /// * `default` - The value to assume if none was set yet
+    pub fn toggle(&self, default: E) {
+        self.modify(|prev| Some(!prev.unwrap_or(default)));
     }
 }
 

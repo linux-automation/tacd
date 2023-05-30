@@ -18,21 +18,24 @@
 use std::time::Duration;
 
 use async_std::prelude::*;
-use async_std::sync::{Arc, Mutex};
-use async_std::task::{sleep, spawn};
+use async_std::sync::Arc;
+use async_std::task::spawn;
+use futures::{select, FutureExt};
 use tide::{Response, Server};
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
 
+mod alerts;
 mod buttons;
-mod draw_fb;
+mod display;
 mod screens;
 mod widgets;
 
-use buttons::{handle_buttons, ButtonEvent};
-use draw_fb::FramebufferDrawTarget;
-use screens::{MountableScreen, Screen};
+use alerts::{AlertList, Alerter};
+use buttons::{handle_buttons, Button, ButtonEvent, Direction, PressDuration, Source};
+pub use display::{Display, ScreenShooter};
+use screens::{splash, ActivatableScreen, AlertScreen, NormalScreen, Screen};
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,
@@ -51,73 +54,88 @@ pub struct UiResources {
 }
 
 pub struct Ui {
-    draw_target: Arc<Mutex<FramebufferDrawTarget>>,
-    screen: Arc<Topic<Screen>>,
+    screen: Arc<Topic<NormalScreen>>,
+    alerts: Arc<Topic<AlertList>>,
     locator: Arc<Topic<bool>>,
-    locator_dance: Arc<Topic<i32>>,
     buttons: Arc<Topic<ButtonEvent>>,
-    screens: Vec<Box<dyn MountableScreen>>,
+    screens: Vec<Box<dyn ActivatableScreen>>,
+    reboot_message: Arc<Topic<Option<String>>>,
     res: UiResources,
 }
 
-/// Add a web endpoint that serves the current framebuffer as png
-fn serve_framebuffer(server: &mut Server<()>, draw_target: Arc<Mutex<FramebufferDrawTarget>>) {
+enum InputEvent {
+    NextScreen,
+    ToggleAction(Source),
+    PerformAction(Source),
+}
+
+impl InputEvent {
+    fn from_button(ev: ButtonEvent) -> Option<Self> {
+        match ev {
+            ButtonEvent {
+                dir: Direction::Press,
+                btn: Button::Upper,
+                dur: PressDuration::Short,
+                src: _,
+            } => Some(Self::NextScreen),
+            ButtonEvent {
+                dir: Direction::Release,
+                btn: Button::Lower,
+                dur: PressDuration::Short,
+                src,
+            } => Some(Self::ToggleAction(src)),
+            ButtonEvent {
+                dir: Direction::Press,
+                btn: Button::Lower,
+                dur: PressDuration::Long,
+                src,
+            } => Some(Self::PerformAction(src)),
+            _ => None,
+        }
+    }
+}
+
+pub fn setup_display() -> Display {
+    let display = Display::new();
+
+    display.clear();
+    display.with_lock(splash);
+
+    display
+}
+
+/// Add a web endpoint that serves the current display content as png
+pub fn serve_display(server: &mut Server<()>, screenshooter: ScreenShooter) {
     server.at("/v1/tac/display/content").get(move |_| {
-        let draw_target = draw_target.clone();
+        let png = screenshooter.as_png();
 
         async move {
             Ok(Response::builder(200)
                 .content_type("image/png")
                 .header("Cache-Control", "no-store")
-                .body(draw_target.lock().await.as_png())
+                .body(png)
                 .build())
         }
     });
 }
 
 impl Ui {
-    pub fn new(bb: &mut BrokerBuilder, res: UiResources, server: &mut Server<()>) -> Self {
-        let screen = bb.topic_rw("/v1/tac/display/screen", Some(Screen::ScreenSaver));
+    pub fn new(bb: &mut BrokerBuilder, res: UiResources) -> Self {
+        let screen = bb.topic_rw("/v1/tac/display/screen", Some(NormalScreen::first()));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
-        let locator_dance = bb.topic_ro("/v1/tac/display/locator_dance", Some(0));
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, false, None, 0);
+        let alerts = bb.topic_ro("/v1/tac/display/alerts", Some(AlertList::new()));
+        let reboot_message = Topic::anonymous(None);
 
-        // Initialize all the screens now so they can be mounted later
-        let screens: Vec<Box<dyn MountableScreen>> = screens::init(&res, &screen, &buttons);
+        alerts.assert(AlertScreen::ScreenSaver);
+
+        // Initialize all the screens now so they can be activated later
+        let screens = screens::init(&res, &alerts, &buttons, &reboot_message, &locator);
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",
             buttons.clone(),
         );
-
-        // Animated Locator for the locator widget
-        let locator_task = locator.clone();
-        let locator_dance_task = locator_dance.clone();
-        spawn(async move {
-            let (mut rx, _) = locator_task.clone().subscribe_unbounded();
-
-            loop {
-                // As long as the locator is active:
-                // count down the value in locator_dance from 63 to 0
-                // with some pause in between in a loop.
-                while locator_task.try_get().unwrap_or(false) {
-                    locator_dance_task.modify(|v| match v {
-                        None | Some(0) => Some(63),
-                        Some(v) => Some(v - 1),
-                    });
-                    sleep(Duration::from_millis(100)).await;
-                }
-
-                // If the locator is empty stop the animation
-                locator_dance_task.set(0);
-
-                match rx.next().await {
-                    Some(true) => {}
-                    Some(false) => continue,
-                    None => break,
-                }
-            }
-        });
 
         // Blink the status LED when locator is active
         let led_status_pattern = res.led.status.clone();
@@ -146,24 +164,38 @@ impl Ui {
             }
         });
 
-        let draw_target = Arc::new(Mutex::new(FramebufferDrawTarget::new()));
-
-        // Expose the framebuffer as png via the web interface
-        serve_framebuffer(server, draw_target.clone());
-
         Self {
-            draw_target,
             screen,
+            alerts,
             locator,
-            locator_dance,
             buttons,
             screens,
+            reboot_message,
             res,
         }
     }
 
-    pub async fn run(mut self) -> Result<(), std::io::Error> {
+    pub async fn run(mut self, display: Display) -> Result<(), std::io::Error> {
         let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded();
+        let (mut alerts_rx, _) = self.alerts.clone().subscribe_unbounded();
+        let (mut button_events, _) = self.buttons.clone().subscribe_unbounded();
+
+        // Helper to go to the next screen and activate the screensaver after
+        // cycling once.
+        let cycle_screen = {
+            let screen = self.screen.clone();
+            let alerts = self.alerts.clone();
+
+            move || {
+                let cur = screen.try_get().unwrap_or_else(NormalScreen::first);
+                let next = cur.next();
+                screen.set(next);
+
+                if next == NormalScreen::first() {
+                    alerts.assert(AlertScreen::ScreenSaver);
+                }
+            }
+        };
 
         // Take the screens out of self so we can hand out references to self
         // to the screen mounting methods.
@@ -173,34 +205,76 @@ impl Ui {
             decoy
         };
 
-        let mut curr_screen_type = None;
+        let mut screen = screen_rx.next().await.unwrap();
+        let mut alerts = alerts_rx.next().await.unwrap();
 
-        while let Some(next_screen_type) = screen_rx.next().await {
-            // Only unmount / mount the shown screen if a change was requested
-            let should_change = curr_screen_type
-                .map(|c| c != next_screen_type)
-                .unwrap_or(true);
+        let mut showing = alerts
+            .highest_priority()
+            .map(Screen::Alert)
+            .unwrap_or(Screen::Normal(screen));
 
-            if should_change {
-                // Find the currently shown screen (if any) and unmount it
-                if let Some(curr) = curr_screen_type {
-                    if let Some(screen) = screens.iter_mut().find(|s| s.is_my_type(curr)) {
-                        screen.unmount().await;
-                    }
+        let mut display = Some(display);
+
+        'exit: loop {
+            let mut active_screen = {
+                let display = display.take().unwrap();
+                display.clear();
+
+                screens
+                    .iter_mut()
+                    .find(|s| s.my_type() == showing)
+                    .unwrap()
+                    .activate(&self, display)
+            };
+
+            'this_screen: loop {
+                select! {
+                    new = screen_rx.next().fuse() => match new {
+                        Some(new) => screen = new,
+                        None => break 'exit,
+                    },
+                    new = alerts_rx.next().fuse() => match new {
+                        Some(new) => alerts = new,
+                        None => break 'exit,
+                    },
+                    ev = button_events.next().fuse() => match ev {
+                        Some(ev) => {
+                            let st = active_screen.my_type();
+                            let ev = InputEvent::from_button(ev);
+
+                            // The NextScreen event for normal screens can be handled
+                            // here.
+                            // The situation for alerts is a bit more complicated.
+                            // (Some ignore all input. Some acknoledge via the upper button).
+                            // Leave handling for NextScreen to them.
+
+                            match (st, ev) {
+                                 (Screen::Normal(_), Some(InputEvent::NextScreen)) => cycle_screen(),
+                                 (_, Some(ev)) => active_screen.input(ev),
+                                 (_, None) => {}
+                            }
+                        },
+                        None => break 'exit,
+                    },
+
                 }
 
-                // Clear the screen as static elements are not cleared by the
-                // widget framework magic
-                self.draw_target.lock().await.clear();
+                // Show the highest priority alert (if one is asserted)
+                // or a normal screen instead.
+                let showing_next = alerts
+                    .highest_priority()
+                    .map(Screen::Alert)
+                    .unwrap_or(Screen::Normal(screen));
 
-                // Find the screen to show (if any) and "mount" it
-                // (e.g. tell it to handle the screen by itself).
-                if let Some(screen) = screens.iter_mut().find(|s| s.is_my_type(next_screen_type)) {
-                    screen.mount(&self).await;
+                // Tear down this screen if another one should be shown.
+                // Otherwise just continue looping.
+                if showing_next != showing {
+                    showing = showing_next;
+                    break 'this_screen;
                 }
-
-                curr_screen_type = Some(next_screen_type);
             }
+
+            display = Some(active_screen.deactivate().await);
         }
 
         Ok(())

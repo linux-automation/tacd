@@ -47,13 +47,16 @@ use regulators::Regulators;
 use setup_mode::SetupMode;
 use system::System;
 use temperatures::Temperatures;
-use ui::{Ui, UiResources};
+use ui::{setup_display, Ui, UiResources};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
 
 #[async_std::main]
 async fn main() -> Result<(), std::io::Error> {
     env_logger::init();
+
+    // Show a splash screen very early on
+    let display = setup_display();
 
     // The BrokerBuilder collects topics that should be exported via the
     // MQTT/REST APIs.
@@ -105,6 +108,9 @@ async fn main() -> Result<(), std::io::Error> {
     // in the web interface.
     journal::serve(&mut http_server.server);
 
+    // Expose the display as a .png on the web server
+    ui::serve_display(&mut http_server.server, display.screenshooter());
+
     // Set up the user interface for the hardware display on the TAC.
     // The different screens receive updates via the topics provided in
     // the UiResources struct.
@@ -125,7 +131,7 @@ async fn main() -> Result<(), std::io::Error> {
             usb_hub,
         };
 
-        Ui::new(&mut bb, resources, &mut http_server.server)
+        Ui::new(&mut bb, resources)
     };
 
     // Consume the BrokerBuilder (no further topics can be added or removed)
@@ -138,13 +144,13 @@ async fn main() -> Result<(), std::io::Error> {
     // exits (with an error).
     if let Some(watchdog) = watchdog {
         select! {
-            ui_err = ui.run().fuse() => ui_err,
+            ui_err = ui.run(display).fuse() => ui_err,
             wi_err = http_server.serve().fuse() => wi_err,
             wd_err = watchdog.keep_fed().fuse() => wd_err,
         }
     } else {
         select! {
-            ui_err = ui.run().fuse() => ui_err,
+            ui_err = ui.run(display).fuse() => ui_err,
             wi_err = http_server.serve().fuse() => wi_err,
         }
     }

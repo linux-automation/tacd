@@ -15,25 +15,28 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
-use async_std::task::spawn;
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use super::buttons::*;
+use super::buttons::Source;
 use super::widgets::*;
-use super::{draw_border, row_anchor, MountableScreen, Screen, Ui};
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::{
+    draw_border, row_anchor, ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter,
+    Display, InputEvent, NormalScreen, Screen, Ui,
+};
+use crate::broker::Topic;
 use crate::dbus::networkmanager::LinkInfo;
 use crate::measurement::Measurement;
 
-const SCREEN_TYPE: Screen = Screen::System;
+const SCREEN_TYPE: NormalScreen = NormalScreen::System;
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 enum Action {
     Reboot,
     Help,
     SetupMode,
+    Updates,
 }
 
 impl Action {
@@ -41,167 +44,179 @@ impl Action {
         match self {
             Self::Reboot => Self::Help,
             Self::Help => Self::SetupMode,
-            Self::SetupMode => Self::Reboot,
+            Self::SetupMode => Self::Updates,
+            Self::Updates => Self::Reboot,
         }
     }
 }
 
-pub struct SystemScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
-}
+pub struct SystemScreen;
 
 impl SystemScreen {
     pub fn new() -> Self {
-        Self {
-            widgets: Vec::new(),
-            buttons_handle: None,
-        }
+        Self
+    }
+}
+
+struct Active {
+    widgets: WidgetContainer,
+    setup_mode: Arc<Topic<bool>>,
+    highlighted: Arc<Topic<Action>>,
+    reboot_message: Arc<Topic<Option<String>>>,
+    show_help: Arc<Topic<bool>>,
+    alerts: Arc<Topic<AlertList>>,
+}
+
+impl ActivatableScreen for SystemScreen {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
+    }
+
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        draw_border("System Status", SCREEN_TYPE, &display);
+
+        let mut widgets = WidgetContainer::new(display);
+        let highlighted = Topic::anonymous(Some(Action::Reboot));
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.temperatures.soc_temperature.clone(),
+                display,
+                row_anchor(0),
+                Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.network.uplink_interface.clone(),
+                display,
+                row_anchor(1),
+                Box::new(|info: &LinkInfo| match info.carrier {
+                    true => format!("Uplink: {}MBit/s", info.speed),
+                    false => "Uplink: Down".to_string(),
+                }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.network.dut_interface.clone(),
+                display,
+                row_anchor(2),
+                Box::new(|info: &LinkInfo| match info.carrier {
+                    true => format!("DUT:    {}MBit/s", info.speed),
+                    false => "DUT:    Down".to_string(),
+                }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                ui.res.network.bridge_interface.clone(),
+                display,
+                row_anchor(3),
+                Box::new(|ips: &Vec<String>| {
+                    let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
+                    format!("IP:     {}", ip)
+                }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                highlighted.clone(),
+                display,
+                row_anchor(5),
+                Box::new(|action| match action {
+                    Action::Reboot => "> Reboot".into(),
+                    _ => "  Reboot".into(),
+                }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                highlighted.clone(),
+                display,
+                row_anchor(6),
+                Box::new(|action| match action {
+                    Action::Help => "> Help".into(),
+                    _ => "  Help".into(),
+                }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                highlighted.clone(),
+                display,
+                row_anchor(7),
+                Box::new(|action| match action {
+                    Action::SetupMode => "> Setup Mode".into(),
+                    _ => "  Setup Mode".into(),
+                }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                highlighted.clone(),
+                display,
+                row_anchor(8),
+                Box::new(|action| match action {
+                    Action::Updates => "> Updates".into(),
+                    _ => "  Updates".into(),
+                }),
+            )
+        });
+
+        let reboot_message = ui.reboot_message.clone();
+        let setup_mode = ui.res.setup_mode.setup_mode.clone();
+        let show_help = ui.res.setup_mode.show_help.clone();
+        let alerts = ui.alerts.clone();
+
+        let active = Active {
+            widgets,
+            highlighted,
+            reboot_message,
+            setup_mode,
+            show_help,
+            alerts,
+        };
+
+        Box::new(active)
     }
 }
 
 #[async_trait]
-impl MountableScreen for SystemScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("System Status", SCREEN_TYPE, &ui.draw_target).await;
-
-        let highlighted = Topic::anonymous(Some(Action::Reboot));
-
-        self.widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            ui.draw_target.clone(),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            ui.res.temperatures.soc_temperature.clone(),
-            ui.draw_target.clone(),
-            row_anchor(0),
-            Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            ui.res.network.uplink_interface.clone(),
-            ui.draw_target.clone(),
-            row_anchor(1),
-            Box::new(|info: &LinkInfo| match info.carrier {
-                true => format!("Uplink: {}MBit/s", info.speed),
-                false => "Uplink: Down".to_string(),
-            }),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            ui.res.network.dut_interface.clone(),
-            ui.draw_target.clone(),
-            row_anchor(2),
-            Box::new(|info: &LinkInfo| match info.carrier {
-                true => format!("DUT:    {}MBit/s", info.speed),
-                false => "DUT:    Down".to_string(),
-            }),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            ui.res.network.bridge_interface.clone(),
-            ui.draw_target.clone(),
-            row_anchor(3),
-            Box::new(|ips: &Vec<String>| {
-                let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
-                format!("IP:     {}", ip)
-            }),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            highlighted.clone(),
-            ui.draw_target.clone(),
-            row_anchor(5),
-            Box::new(|action| match action {
-                Action::Reboot => "> Reboot".into(),
-                _ => "  Reboot".into(),
-            }),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            highlighted.clone(),
-            ui.draw_target.clone(),
-            row_anchor(6),
-            Box::new(|action| match action {
-                Action::Help => "> Help".into(),
-                _ => "  Help".into(),
-            }),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            highlighted.clone(),
-            ui.draw_target.clone(),
-            row_anchor(7),
-            Box::new(|action| match action {
-                Action::SetupMode => "> Setup Mode".into(),
-                _ => "  Setup Mode".into(),
-            }),
-        )));
-
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
-        let setup_mode = ui.res.setup_mode.setup_mode.clone();
-        let screen = ui.screen.clone();
-
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                let action = highlighted.get().await;
-
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: _,
-                        src: Source::Web,
-                    } => {
-                        /* Only allow upper button interaction (going to the next screen)
-                         * for inputs on the web.
-                         * Triggering Reboots is possible via the API, so we do not have to
-                         * protect against that and opening the help text is harmless as well,
-                         * but we could think of an attacker that tricks a local user into
-                         * long pressing the lower button right when the attacker goes to the
-                         * "Setup Mode" entry in the menu so that they can deploy new keys.
-                         * Prevent that by disabling navigation altogether. */
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: Source::Local,
-                    } => match action {
-                        Action::Reboot => screen.set(Screen::RebootConfirm),
-                        Action::Help => screen.set(Screen::Help),
-                        Action::SetupMode => setup_mode.modify(|prev| Some(!prev.unwrap_or(true))),
-                    },
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: Source::Local,
-                    } => highlighted.set(action.next()),
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => {
-                        screen.set(SCREEN_TYPE.next());
-                    }
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                }
-            }
-        });
-
-        self.buttons_handle = Some(buttons_handle);
+    async fn deactivate(mut self: Box<Self>) -> Display {
+        self.widgets.destroy().await
     }
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+    fn input(&mut self, ev: InputEvent) {
+        let action = self.highlighted.try_get().unwrap_or(Action::Reboot);
 
-        for mut widget in self.widgets.drain(..) {
-            widget.unmount().await
+        // Actions on this page are only allowed with Source::Local
+        // (in contrast to Source::Web) to prevent e.g. an attacker from
+        // re-enabling the setup mode.
+
+        match ev {
+            InputEvent::ToggleAction(Source::Local) => self.highlighted.set(action.next()),
+            InputEvent::PerformAction(Source::Local) => match action {
+                Action::Reboot => self.reboot_message.set(Some(
+                    "Really reboot?\nLong press lower\nbutton to confirm.".to_string(),
+                )),
+                Action::Help => self.show_help.set(true),
+                Action::SetupMode => self.setup_mode.set(true),
+                Action::Updates => self.alerts.assert(AlertScreen::UpdateAvailable),
+            },
+            _ => {}
         }
     }
 }

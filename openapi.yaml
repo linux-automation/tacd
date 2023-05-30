@@ -30,6 +30,17 @@ paths:
         '400':
           description: The value could not be parsed into a screen name
 
+  /v1/tac/display/alerts:
+    get:
+      summary: A list of currently pending alerts shown on the local UI
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alerts'
+
   /v1/tac/display/buttons:
     put:
       summary: Simulate a button press/release on the device
@@ -77,6 +88,30 @@ paths:
           description: The locator status was set sucessfully
         '400':
           description: The value could not be parsed into a boolean
+
+  /v1/tac/display/show_help:
+    get:
+      summary: Display a help menu on the local screen
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+    put:
+      summary: Display a help menu on the local screen
+      tags: [User Interface]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: Help will be shown or hidden as requested
+        '400':
+          description: The request could not be parsed as boolean
 
   /v1/tac/led/{led}/pattern:
     parameters:
@@ -712,6 +747,43 @@ paths:
         '400':
           description: The value could not be parsed as string
 
+  /v1/tac/update/channels:
+    get:
+      summary: Get a list of update channels and available updates
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateChannels'
+
+  /v1/tac/update/channels/reload:
+    put:
+      summary: Request an update of the channels list and update availability
+      tags: [Updating]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: An update was requested (if true was sent)
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/tac/update/should_reboot:
+    get:
+      summary: Should the system be rebooted as there is a new bundle in the other slot?
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+
   /v1/tac/network/hostname:
     get:
       summary: Get the systems hostname
@@ -772,38 +844,40 @@ components:
         - System
         - IoBus
         - Uart
-        - ScreenSaver
-        - Breakout
-        - RebootConfirm
-        - Rauc
+
+    Alerts:
+      type: array
+      items:
+        type: string
+        enum:
+          - ScreenSaver
+          - Locator
+          - RebootConfirm
+          - UpdateAvailable
+          - UpdateInstallation
+          - Help
+          - Setup
 
     ButtonEvent:
       type: object
       properties:
-        Press:
-          type: object
-          properties:
-            btn:
-              type: string
-              enum:
-                - Upper
-                - Lower
-        Release:
-          type: object
-          properties:
-            btn:
-              type: string
-              enum:
-                - Upper
-                - Lower
-            dur:
-              type: string
-              enum:
-                - Short
-                - Long
-      oneOf:
-        - required: [Press]
-        - required: [Release]
+        type: object
+        properties:
+          dir:
+            type: string
+            enum:
+              - Press
+              - Release
+          btn:
+            type: string
+            enum:
+              - Upper
+              - Lower
+          dur:
+            type: string
+            enum:
+              - Short
+              - Long
 
     BlinkPattern:
       type: object
@@ -932,6 +1006,38 @@ components:
           type: string
         nesting_depth:
           type: number
+
+    UpdateChannels:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          display_name:
+            type: string
+          description:
+            type: string
+          url:
+            type: string
+          polling_interval:
+            type: object
+            properties:
+              secs:
+                type: integer
+              nanos:
+                type: integer
+          enabled:
+            type: boolean
+          bundle:
+            type: object
+            properties:
+              compatible:
+                type: string
+              version:
+                type: string,
+              newer_than_installed:
+                type: boolean
 
     ServiceStatus:
       type: object

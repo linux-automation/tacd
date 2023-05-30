@@ -22,9 +22,7 @@ use async_std::future::timeout;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
-
 use async_trait::async_trait;
-
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoFont, MonoTextStyle},
     pixelcolor::BinaryColor,
@@ -35,12 +33,14 @@ use embedded_graphics::{
 
 use super::buttons::*;
 use super::widgets::*;
-use super::{MountableScreen, Screen, Ui};
-
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::{
+    splash, ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent,
+    Screen, Ui,
+};
+use crate::broker::Topic;
 
 const UI_TEXT_FONT: MonoFont = FONT_10X20;
-const SCREEN_TYPE: Screen = Screen::ScreenSaver;
+const SCREEN_TYPE: AlertScreen = AlertScreen::ScreenSaver;
 const SCREENSAVER_TIMEOUT: Duration = Duration::from_secs(600);
 
 struct BounceAnimation {
@@ -88,16 +88,14 @@ impl BounceAnimation {
     }
 }
 
-pub struct ScreenSaverScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
-}
+pub struct ScreenSaverScreen;
 
 impl ScreenSaverScreen {
-    pub fn new(buttons: &Arc<Topic<ButtonEvent>>, screen: &Arc<Topic<Screen>>) -> Self {
+    pub fn new(buttons: &Arc<Topic<ButtonEvent>>, alerts: &Arc<Topic<AlertList>>) -> Self {
         // Activate screensaver if no button is pressed for some time
         let (mut buttons_events, _) = buttons.clone().subscribe_unbounded();
-        let screen_task = screen.clone();
+        let alerts = alerts.clone();
+
         spawn(async move {
             loop {
                 let ev = timeout(SCREENSAVER_TIMEOUT, buttons_events.next()).await;
@@ -108,92 +106,85 @@ impl ScreenSaverScreen {
                 };
 
                 if activate_screensaver {
-                    screen_task.modify(|screen| {
-                        screen.and_then(|s| {
-                            if s.use_screensaver() {
-                                Some(Screen::ScreenSaver)
-                            } else {
-                                None
-                            }
-                        })
-                    });
+                    alerts.assert(SCREEN_TYPE);
                 }
             }
         });
 
-        Self {
-            widgets: Vec::new(),
-            buttons_handle: None,
-        }
+        Self
+    }
+}
+
+struct Active {
+    widgets: WidgetContainer,
+    locator: Arc<Topic<bool>>,
+    alerts: Arc<Topic<AlertList>>,
+}
+
+impl ActivatableScreen for ScreenSaverScreen {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
+    }
+
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        let bounce = BounceAnimation::new(Rectangle::with_corners(
+            Point::new(0, 8),
+            Point::new(240, 240),
+        ));
+
+        let mut widgets = WidgetContainer::new(display);
+
+        let hostname = ui.res.network.hostname.clone();
+
+        widgets.push(|display| {
+            DynamicWidget::new(
+                ui.res.adc.time.clone(),
+                display,
+                Box::new(move |_, target| {
+                    let ui_text_style: MonoTextStyle<BinaryColor> =
+                        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
+
+                    if let Some(hn) = hostname.try_get() {
+                        let text = Text::new(&hn, Point::new(0, 0), ui_text_style);
+                        let text = bounce.bounce(text);
+                        text.draw(target).unwrap();
+
+                        Some(text.bounding_box())
+                    } else {
+                        Some(splash(target))
+                    }
+                }),
+            )
+        });
+
+        let locator = ui.locator.clone();
+        let alerts = ui.alerts.clone();
+
+        let active = Active {
+            widgets,
+            locator,
+            alerts,
+        };
+
+        Box::new(active)
     }
 }
 
 #[async_trait]
-impl MountableScreen for ScreenSaverScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        let hostname = ui.res.network.hostname.get().await;
-        let bounce = BounceAnimation::new(Rectangle::with_corners(
-            Point::new(0, 8),
-            Point::new(230, 240),
-        ));
-
-        self.widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            ui.draw_target.clone(),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::new(
-            ui.res.adc.time.clone(),
-            ui.draw_target.clone(),
-            Box::new(move |_, target| {
-                let ui_text_style: MonoTextStyle<BinaryColor> =
-                    MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
-
-                let text = Text::new(&hostname, Point::new(0, 0), ui_text_style);
-                let text = bounce.bounce(text);
-
-                text.draw(target).unwrap();
-
-                Some(text.bounding_box())
-            }),
-        )));
-
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
-        let locator = ui.locator.clone();
-        let screen = ui.screen.clone();
-
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: _,
-                        src: _,
-                    } => locator.modify(|prev| Some(!prev.unwrap_or(false))),
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => screen.set(SCREEN_TYPE.next()),
-                    _ => {}
-                }
-            }
-        });
-
-        self.buttons_handle = Some(buttons_handle);
+    async fn deactivate(mut self: Box<Self>) -> Display {
+        self.widgets.destroy().await
     }
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
-
-        for mut widget in self.widgets.drain(..) {
-            widget.unmount().await
+    fn input(&mut self, ev: InputEvent) {
+        match ev {
+            InputEvent::NextScreen => self.alerts.deassert(SCREEN_TYPE),
+            InputEvent::ToggleAction(_) => {}
+            InputEvent::PerformAction(_) => self.locator.toggle(false),
         }
     }
 }

@@ -16,16 +16,19 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use async_std::prelude::*;
+use async_std::sync::Arc;
 use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::prelude::Point;
 
-use super::buttons::*;
 use super::widgets::*;
-use super::{MountableScreen, Screen, Ui};
-use crate::broker::{Native, SubscriptionHandle, Topic};
+use super::Display;
+use super::{
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, InputEvent, Screen, Ui,
+};
+use crate::broker::Topic;
 
-const SCREEN_TYPE: Screen = Screen::Help;
+const SCREEN_TYPE: AlertScreen = AlertScreen::Help;
 const PAGES: &[&str] = &[
     "Hey there!
 
@@ -52,104 +55,117 @@ Press it to leave
 this guide",
 ];
 
-pub struct HelpScreen {
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
+pub struct HelpScreen;
+
+struct Active {
+    widgets: WidgetContainer,
+    up: Arc<Topic<bool>>,
+    page: Arc<Topic<usize>>,
+    show_help: Arc<Topic<bool>>,
 }
 
 impl HelpScreen {
-    pub fn new() -> Self {
-        Self {
-            widgets: Vec::new(),
-            buttons_handle: None,
-        }
-    }
-}
-
-#[async_trait]
-impl MountableScreen for HelpScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
-    }
-
-    async fn mount(&mut self, ui: &Ui) {
-        let up = Topic::anonymous(Some(false));
-        let page = Topic::anonymous(Some(0));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            page.clone(),
-            ui.draw_target.clone(),
-            Point::new(8, 24),
-            Box::new(|page| PAGES[*page].into()),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            up.clone(),
-            ui.draw_target.clone(),
-            Point::new(8, 200),
-            Box::new(|up| match up {
-                false => "  Scroll up".into(),
-                true => "> Scroll up".into(),
-            }),
-        )));
-
-        self.widgets.push(Box::new(DynamicWidget::text(
-            up.clone(),
-            ui.draw_target.clone(),
-            Point::new(8, 220),
-            Box::new(|up| match up {
-                false => "> Scroll down".into(),
-                true => "  Scroll down".into(),
-            }),
-        )));
-
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
-        let screen = ui.screen.clone();
+    pub fn new(alerts: &Arc<Topic<AlertList>>, show_help: &Arc<Topic<bool>>) -> Self {
+        let (mut show_help_events, _) = show_help.clone().subscribe_unbounded();
+        let alerts = alerts.clone();
 
         spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: _,
-                    } => up.modify(|a| Some(!a.unwrap_or(false))),
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => {
-                        let up = up.clone().get().await;
-
-                        page.modify(|page| match (page.unwrap_or(0), up) {
-                            (0, true) => Some(0),
-                            (p, true) => Some(p - 1),
-                            (2, false) => Some(2),
-                            (p, false) => Some(p + 1),
-                        });
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => {
-                        screen.set(SCREEN_TYPE.next());
-                    }
-                    ButtonEvent::Press { btn: _, src: _ } => {}
+            while let Some(show_help) = show_help_events.next().await {
+                if show_help {
+                    alerts.assert(AlertScreen::Help);
+                } else {
+                    alerts.deassert(AlertScreen::Help);
                 }
             }
         });
 
-        self.buttons_handle = Some(buttons_handle);
+        Self
+    }
+}
+
+impl ActivatableScreen for HelpScreen {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
     }
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        let mut widgets = WidgetContainer::new(display);
 
-        for mut widget in self.widgets.drain(..) {
-            widget.unmount().await
+        let up = Topic::anonymous(Some(false));
+        let page = Topic::anonymous(Some(0));
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                page.clone(),
+                display,
+                Point::new(8, 24),
+                Box::new(|page| PAGES[*page].into()),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                up.clone(),
+                display,
+                Point::new(8, 200),
+                Box::new(|up| match up {
+                    false => "  Scroll up".into(),
+                    true => "> Scroll up".into(),
+                }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::text(
+                up.clone(),
+                display,
+                Point::new(8, 220),
+                Box::new(|up| match up {
+                    false => "> Scroll down".into(),
+                    true => "  Scroll down".into(),
+                }),
+            )
+        });
+
+        let show_help = ui.res.setup_mode.show_help.clone();
+
+        let active = Active {
+            widgets,
+            up,
+            page,
+            show_help,
+        };
+
+        Box::new(active)
+    }
+}
+
+#[async_trait]
+impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Alert(SCREEN_TYPE)
+    }
+
+    async fn deactivate(mut self: Box<Self>) -> Display {
+        self.widgets.destroy().await
+    }
+
+    fn input(&mut self, ev: InputEvent) {
+        match ev {
+            InputEvent::NextScreen => {
+                self.show_help.set(false);
+            }
+            InputEvent::ToggleAction(_) => self.up.toggle(false),
+            InputEvent::PerformAction(_) => {
+                let up = self.up.try_get().unwrap_or(false);
+
+                self.page.modify(|page| match (page.unwrap_or(0), up) {
+                    (0, true) => Some(0),
+                    (p, true) => Some(p - 1),
+                    (2, false) => Some(2),
+                    (p, false) => Some(p + 1),
+                });
+            }
         }
     }
 }

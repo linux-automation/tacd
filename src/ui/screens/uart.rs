@@ -15,50 +15,45 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
-
 use embedded_graphics::prelude::*;
 
-use crate::broker::{Native, SubscriptionHandle, Topic};
-
-use super::buttons::*;
 use super::widgets::*;
-use super::{draw_border, MountableScreen, Screen, Ui};
+use super::{
+    draw_border, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen, Screen, Ui,
+};
+use crate::broker::Topic;
 
-const SCREEN_TYPE: Screen = Screen::Uart;
+const SCREEN_TYPE: NormalScreen = NormalScreen::Uart;
 
 pub struct UartScreen {
-    highlighted: Arc<Topic<u8>>,
-    widgets: Vec<Box<dyn AnyWidget>>,
-    buttons_handle: Option<SubscriptionHandle<ButtonEvent, Native>>,
+    highlighted: Arc<Topic<usize>>,
 }
 
 impl UartScreen {
     pub fn new() -> Self {
         Self {
             highlighted: Topic::anonymous(Some(0)),
-            widgets: Vec::new(),
-            buttons_handle: None,
         }
     }
 }
 
-#[async_trait]
-impl MountableScreen for UartScreen {
-    fn is_my_type(&self, screen: Screen) -> bool {
-        screen == SCREEN_TYPE
+struct Active {
+    widgets: WidgetContainer,
+    dir_enables: [Arc<Topic<bool>>; 2],
+    highlighted: Arc<Topic<usize>>,
+}
+
+impl ActivatableScreen for UartScreen {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
     }
 
-    async fn mount(&mut self, ui: &Ui) {
-        draw_border("DUT UART", SCREEN_TYPE, &ui.draw_target).await;
+    fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        draw_border("DUT UART", SCREEN_TYPE, &display);
 
-        self.widgets.push(Box::new(DynamicWidget::locator(
-            ui.locator_dance.clone(),
-            ui.draw_target.clone(),
-        )));
+        let mut widgets = WidgetContainer::new(display);
 
         let ports = [
             (0, "UART RX EN", 52, &ui.res.dig_io.uart_rx_en),
@@ -66,76 +61,65 @@ impl MountableScreen for UartScreen {
         ];
 
         for (idx, name, y, status) in ports {
-            self.widgets.push(Box::new(DynamicWidget::text(
-                self.highlighted.clone(),
-                ui.draw_target.clone(),
-                Point::new(8, y),
-                Box::new(move |highlight: &u8| {
-                    format!(
-                        "{} {}",
-                        if *highlight as usize == idx { ">" } else { " " },
-                        name,
-                    )
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::text(
+                    self.highlighted.clone(),
+                    display,
+                    Point::new(8, y),
+                    Box::new(move |highlight| {
+                        format!("{} {}", if *highlight == idx { ">" } else { " " }, name,)
+                    }),
+                )
+            });
 
-            self.widgets.push(Box::new(DynamicWidget::indicator(
-                status.clone(),
-                ui.draw_target.clone(),
-                Point::new(160, y - 10),
-                Box::new(|state: &bool| match *state {
-                    true => IndicatorState::On,
-                    false => IndicatorState::Off,
-                }),
-            )));
+            widgets.push(|display| {
+                DynamicWidget::indicator(
+                    status.clone(),
+                    display,
+                    Point::new(160, y - 10),
+                    Box::new(|state: &bool| match *state {
+                        true => IndicatorState::On,
+                        false => IndicatorState::Off,
+                    }),
+                )
+            });
         }
 
-        let (mut button_events, buttons_handle) = ui.buttons.clone().subscribe_unbounded();
         let dir_enables = [
             ui.res.dig_io.uart_rx_en.clone(),
             ui.res.dig_io.uart_tx_en.clone(),
         ];
-        let dir_highlight = self.highlighted.clone();
-        let screen = ui.screen.clone();
+        let highlighted = self.highlighted.clone();
 
-        spawn(async move {
-            while let Some(ev) = button_events.next().await {
-                let highlighted = dir_highlight.get().await;
-                let port = &dir_enables[highlighted as usize];
+        let active = Active {
+            widgets,
+            dir_enables,
+            highlighted,
+        };
 
-                match ev {
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Long,
-                        src: _,
-                    } => port.modify(|prev| Some(!prev.unwrap_or(false))),
-                    ButtonEvent::Release {
-                        btn: Button::Lower,
-                        dur: PressDuration::Short,
-                        src: _,
-                    } => {
-                        dir_highlight.set((highlighted + 1) % 2);
-                    }
-                    ButtonEvent::Release {
-                        btn: Button::Upper,
-                        dur: _,
-                        src: _,
-                    } => screen.set(SCREEN_TYPE.next()),
-                    ButtonEvent::Press { btn: _, src: _ } => {}
-                }
-            }
-        });
+        Box::new(active)
+    }
+}
 
-        self.buttons_handle = Some(buttons_handle);
+#[async_trait]
+impl ActiveScreen for Active {
+    fn my_type(&self) -> Screen {
+        Screen::Normal(SCREEN_TYPE)
     }
 
-    async fn unmount(&mut self) {
-        if let Some(handle) = self.buttons_handle.take() {
-            handle.unsubscribe();
-        }
+    async fn deactivate(mut self: Box<Self>) -> Display {
+        self.widgets.destroy().await
+    }
 
-        for mut widget in self.widgets.drain(..) {
-            widget.unmount().await
+    fn input(&mut self, ev: InputEvent) {
+        let highlighted = self.highlighted.try_get().unwrap_or(0);
+
+        match ev {
+            InputEvent::NextScreen => {}
+            InputEvent::ToggleAction(_) => {
+                self.highlighted.set((highlighted + 1) % 2);
+            }
+            InputEvent::PerformAction(_) => self.dir_enables[highlighted].toggle(false),
         }
     }
 }

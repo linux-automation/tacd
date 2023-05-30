@@ -34,6 +34,7 @@ const AUTHORIZED_KEYS_PATH: &str = "/home/root/.ssh/authorized_keys";
 
 pub struct SetupMode {
     pub setup_mode: Arc<Topic<bool>>,
+    pub show_help: Arc<Topic<bool>>,
 }
 
 impl SetupMode {
@@ -128,6 +129,14 @@ impl SetupMode {
     pub fn new(bb: &mut BrokerBuilder, server: &mut Server<()>) -> Self {
         let this = Self {
             setup_mode: bb.topic("/v1/tac/setup_mode", true, false, true, Some(true), 1),
+            show_help: bb.topic(
+                "/v1/tac/display/show_help",
+                true,
+                false,
+                true,
+                Some(true),
+                1,
+            ),
         };
 
         this.handle_leave_requests(bb);
