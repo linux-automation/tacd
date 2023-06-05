@@ -39,7 +39,7 @@ linked above.
 
 The `tacd` serves a React-Based web interface to interactively remote control
 the LXA TAC.
-If you want to use this web interface with you `tacd` build you should build it
+If you want to use this web interface with your `tacd` build you should build it
 from source using the dark witchcraft that is javascript dependency management:
 
     $ cd web
@@ -49,7 +49,7 @@ from source using the dark witchcraft that is javascript dependency management:
 ### Building for your PC
 
 The `tacd` contains stubs that make building a stripped-down version for your
-host PC possible. These can be useful for quickling checking if a change
+host PC possible. These can be useful for quickly checking if a change
 compiles, testing changes in the web interface or running unit tests.
 
 #### Run `tacd` on your PC
@@ -107,7 +107,7 @@ documentation and add the following to the `.cargo/config.toml`:
         "-C", "link-arg=--sysroot=[PATH_TO_YOUR_INSTALLED_SDK]/sysroots/cortexa7t2hf-neon-vfpv4-oe-linux-gnueabi",
     ]
 
-Remeber to update *both* paths so that they point to your installed SDK.
+Remember to update *both* paths so that they point to your installed SDK.
 Also remember to always source the SDK activation script before building for
 the LXA TAC (and using a shell without a sourced SDK when building for the host
 PC).
@@ -117,7 +117,7 @@ PC).
 Then, you can use `cargo build --target armv7-unknown-linux-gnueabihf` to
 compile the `tacd`.
 The resulting binary is placed in `target/armv7-unknown-linux-gnueabihf/release/tacd`
-and contains averything required to run the tacd, including the web interface.
+and contains everything required to run the tacd, including the web interface.
 It can thus just be copied to your LXA TAC and run instead of the existing
 `tacd` (remember to `systemctl stop tacd` the already running instance).
 
