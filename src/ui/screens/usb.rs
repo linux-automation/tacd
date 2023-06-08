@@ -51,7 +51,8 @@ impl UsbScreen {
 
 struct Active {
     widgets: WidgetContainer,
-    port_enables: [Arc<Topic<bool>>; 3],
+    port_requests: [Arc<Topic<bool>>; 3],
+    port_states: [Arc<Topic<bool>>; 3],
     highlighted: Arc<Topic<usize>>,
 }
 
@@ -78,19 +79,19 @@ impl ActivatableScreen for UsbScreen {
             (
                 0,
                 "Port 1",
-                &ui.res.usb_hub.port1.powered,
+                &ui.res.usb_hub.port1.status,
                 &ui.res.adc.usb_host1_curr.topic,
             ),
             (
                 1,
                 "Port 2",
-                &ui.res.usb_hub.port2.powered,
+                &ui.res.usb_hub.port2.status,
                 &ui.res.adc.usb_host2_curr.topic,
             ),
             (
                 2,
                 "Port 3",
-                &ui.res.usb_hub.port3.powered,
+                &ui.res.usb_hub.port3.status,
                 &ui.res.adc.usb_host3_curr.topic,
             ),
         ];
@@ -147,16 +148,22 @@ impl ActivatableScreen for UsbScreen {
             });
         }
 
-        let port_enables = [
-            ui.res.usb_hub.port1.powered.clone(),
-            ui.res.usb_hub.port2.powered.clone(),
-            ui.res.usb_hub.port3.powered.clone(),
+        let port_requests = [
+            ui.res.usb_hub.port1.request.clone(),
+            ui.res.usb_hub.port2.request.clone(),
+            ui.res.usb_hub.port3.request.clone(),
+        ];
+        let port_states = [
+            ui.res.usb_hub.port1.status.clone(),
+            ui.res.usb_hub.port2.status.clone(),
+            ui.res.usb_hub.port3.status.clone(),
         ];
         let highlighted = self.highlighted.clone();
 
         let active = Active {
             widgets,
-            port_enables,
+            port_requests,
+            port_states,
             highlighted,
         };
 
@@ -182,7 +189,10 @@ impl ActiveScreen for Active {
             InputEvent::ToggleAction(_) => {
                 self.highlighted.set((highlighted + 1) % 3);
             }
-            InputEvent::PerformAction(_) => self.port_enables[highlighted].toggle(false),
+            InputEvent::PerformAction(_) => {
+                let status = self.port_states[highlighted].try_get().unwrap_or(false);
+                self.port_requests[highlighted].set(!status);
+            }
         }
     }
 }
