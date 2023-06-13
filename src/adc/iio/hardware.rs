@@ -102,6 +102,8 @@ const CHANNELS_PWR: &[ChannelDesc] = &[
     },
 ];
 
+const TIMESTAMP_ERROR: u64 = u64::MAX;
+
 #[derive(Clone, Copy)]
 struct Calibration {
     scale: f32,
@@ -193,7 +195,11 @@ impl CalibratedChannel {
 
         let ts_after = self.iio_thread.timestamp.load(Ordering::Acquire);
 
-        if (ts_before == ts_after) && (ts_before != 0) {
+        if ts_before == TIMESTAMP_ERROR || ts_after == TIMESTAMP_ERROR {
+            panic!("Failed to read from ADC");
+        }
+
+        if ts_before == ts_after {
             let ts = self
                 .iio_thread
                 .ref_instant
@@ -315,7 +321,7 @@ impl IioThread {
                     Ok((stm32_channels, stm32_buf, pwr_channels)) => {
                         let thread = Arc::new(Self {
                             ref_instant: Instant::now(),
-                            timestamp: AtomicU64::new(0),
+                            timestamp: AtomicU64::new(TIMESTAMP_ERROR),
                             values: [
                                 AtomicU16::new(0),
                                 AtomicU16::new(0),
@@ -348,6 +354,8 @@ impl IioThread {
                     // Use the buffer interface to get STM32 ADC values at a high
                     // sampling rate to perform averaging in software.
                     if let Err(e) = stm32_buf.refill() {
+                        thread.timestamp.store(TIMESTAMP_ERROR, Ordering::Relaxed);
+
                         error!("Failed to refill STM32 ADC buffer: {}", e);
 
                         // If the ADC has not yet produced any values we still have the
