@@ -31,7 +31,7 @@ mod reg {
 
     pub fn regulator_set(name: &str, state: bool) -> Result<()> {
         if name == "output_iobus_12v" {
-            let iio_thread = block_on(IioThread::new()).unwrap();
+            let iio_thread = block_on(IioThread::new_stm32()).unwrap();
 
             iio_thread
                 .clone()

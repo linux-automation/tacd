@@ -29,7 +29,8 @@ use crate::measurement::{Measurement, Timestamp};
 // We need to somehow get the output states from digital_io/gpio/demo_mode.rs
 // to here. We could clobber the actual business code even more, or do dirty
 // mutable globals stuff.
-pub static DEMO_MAGIC: Mutex<Option<Arc<IioThread>>> = Mutex::new(None);
+pub static DEMO_MAGIC_STM32: Mutex<Option<Arc<IioThread>>> = Mutex::new(None);
+pub static DEMO_MAGIC_POWERBOARD: Mutex<Option<Arc<IioThread>>> = Mutex::new(None);
 
 pub struct CalibratedChannelInner {
     name: &'static str,
@@ -153,10 +154,10 @@ pub struct IioThread {
 }
 
 impl IioThread {
-    pub async fn new() -> Result<Arc<Self>> {
-        let mut demo_magic = block_on(DEMO_MAGIC.lock());
+    pub async fn new_stm32() -> Result<Arc<Self>> {
+        let mut demo_magic = block_on(DEMO_MAGIC_STM32.lock());
 
-        // Only ever set up a single demo_mode "IioThread"
+        // Only ever set up a single demo_mode "IioThread" per ADC
         if let Some(this) = &*demo_magic {
             return Ok(this.clone());
         }
@@ -179,6 +180,24 @@ impl IioThread {
             CalibratedChannel::with_exponential("out1-volt", 0.0, -3.3, 0.002, 0.2, 0.1),
             CalibratedChannel::with_exponential("iobus-curr", 0.15, 0.0, 0.001, 0.2, 0.01),
             CalibratedChannel::with_exponential("iobus-volt", 12.2, 0.0, 0.1, 0.2, 1.0),
+        ];
+
+        let this = Arc::new(Self { channels });
+
+        *demo_magic = Some(this.clone());
+
+        Ok(this)
+    }
+
+    pub async fn new_powerboard() -> Result<Arc<Self>> {
+        let mut demo_magic = block_on(DEMO_MAGIC_POWERBOARD.lock());
+
+        // Only ever set up a single demo_mode "IioThread" per ADC
+        if let Some(this) = &*demo_magic {
+            return Ok(this.clone());
+        }
+
+        let channels = vec![
             CalibratedChannel::with_exponential("pwr-volt", 24.0, 0.0, 0.02, 0.2, 2.0),
             CalibratedChannel::with_exponential("pwr-curr", 1.2, 0.0, 0.002, 0.2, 0.01),
         ];

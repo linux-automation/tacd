@@ -30,18 +30,28 @@ impl LineHandle {
         // It is just a hack to let adc/iio/demo_mode.rs
         // communicate with this function so that toggling an output
         // has an effect on the measured values.
-        let iio_thread = block_on(IioThread::new()).unwrap();
+        let iio_thread_stm32 = block_on(IioThread::new_stm32()).unwrap();
+        let iio_thread_pwr = block_on(IioThread::new_powerboard()).unwrap();
 
         match self.name.as_str() {
-            "OUT_0" => iio_thread.get_channel("out0-volt").unwrap().set(val != 0),
-            "OUT_1" => iio_thread.get_channel("out1-volt").unwrap().set(val != 0),
+            "OUT_0" => iio_thread_stm32
+                .get_channel("out0-volt")
+                .unwrap()
+                .set(val != 0),
+            "OUT_1" => iio_thread_stm32
+                .get_channel("out1-volt")
+                .unwrap()
+                .set(val != 0),
             "DUT_PWR_EN" => {
-                iio_thread
+                iio_thread_pwr
                     .clone()
                     .get_channel("pwr-curr")
                     .unwrap()
                     .set(val == 0);
-                iio_thread.get_channel("pwr-volt").unwrap().set(val == 0);
+                iio_thread_pwr
+                    .get_channel("pwr-volt")
+                    .unwrap()
+                    .set(val == 0);
             }
             _ => {}
         }
