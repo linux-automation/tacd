@@ -106,6 +106,8 @@ export default function DashboardDut() {
             <MqttChart
               title="DUT Voltage"
               topic="/v1/dut/feedback/voltage"
+              maxSnapPoints={[6, 13, 25, 50]}
+              minSnapPoints={[-1]}
             />
           </Box>
           <Box>
@@ -113,6 +115,8 @@ export default function DashboardDut() {
             <MqttChart
               title="DUT Current"
               topic="/v1/dut/feedback/current"
+              maxSnapPoints={[0.5, 1, 2, 3, 4, 5]}
+              minSnapPoints={[-0.1, -1]}
             />
           </Box>
         </ColumnLayout>
@@ -248,6 +252,8 @@ export default function DashboardDut() {
                 <MqttChart
                   title={`OUT_${port} Voltage`}
                   topic={`/v1/output/out_${port}/feedback/voltage`}
+                  maxSnapPoints={[4, 6]}
+                  minSnapPoints={[-4, -6]}
                 />
               </UnloadingSection>
             </SpaceBetween>
@@ -316,6 +322,8 @@ export default function DashboardDut() {
               <MqttChart
                 title="IOBus current"
                 topic="/v1/iobus/feedback/current"
+                maxSnapPoints={[0.25]}
+                minSnapPoints={[0]}
               />
             </UnloadingSection>
             <MqttBarMeter
@@ -333,6 +341,8 @@ export default function DashboardDut() {
               <MqttChart
                 title="IOBus current"
                 topic="/v1/iobus/feedback/voltage"
+                maxSnapPoints={[13]}
+                minSnapPoints={[0]}
               />
             </UnloadingSection>
           </SpaceBetween>
@@ -397,6 +407,8 @@ export default function DashboardDut() {
                     <MqttChart
                       title={`Port ${port} current`}
                       topic={`/v1/usb/host/port${port}/feedback/current`}
+                      maxSnapPoints={[0.5]}
+                      minSnapPoints={[0]}
                     />
                   </UnloadingSection>
                 </SpaceBetween>
