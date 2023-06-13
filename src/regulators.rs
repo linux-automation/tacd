@@ -75,8 +75,8 @@ fn handle_regulator(
 impl Regulators {
     pub fn new(bb: &mut BrokerBuilder) -> Self {
         Self {
-            iobus_pwr_en: handle_regulator(bb, "/v1/iobus/powered", "output_iobus_12v", true),
-            uart_pwr_en: handle_regulator(bb, "/v1/uart/powered", "output_vuart", true),
+            iobus_pwr_en: handle_regulator(bb, "/v1/iobus/powered", "output-iobus-12v", true),
+            uart_pwr_en: handle_regulator(bb, "/v1/uart/powered", "output-vuart", true),
         }
     }
 }
