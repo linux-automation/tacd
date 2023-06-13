@@ -23,14 +23,14 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use async_std::channel::bounded;
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
 
 use industrial_io::{Buffer, Channel};
 
-use log::{debug, warn};
+use log::{debug, error, warn};
 use thread_priority::*;
 
 use crate::measurement::{Measurement, Timestamp};
@@ -310,44 +310,56 @@ impl IioThread {
         let join = thread::Builder::new()
             .name("tacd iio".into())
             .spawn(move || {
-                let (thread_weak, stm32_channels, mut stm32_buf, pwr_channels) =
-                    match Self::adc_setup() {
-                        Ok((stm32_channels, stm32_buf, pwr_channels)) => {
-                            let thread = Arc::new(Self {
-                                ref_instant: Instant::now(),
-                                timestamp: AtomicU64::new(0),
-                                values: [
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                    AtomicU16::new(0),
-                                ],
-                                join: Mutex::new(None),
-                            });
-                            let thread_weak = Arc::downgrade(&thread);
+                let (thread, stm32_channels, mut stm32_buf, pwr_channels) = match Self::adc_setup()
+                {
+                    Ok((stm32_channels, stm32_buf, pwr_channels)) => {
+                        let thread = Arc::new(Self {
+                            ref_instant: Instant::now(),
+                            timestamp: AtomicU64::new(0),
+                            values: [
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                                AtomicU16::new(0),
+                            ],
+                            join: Mutex::new(None),
+                        });
 
-                            thread_res_tx.try_send(Ok(thread)).unwrap();
+                        (thread, stm32_channels, stm32_buf, pwr_channels)
+                    }
+                    Err(e) => {
+                        thread_res_tx.try_send(Err(e)).unwrap();
+                        panic!()
+                    }
+                };
 
-                            (thread_weak, stm32_channels, stm32_buf, pwr_channels)
-                        }
-                        Err(e) => {
-                            thread_res_tx.try_send(Err(e)).unwrap();
-                            panic!()
-                        }
-                    };
+                let thread_weak = Arc::downgrade(&thread);
+                let mut signal_ready = Some((thread, thread_res_tx));
 
                 // Stop running as soon as the last reference to this Arc<IioThread>
                 // is dropped (e.g. the weak reference can no longer be upgraded).
                 while let Some(thread) = thread_weak.upgrade() {
                     // Use the buffer interface to get STM32 ADC values at a high
                     // sampling rate to perform averaging in software.
-                    stm32_buf.refill().unwrap();
+                    if let Err(e) = stm32_buf.refill() {
+                        error!("Failed to refill STM32 ADC buffer: {}", e);
+
+                        // If the ADC has not yet produced any values we still have the
+                        // queue at hand that signals readiness to the main thread.
+                        // This gives us a chance to return an Err from new().
+                        // If the queue was already used just print an error instead.
+                        if let Some((_, tx)) = signal_ready.take() {
+                            tx.try_send(Err(Error::new(e))).unwrap();
+                        }
+
+                        break;
+                    }
 
                     let stm32_values = stm32_channels.iter().map(|ch| {
                         let buf_sum: u32 =
@@ -377,6 +389,12 @@ impl IioThread {
                         .unwrap();
 
                     thread.timestamp.store(ts, Ordering::Release);
+
+                    // Now that we know that the ADC actually works and we have
+                    // initial values: return a handle to it.
+                    if let Some((content, tx)) = signal_ready.take() {
+                        tx.try_send(Ok(content)).unwrap();
+                    }
                 }
             })?;
 
