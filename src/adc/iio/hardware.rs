@@ -407,9 +407,9 @@ impl IioThread {
             "stm32",
             "48003000.adc:adc@0",
             "tim4_trgo",
-            1024,
+            80,
             CHANNELS_STM32,
-            128,
+            4,
         )
         .await
     }
