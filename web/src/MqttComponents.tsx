@@ -260,6 +260,7 @@ function measToPoint(m: Measurement) {
 }
 
 interface MqttChartProps {
+  title: string;
   topic: string;
 }
 
@@ -275,7 +276,7 @@ export function MqttChart(props: MqttChartProps) {
 
   let series: MixedLineBarChartProps.ChartSeries<Date> = {
     type: "line",
-    title: "eh",
+    title: props.title,
     data: values,
   };
 

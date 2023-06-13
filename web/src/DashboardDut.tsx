@@ -103,11 +103,17 @@ export default function DashboardDut() {
         <ColumnLayout columns={2} variant="text-grid">
           <Box>
             <Box variant="awsui-key-label">DUT voltage (V)</Box>
-            <MqttChart topic="/v1/dut/feedback/voltage" />
+            <MqttChart
+              title="DUT Voltage"
+              topic="/v1/dut/feedback/voltage"
+            />
           </Box>
           <Box>
             <Box variant="awsui-key-label">DUT current (A)</Box>
-            <MqttChart topic="/v1/dut/feedback/current" />
+            <MqttChart
+              title="DUT Current"
+              topic="/v1/dut/feedback/current"
+            />
           </Box>
         </ColumnLayout>
         <ColumnLayout columns={4} variant="text-grid">
@@ -239,7 +245,10 @@ export default function DashboardDut() {
                 additionalInfo="The absolute voltage is independent of pin orientation"
               />
               <UnloadingSection header={`OUT_${port} voltage plot (V)`}>
-                <MqttChart topic={`/v1/output/out_${port}/feedback/voltage`} />
+                <MqttChart
+                  title={`OUT_${port} Voltage`}
+                  topic={`/v1/output/out_${port}/feedback/voltage`}
+                />
               </UnloadingSection>
             </SpaceBetween>
           </ColumnLayout>
@@ -304,7 +313,10 @@ export default function DashboardDut() {
               additionalInfo="Too many devices may overload the bus"
             />
             <UnloadingSection header="IOBus current plot">
-              <MqttChart topic="/v1/iobus/feedback/current" />
+              <MqttChart
+                title="IOBus current"
+                topic="/v1/iobus/feedback/current"
+              />
             </UnloadingSection>
             <MqttBarMeter
               topic="/v1/iobus/feedback/voltage"
@@ -318,7 +330,10 @@ export default function DashboardDut() {
               additionalInfo="The voltage will go down if the bus is overloaded"
             />
             <UnloadingSection header="IOBus voltage plot">
-              <MqttChart topic="/v1/iobus/feedback/voltage" />
+              <MqttChart
+                title="IOBus current"
+                topic="/v1/iobus/feedback/voltage"
+              />
             </UnloadingSection>
           </SpaceBetween>
         </ColumnLayout>
@@ -380,6 +395,7 @@ export default function DashboardDut() {
                   />
                   <UnloadingSection header={`USB Port ${port} current plot`}>
                     <MqttChart
+                      title={`Port ${port} current`}
                       topic={`/v1/usb/host/port${port}/feedback/current`}
                     />
                   </UnloadingSection>
