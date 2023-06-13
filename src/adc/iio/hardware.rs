@@ -35,49 +35,71 @@ use thread_priority::*;
 
 use crate::measurement::{Measurement, Timestamp};
 
+struct ChannelDesc {
+    kernel_name: &'static str,
+    calibration_path: &'static str,
+    name: &'static str,
+}
+
 // Hard coded list of channels using the internal STM32MP1 ADC.
 // Consists of the IIO channel name, the location of the calibration data
 // in the device tree and an internal name for the channel.
-const CHANNELS_STM32: &[(&str, &str, &str)] = &[
-    (
-        "voltage13",
-        "baseboard-factory-data/usb-host-curr",
-        "usb-host-curr",
-    ),
-    (
-        "voltage15",
-        "baseboard-factory-data/usb-host1-curr",
-        "usb-host1-curr",
-    ),
-    (
-        "voltage0",
-        "baseboard-factory-data/usb-host2-curr",
-        "usb-host2-curr",
-    ),
-    (
-        "voltage1",
-        "baseboard-factory-data/usb-host3-curr",
-        "usb-host3-curr",
-    ),
-    ("voltage2", "baseboard-factory-data/out0-volt", "out0-volt"),
-    ("voltage10", "baseboard-factory-data/out1-volt", "out1-volt"),
-    (
-        "voltage5",
-        "baseboard-factory-data/iobus-curr",
-        "iobus-curr",
-    ),
-    (
-        "voltage9",
-        "baseboard-factory-data/iobus-volt",
-        "iobus-volt",
-    ),
+const CHANNELS_STM32: &[ChannelDesc] = &[
+    ChannelDesc {
+        kernel_name: "voltage13",
+        calibration_path: "baseboard-factory-data/usb-host-curr",
+        name: "usb-host-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage15",
+        calibration_path: "baseboard-factory-data/usb-host1-curr",
+        name: "usb-host1-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage0",
+        calibration_path: "baseboard-factory-data/usb-host2-curr",
+        name: "usb-host2-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage1",
+        calibration_path: "baseboard-factory-data/usb-host3-curr",
+        name: "usb-host3-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage2",
+        calibration_path: "baseboard-factory-data/out0-volt",
+        name: "out0-volt",
+    },
+    ChannelDesc {
+        kernel_name: "voltage10",
+        calibration_path: "baseboard-factory-data/out1-volt",
+        name: "out1-volt",
+    },
+    ChannelDesc {
+        kernel_name: "voltage5",
+        calibration_path: "baseboard-factory-data/iobus-curr",
+        name: "iobus-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage9",
+        calibration_path: "baseboard-factory-data/iobus-volt",
+        name: "iobus-volt",
+    },
 ];
 
 // The same as for the STM32MP1 channels but for the discrete ADC on the power
 // board.
-const CHANNELS_PWR: &[(&str, &str, &str)] = &[
-    ("voltage", "powerboard-factory-data/pwr-volt", "pwr-volt"),
-    ("current", "powerboard-factory-data/pwr-curr", "pwr-curr"),
+const CHANNELS_PWR: &[ChannelDesc] = &[
+    ChannelDesc {
+        kernel_name: "voltage",
+        calibration_path: "powerboard-factory-data/pwr-volt",
+        name: "pwr-volt",
+    },
+    ChannelDesc {
+        kernel_name: "current",
+        calibration_path: "powerboard-factory-data/pwr-curr",
+        name: "pwr-curr",
+    },
 ];
 
 #[derive(Clone, Copy)]
@@ -235,10 +257,10 @@ impl IioThread {
 
         let stm32_channels: Vec<Channel> = CHANNELS_STM32
             .iter()
-            .map(|(iio_name, _, _)| {
+            .map(|ChannelDesc { kernel_name, .. }| {
                 let ch = stm32_adc
-                    .find_channel(iio_name, false)
-                    .unwrap_or_else(|| panic!("Failed to open iio channel {}", iio_name));
+                    .find_channel(kernel_name, false)
+                    .unwrap_or_else(|| panic!("Failed to open iio channel {}", kernel_name));
 
                 ch.enable();
                 ch
@@ -247,10 +269,10 @@ impl IioThread {
 
         let pwr_channels: Vec<Channel> = CHANNELS_PWR
             .iter()
-            .map(|(iio_name, _, _)| {
+            .map(|ChannelDesc { kernel_name, .. }| {
                 pwr_adc
-                    .find_channel(iio_name, false)
-                    .unwrap_or_else(|| panic!("Failed to open iio channel {}", iio_name))
+                    .find_channel(kernel_name, false)
+                    .unwrap_or_else(|| panic!("Failed to open iio channel {}", kernel_name))
             })
             .collect();
 
@@ -371,10 +393,17 @@ impl IioThread {
             .iter()
             .chain(CHANNELS_PWR)
             .enumerate()
-            .find(|(_, (_, _, name))| name == &ch_name)
+            .find(|(_, ChannelDesc { name, .. })| name == &ch_name)
             .ok_or(anyhow!("Could not get adc channel {}", ch_name))
-            .and_then(|(idx, (_, calib_name, _))| {
-                CalibratedChannel::from_name(self.clone(), idx, calib_name)
-            })
+            .and_then(
+                |(
+                    idx,
+                    ChannelDesc {
+                        calibration_path, ..
+                    },
+                )| {
+                    CalibratedChannel::from_name(self.clone(), idx, calibration_path)
+                },
+            )
     }
 }
