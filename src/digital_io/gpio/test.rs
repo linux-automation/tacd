@@ -41,24 +41,9 @@ impl LineHandle {
 
 pub struct LineEvent(u8);
 
-impl LineEvent {
-    pub fn event_type(&self) -> EventType {
-        match self.0 {
-            0 => EventType::FallingEdge,
-            _ => EventType::RisingEdge,
-        }
-    }
-}
-
 pub struct LineEventHandle {
     val: Arc<AtomicU8>,
     prev_val: u8,
-}
-
-impl LineEventHandle {
-    pub fn get_value(&self) -> Result<u8, ()> {
-        Ok(self.val.load(Ordering::Relaxed))
-    }
 }
 
 impl Iterator for LineEventHandle {
@@ -78,20 +63,9 @@ impl Iterator for LineEventHandle {
     }
 }
 
-pub enum EventType {
-    RisingEdge,
-    FallingEdge,
-}
-
-#[allow(non_camel_case_types)]
-pub enum EventRequestFlags {
-    BOTH_EDGES,
-}
-
 #[allow(clippy::upper_case_acronyms)]
 pub enum LineRequestFlags {
     OUTPUT,
-    INPUT,
 }
 
 pub struct FindDecoy {
@@ -106,18 +80,6 @@ impl FindDecoy {
         Ok(LineHandle {
             name: self.name.clone(),
             val: self.val.clone(),
-        })
-    }
-
-    pub fn events(
-        &self,
-        _: LineRequestFlags,
-        _: EventRequestFlags,
-        _: &str,
-    ) -> Result<LineEventHandle> {
-        Ok(LineEventHandle {
-            val: self.val.clone(),
-            prev_val: self.val.load(Ordering::Relaxed),
         })
     }
 

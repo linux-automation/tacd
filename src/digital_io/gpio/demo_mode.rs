@@ -15,10 +15,6 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::iter::Iterator;
-use std::thread::sleep;
-use std::time::Duration;
-
 use anyhow::Result;
 use async_std::task::block_on;
 
@@ -54,49 +50,9 @@ impl LineHandle {
     }
 }
 
-pub struct LineEvent(u8);
-
-impl LineEvent {
-    pub fn event_type(&self) -> EventType {
-        match self.0 {
-            0 => EventType::FallingEdge,
-            _ => EventType::RisingEdge,
-        }
-    }
-}
-
-pub struct LineEventHandle {}
-
-impl LineEventHandle {
-    pub fn get_value(&self) -> Result<u8, ()> {
-        Ok(0)
-    }
-}
-
-impl Iterator for LineEventHandle {
-    type Item = Result<LineEvent, ()>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            sleep(Duration::from_secs(1000));
-        }
-    }
-}
-
-pub enum EventType {
-    RisingEdge,
-    FallingEdge,
-}
-
-#[allow(non_camel_case_types)]
-pub enum EventRequestFlags {
-    BOTH_EDGES,
-}
-
 #[allow(clippy::upper_case_acronyms)]
 pub enum LineRequestFlags {
     OUTPUT,
-    INPUT,
 }
 
 pub struct FindDecoy {
@@ -112,15 +68,6 @@ impl FindDecoy {
         line_handle.set_value(initial).unwrap();
 
         Ok(line_handle)
-    }
-
-    pub fn events(
-        &self,
-        _: LineRequestFlags,
-        _: EventRequestFlags,
-        _: &str,
-    ) -> Result<LineEventHandle, ()> {
-        Ok(LineEventHandle {})
     }
 }
 

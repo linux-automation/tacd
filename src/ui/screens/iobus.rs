@@ -111,7 +111,7 @@ impl ActivatableScreen for IoBusScreen {
 
         widgets.push(|display| {
             DynamicWidget::indicator(
-                ui.res.dig_io.iobus_flt_fb.clone(),
+                ui.res.iobus.supply_fault.clone(),
                 display,
                 row_anchor(2) + OFFSET_INDICATOR,
                 Box::new(|state: &bool| match *state {

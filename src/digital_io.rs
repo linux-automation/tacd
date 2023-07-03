@@ -17,7 +17,7 @@
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::{spawn, spawn_blocking};
+use async_std::task::spawn;
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
@@ -40,14 +40,13 @@ mod gpio {
     pub use hardware::*;
 }
 
-pub use gpio::{find_line, EventRequestFlags, EventType, LineHandle, LineRequestFlags};
+pub use gpio::{find_line, LineHandle, LineRequestFlags};
 
 pub struct DigitalIo {
     pub out_0: Arc<Topic<bool>>,
     pub out_1: Arc<Topic<bool>>,
     pub uart_rx_en: Arc<Topic<bool>>,
     pub uart_tx_en: Arc<Topic<bool>>,
-    pub iobus_flt_fb: Arc<Topic<bool>>,
 }
 
 /// Handle a GPIO line whose state is completely defined by the broker framework
@@ -82,38 +81,6 @@ fn handle_line_wo(
     topic
 }
 
-/// Handle a GPIO line whose state is completely defined by itself
-/// (e.g. there is no way to manipulate it via the broker framework).
-fn handle_line_ro(bb: &mut BrokerBuilder, path: &str, line_name: &str) -> Arc<Topic<bool>> {
-    let topic = bb.topic_ro(path, None);
-    let line = find_line(line_name).unwrap();
-
-    let topic_thread = topic.clone();
-
-    let src = line
-        .events(
-            LineRequestFlags::INPUT,
-            EventRequestFlags::BOTH_EDGES,
-            "tacd",
-        )
-        .unwrap();
-
-    spawn_blocking(move || {
-        topic_thread.set(src.get_value().unwrap() != 0);
-
-        for ev in src {
-            let state = match ev.unwrap().event_type() {
-                EventType::RisingEdge => true,
-                EventType::FallingEdge => false,
-            };
-
-            topic_thread.set(state);
-        }
-    });
-
-    topic
-}
-
 impl DigitalIo {
     pub fn new(
         bb: &mut BrokerBuilder,
@@ -140,14 +107,12 @@ impl DigitalIo {
 
         let uart_rx_en = handle_line_wo(bb, "/v1/uart/rx/enabled", "UART_RX_EN", true, true, None);
         let uart_tx_en = handle_line_wo(bb, "/v1/uart/tx/enabled", "UART_TX_EN", true, true, None);
-        let iobus_flt_fb = handle_line_ro(bb, "/v1/iobus/feedback/fault", "IOBUS_FLT_FB");
 
         Self {
             out_0,
             out_1,
             uart_rx_en,
             uart_tx_en,
-            iobus_flt_fb,
         }
     }
 }
