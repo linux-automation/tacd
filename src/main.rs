@@ -18,6 +18,7 @@
 use futures::{select, FutureExt};
 
 mod adc;
+mod backlight;
 mod broker;
 mod dbus;
 mod digital_io;
@@ -36,6 +37,7 @@ mod usb_hub;
 mod watchdog;
 
 use adc::Adc;
+use backlight::Backlight;
 use broker::BrokerBuilder;
 use dbus::DbusSession;
 use digital_io::DigitalIo;
@@ -64,6 +66,7 @@ async fn main() -> Result<(), std::io::Error> {
     let mut bb = BrokerBuilder::new();
 
     // Expose hardware on the TAC via the broker framework.
+    let backlight = Backlight::new(&mut bb).unwrap();
     let led = Led::new(&mut bb);
     let adc = Adc::new(&mut bb).await.unwrap();
     let dut_pwr = DutPwrThread::new(
@@ -117,6 +120,7 @@ async fn main() -> Result<(), std::io::Error> {
     let ui = {
         let resources = UiResources {
             adc,
+            backlight,
             dig_io,
             dut_pwr,
             iobus,

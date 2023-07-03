@@ -41,6 +41,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/Alerts'
 
+  /v1/tac/display/backlight/brightness:
+    get:
+      summary: Get the current backlight brightness (between 0.0, and 1.0)
+      tags: [User Interface]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: number
+    put:
+      summary: Set the current backlight brightness (between 0.0 and 1.0)
+      tags: [User Interface]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: number
+      responses:
+        '204':
+          description: The display brightness was set sucessfully
+        '400':
+          description: The value could not be parsed as a number
+
   /v1/tac/display/buttons:
     put:
       summary: Simulate a button press/release on the device
