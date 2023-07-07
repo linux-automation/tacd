@@ -31,6 +31,7 @@ import "./App.css";
 import { useMqttSubscription } from "./mqtt";
 import { ApiPickerButton, MqttButton } from "./MqttComponents";
 import {
+  IOBusFaultNotification,
   RebootNotification,
   UpdateNotification,
   ProgressNotification,
@@ -158,6 +159,7 @@ function Notifications() {
       <ProgressNotification />
       <UpdateNotification />
       <LocatorNotification />
+      <IOBusFaultNotification />
     </>
   );
 }
