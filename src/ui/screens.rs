@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 mod dig_out;
 mod help;
 mod iobus;
+mod iobus_health;
 mod locator;
 mod power;
 mod reboot;
@@ -43,6 +44,7 @@ mod usb;
 use dig_out::DigOutScreen;
 use help::HelpScreen;
 use iobus::IoBusScreen;
+use iobus_health::IoBusHealthScreen;
 use locator::LocatorScreen;
 use power::PowerScreen;
 use reboot::RebootConfirmScreen;
@@ -75,6 +77,7 @@ pub enum NormalScreen {
 #[derive(Serialize, Deserialize, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, Debug)]
 pub enum AlertScreen {
     ScreenSaver,
+    IoBusHealth,
     Locator,
     RebootConfirm,
     UpdateAvailable,
@@ -185,6 +188,7 @@ pub(super) fn init(
         Box::new(UartScreen::new()),
         Box::new(UsbScreen::new()),
         Box::new(HelpScreen::new(alerts, &res.setup_mode.show_help)),
+        Box::new(IoBusHealthScreen::new(alerts, &res.iobus.supply_fault)),
         Box::new(UpdateInstallationScreen::new(
             alerts,
             &res.rauc.operation,
