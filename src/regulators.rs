@@ -25,7 +25,22 @@ use crate::broker::{BrokerBuilder, Topic};
 mod reg {
     use std::io::Result;
 
+    use async_std::task::block_on;
+
+    use crate::adc::IioThread;
+
     pub fn regulator_set(name: &str, state: bool) -> Result<()> {
+        if name == "output_iobus_12v" {
+            let iio_thread = block_on(IioThread::new()).unwrap();
+
+            iio_thread
+                .clone()
+                .get_channel("iobus-curr")
+                .unwrap()
+                .set(state);
+            iio_thread.get_channel("iobus-volt").unwrap().set(state);
+        }
+
         let state = if state { "enabled" } else { "disabled" };
         println!("Regulator: would set {name} to {state} but don't feel like it");
 

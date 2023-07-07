@@ -39,14 +39,6 @@ impl LineHandle {
         match self.name.as_str() {
             "OUT_0" => iio_thread.get_channel("out0-volt").unwrap().set(val != 0),
             "OUT_1" => iio_thread.get_channel("out1-volt").unwrap().set(val != 0),
-            "IOBUS_PWR_EN" => {
-                iio_thread
-                    .clone()
-                    .get_channel("iobus-curr")
-                    .unwrap()
-                    .set(val != 0);
-                iio_thread.get_channel("iobus-volt").unwrap().set(val != 0);
-            }
             "DUT_PWR_EN" => {
                 iio_thread
                     .clone()
