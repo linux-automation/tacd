@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: latest
-      - run: npx prettier --check .
+      - run: npx prettier@=2.8.8 --check .
 
   license:
     name: npx license-checker
