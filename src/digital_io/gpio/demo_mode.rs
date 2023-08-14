@@ -15,6 +15,8 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::ops::BitOr;
+
 use anyhow::Result;
 use async_std::task::block_on;
 
@@ -60,9 +62,30 @@ impl LineHandle {
     }
 }
 
-#[allow(clippy::upper_case_acronyms)]
+#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
+#[derive(Clone, Copy)]
 pub enum LineRequestFlags {
     OUTPUT,
+    OPEN_DRAIN,
+}
+
+impl BitOr for LineRequestFlags {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Self::OPEN_DRAIN, res) | (res, Self::OPEN_DRAIN) => res,
+            _ => unimplemented!(),
+        }
+    }
+}
+
+pub struct ChipDecoy;
+
+impl ChipDecoy {
+    pub fn label(&self) -> &'static str {
+        "demo_mode"
+    }
 }
 
 pub struct FindDecoy {
@@ -78,6 +101,10 @@ impl FindDecoy {
         line_handle.set_value(initial).unwrap();
 
         Ok(line_handle)
+    }
+
+    pub fn chip(&self) -> ChipDecoy {
+        ChipDecoy
     }
 }
 

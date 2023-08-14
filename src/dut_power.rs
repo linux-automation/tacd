@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_std::channel::bounded;
 use async_std::prelude::*;
 use async_std::sync::{Arc, Weak};
@@ -286,17 +286,23 @@ impl DutPwrThread {
         pwr_curr: AdcChannel,
         pwr_led: Arc<Topic<BlinkPattern>>,
     ) -> Result<Self> {
-        let pwr_line = find_line("DUT_PWR_EN").unwrap().request(
-            LineRequestFlags::OUTPUT,
-            1 - PWR_LINE_ASSERTED,
-            "tacd",
-        )?;
+        let pwr_line = find_line("DUT_PWR_EN")
+            .ok_or_else(|| anyhow!("Could not find GPIO line DUT_PWR_EN"))?;
+        let discharge_line = find_line("DUT_PWR_DISCH")
+            .ok_or_else(|| anyhow!("Could not find GPIO line DUT_PWR_DISCH"))?;
 
-        let discharge_line = find_line("DUT_PWR_DISCH").unwrap().request(
-            LineRequestFlags::OUTPUT,
-            DISCHARGE_LINE_ASSERTED,
-            "tacd",
-        )?;
+        // Early TACs have a i2c port expander on the power board.
+        // This port expander is output only and can not be configured as
+        // open drain.
+        // The outputs on later TACs should however be driven open drain
+        // for EMI reasons.
+        let flags = match pwr_line.chip().label() {
+            "pca9570" => LineRequestFlags::OUTPUT,
+            _ => LineRequestFlags::OUTPUT | LineRequestFlags::OPEN_DRAIN,
+        };
+
+        let pwr_line = pwr_line.request(flags, 1 - PWR_LINE_ASSERTED, "tacd")?;
+        let discharge_line = discharge_line.request(flags, DISCHARGE_LINE_ASSERTED, "tacd")?;
 
         // The realtime priority must be set up inside the tread, but
         // the operation may fail, in which case we want new() to fail

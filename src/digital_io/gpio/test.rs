@@ -16,6 +16,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use std::iter::Iterator;
+use std::ops::BitOr;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::thread::sleep;
 use std::time::Duration;
@@ -63,9 +64,30 @@ impl Iterator for LineEventHandle {
     }
 }
 
-#[allow(clippy::upper_case_acronyms)]
+#[allow(clippy::upper_case_acronyms, non_camel_case_types)]
+#[derive(Clone, Copy)]
 pub enum LineRequestFlags {
     OUTPUT,
+    OPEN_DRAIN,
+}
+
+impl BitOr for LineRequestFlags {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Self::OPEN_DRAIN, res) | (res, Self::OPEN_DRAIN) => res,
+            _ => unimplemented!(),
+        }
+    }
+}
+
+pub struct ChipDecoy;
+
+impl ChipDecoy {
+    pub fn label(&self) -> &'static str {
+        "test"
+    }
 }
 
 pub struct FindDecoy {
@@ -81,6 +103,10 @@ impl FindDecoy {
             name: self.name.clone(),
             val: self.val.clone(),
         })
+    }
+
+    pub fn chip(&self) -> ChipDecoy {
+        ChipDecoy
     }
 
     pub fn stub_get(&self) -> u8 {
