@@ -131,5 +131,5 @@ guidelines:
 - Use `cargo fmt` after every change to the rust codebase
 - Use `cargo deny check license` if you have introduced new dependencies to
   check if they (or their dependencies) introduce license issues.
-- Use `npx prettier --write .` (in the web directory) after every change to the
-  web codebase.
+- Use `npx prettier@=3.0.1 --write .` (in the web directory) after every
+  change to the web codebase.

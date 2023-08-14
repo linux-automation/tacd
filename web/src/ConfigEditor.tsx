@@ -99,7 +99,7 @@ export function ConfigEditor(props: ConfigEditorProps) {
       setContent(undefined);
 
       fetch(props.path, { method: "PUT", body: newContent }).then(() =>
-        loadContent()
+        loadContent(),
       );
     }
   }

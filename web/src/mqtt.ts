@@ -20,7 +20,7 @@ import { useEffect, useState } from "react";
 
 export const session = new Client(
   `ws://${window.location.hostname}:${window.location.port}/v1/mqtt`,
-  "webinterface-" + (Math.random() * 1000000).toFixed()
+  "webinterface-" + (Math.random() * 1000000).toFixed(),
 );
 
 let subscriptions: {
@@ -66,7 +66,7 @@ session.connect({
 
 function subscribe(
   topic: string,
-  handleMessage: (m: Message | undefined) => void
+  handleMessage: (m: Message | undefined) => void,
 ) {
   if (subscriptions[topic] === undefined) {
     if (session.isConnected()) {
@@ -148,7 +148,7 @@ type History<M> = {
 export function useMqttHistory<T, M>(
   topic: string,
   length: number,
-  format: (t: T) => M
+  format: (t: T) => M,
 ) {
   const [hist, setHist] = useState<History<M>>({ current: [] });
 
