@@ -32,7 +32,7 @@ import SettingsLabgrid from "./SettingsLabgrid";
 import Setup from "./Setup";
 
 const root = ReactDOM.createRoot(
-  document.getElementById("root") as HTMLElement
+  document.getElementById("root") as HTMLElement,
 );
 root.render(
   <React.StrictMode>
@@ -49,5 +49,5 @@ root.render(
         <Route path="/setup" element={<Setup />} />
       </Routes>
     </HashRouter>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

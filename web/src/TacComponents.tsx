@@ -205,7 +205,7 @@ export function SlotStatus() {
 
 export function UpdateChannels() {
   const channels_topic = useMqttSubscription<Array<Channel>>(
-    "/v1/tac/update/channels"
+    "/v1/tac/update/channels",
   );
 
   const channels = channels_topic !== undefined ? channels_topic : [];
@@ -383,7 +383,7 @@ export function ProgressNotification() {
 
 export function RebootNotification() {
   const should_reboot = useMqttSubscription<boolean>(
-    "/v1/tac/update/should_reboot"
+    "/v1/tac/update/should_reboot",
   );
 
   return (
@@ -425,7 +425,7 @@ export function UpdateContainer() {
 
 export function UpdateNotification() {
   const channels = useMqttSubscription<Array<Channel>>(
-    "/v1/tac/update/channels"
+    "/v1/tac/update/channels",
   );
 
   let updates = [];

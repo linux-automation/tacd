@@ -37,7 +37,7 @@ export function SwaggerView(props: SwaggerViewProps) {
 
   const content = useMemo(
     () => (openapi === undefined ? <Spinner /> : <SwaggerUI spec={openapi} />),
-    [openapi]
+    [openapi],
   );
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export function SwaggerView(props: SwaggerViewProps) {
             // [ "", "v1", "output", "{out_n}", "feedback", "voltage" ] ->
             //   [ "", "v1", "output", "[^/]+", "feedback", "voltage" ]
             let frags_no_var = frags.map((el) =>
-              el[0] === "{" && el[el.length - 1] === "}" ? "[^/]+" : el
+              el[0] === "{" && el[el.length - 1] === "}" ? "[^/]+" : el,
             );
 
             // [ "", "v1", "output", "[^/]+", "feedback", "voltage" ] ->
@@ -93,7 +93,7 @@ export function SwaggerView(props: SwaggerViewProps) {
 
           // Filter out all the tags that are not actually used
           obj.tags = obj.tags.filter((t: { [n: string]: any }) =>
-            tags_to_keep.has(t.name)
+            tags_to_keep.has(t.name),
           );
         }
 

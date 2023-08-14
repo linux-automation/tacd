@@ -267,7 +267,7 @@ export function MqttChart(props: MqttChartProps) {
   const history = useMqttHistory<Measurement, Point>(
     props.topic,
     200,
-    measToPoint
+    measToPoint,
   );
   let values = history.current;
 
