@@ -89,6 +89,13 @@ enum RaucInstallStep {
   Done,
 }
 
+enum UsbOverload {
+  Total = "Total",
+  Port1 = "Port1",
+  Port2 = "Port2",
+  Port3 = "Port3",
+}
+
 type Duration = {
   secs: number;
   nanos: number;
@@ -517,6 +524,42 @@ export function OverTemperatureNotification() {
       The LXA TAC's temperature is{" "}
       {warning === "SocCritical" ? "critical" : "high"}. Provide better airflow
       and check for overloads!
+    </Alert>
+  );
+}
+
+export function UsbOverloadNotification() {
+  const overload = useMqttSubscription<UsbOverload | null>(
+    "/v1/usb/host/overload",
+  );
+
+  let header = "One of the USB host ports is overloaded";
+  let detail = "";
+
+  switch (overload) {
+    case UsbOverload.Total:
+      header = "The USB host ports are overloaded";
+      detail = "devices";
+      break;
+    case UsbOverload.Port1:
+      detail = "the device from port 1";
+      break;
+    case UsbOverload.Port2:
+      detail = "the device from port 2";
+      break;
+    case UsbOverload.Port3:
+      detail = "the device from port 3";
+      break;
+  }
+
+  return (
+    <Alert
+      statusIconAriaLabel="Warning"
+      type="warning"
+      visible={overload !== null}
+      header={header}
+    >
+      Disconnect {detail} or use a powered hub to resolve this issue.
     </Alert>
   );
 }
