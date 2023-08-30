@@ -283,6 +283,21 @@ paths:
               schema:
                 $ref: '#/components/schemas/Measurement'
 
+  /v1/tac/temperatures/warning:
+    get:
+      summary: Get the current temperature warning state
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                enum:
+                  - Okay
+                  - SocHigh
+                  - SocCritical
+
   /v1/tac/info/uname:
     get:
       summary: Get the information commonly accessed via "uname"
