@@ -33,6 +33,7 @@ mod iobus_health;
 mod locator;
 mod overtemperature;
 mod power;
+mod power_fail;
 mod reboot;
 mod screensaver;
 mod setup;
@@ -50,6 +51,7 @@ use iobus_health::IoBusHealthScreen;
 use locator::LocatorScreen;
 use overtemperature::OverTemperatureScreen;
 use power::PowerScreen;
+use power_fail::PowerFailScreen;
 use reboot::RebootConfirmScreen;
 use screensaver::ScreenSaverScreen;
 use setup::SetupScreen;
@@ -82,6 +84,7 @@ pub enum NormalScreen {
 pub enum AlertScreen {
     ScreenSaver,
     IoBusHealth,
+    PowerFail,
     Locator,
     RebootConfirm,
     UpdateAvailable,
@@ -211,5 +214,6 @@ pub(super) fn init(
         )),
         Box::new(LocatorScreen::new(alerts, locator)),
         Box::new(UsbOverloadScreen::new(alerts, &res.usb_hub.overload)),
+        Box::new(PowerFailScreen::new(alerts, &res.dut_pwr.state)),
     ]
 }
