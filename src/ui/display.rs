@@ -29,7 +29,7 @@ mod backend {
         pub device: (),
         pub var_screen_info: VarScreeninfo,
         pub fix_screen_info: FixScreeninfo,
-        pub frame: [u8; 240 * 240 * 2],
+        pub frame: [u8; 240 * 240 * 4],
     }
 
     impl Framebuffer {
@@ -37,16 +37,16 @@ mod backend {
             Ok(Self {
                 device: (),
                 var_screen_info: VarScreeninfo {
-                    bits_per_pixel: 16,
+                    bits_per_pixel: 32,
                     xres: 240,
                     yres: 240,
                     ..Default::default()
                 },
                 fix_screen_info: FixScreeninfo {
-                    line_length: 480,
+                    line_length: 240 * 4,
                     ..Default::default()
                 },
-                frame: [0; 240 * 240 * 2],
+                frame: [0; 240 * 240 * 4],
             })
         }
 
@@ -108,14 +108,21 @@ impl ScreenShooter {
         let (image, xres, yres) = {
             let fb = &self.inner.lock().unwrap().0;
 
-            let bpp = (fb.var_screen_info.bits_per_pixel / 8) as usize;
-            let xres = fb.var_screen_info.xres;
-            let yres = fb.var_screen_info.yres;
-            let res = (xres as usize) * (yres as usize);
+            assert!(fb.var_screen_info.bits_per_pixel == 32);
+            let xres = fb.var_screen_info.xres as usize;
+            let yres = fb.var_screen_info.yres as usize;
 
-            let image: Vec<u8> = (0..res)
-                .map(|i| if fb.frame[i * bpp] != 0 { 0xff } else { 0 })
-                .collect();
+            let mut image = vec![0; xres * yres * 3];
+
+            for y in 0..yres {
+                for x in 0..xres {
+                    let idx = y * xres + x;
+
+                    image[idx * 3] = fb.frame[idx * 4 + 2];
+                    image[idx * 3 + 1] = fb.frame[idx * 4 + 1];
+                    image[idx * 3 + 2] = fb.frame[idx * 4];
+                }
+            }
 
             (image, xres, yres)
         };
@@ -123,8 +130,8 @@ impl ScreenShooter {
         let mut dst = Cursor::new(Vec::new());
 
         let mut writer = {
-            let mut enc = Encoder::new(&mut dst, xres, yres);
-            enc.set_color(ColorType::Grayscale);
+            let mut enc = Encoder::new(&mut dst, xres as u32, yres as u32);
+            enc.set_color(ColorType::Rgb);
             enc.set_depth(BitDepth::Eight);
             enc.write_header().unwrap()
         };
