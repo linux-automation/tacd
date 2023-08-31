@@ -63,6 +63,8 @@ mod backend {
 
 use backend::Framebuffer;
 
+const BACKGROUND: &[(u8, u8, u8)] = include!(concat!(env!("OUT_DIR"), "/background.rs"));
+
 pub struct DisplayExclusive(Framebuffer);
 
 pub struct Display {
@@ -93,7 +95,7 @@ impl Display {
     }
 
     pub fn clear(&self) {
-        self.with_lock(|target| target.0.frame.iter_mut().for_each(|p| *p = 0x00));
+        self.with_lock(|target| target.clear(BinaryColor::Off).unwrap());
     }
 
     pub fn screenshooter(&self) -> ScreenShooter {
@@ -151,7 +153,7 @@ impl DrawTarget for DisplayExclusive {
     where
         I: IntoIterator<Item = Pixel<Self::Color>>,
     {
-        let bpp = self.0.var_screen_info.bits_per_pixel / 8;
+        assert!(self.0.var_screen_info.bits_per_pixel == 32);
         let xres = self.0.var_screen_info.xres;
         let yres = self.0.var_screen_info.yres;
         let line_length = self.0.fix_screen_info.line_length;
@@ -164,14 +166,17 @@ impl DrawTarget for DisplayExclusive {
                 continue;
             }
 
-            let offset = line_length * y + bpp * x;
+            let offset_bg = (y * xres + x) as usize;
+            let offset_fb = (line_length * y + 4 * x) as usize;
 
-            for b in 0..bpp {
-                self.0.frame[(offset + b) as usize] = match color {
-                    BinaryColor::Off => 0x00,
-                    BinaryColor::On => 0xff,
-                }
-            }
+            let rgb = match color {
+                BinaryColor::Off => BACKGROUND[offset_bg],
+                BinaryColor::On => (255, 255, 255),
+            };
+
+            self.0.frame[offset_fb] = rgb.2;
+            self.0.frame[offset_fb + 1] = rgb.1;
+            self.0.frame[offset_fb + 2] = rgb.0;
         }
 
         Ok(())
