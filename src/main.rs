@@ -16,7 +16,9 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use anyhow::Result;
+use async_std::future::pending;
 use futures::{select, FutureExt};
+use log::{error, info};
 
 mod adc;
 mod backlight;
@@ -50,7 +52,7 @@ use regulators::Regulators;
 use setup_mode::SetupMode;
 use system::System;
 use temperatures::Temperatures;
-use ui::{setup_display, Display, Ui, UiResources};
+use ui::{message, setup_display, Display, Ui, UiResources};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
 
@@ -156,7 +158,7 @@ async fn run(
     // Expose the display as a .png on the web server
     ui::serve_display(&mut http_server.server, display.screenshooter());
 
-    log::info!("Setup complete. Handling requests");
+    info!("Setup complete. Handling requests");
 
     // Run until the user interface, http server or (if selected) the watchdog
     // exits (with an error).
@@ -183,6 +185,24 @@ async fn main() -> Result<()> {
     // Show a splash screen very early on
     let display = setup_display();
 
-    let (ui, http_server, watchdog) = init().await?;
-    run(ui, http_server, watchdog, display).await
+    match init().await {
+        Ok((ui, http_server, watchdog)) => run(ui, http_server, watchdog, display).await,
+        Err(e) => {
+            // Display a detailed error message on stderr (and thus in the journal) ...
+            error!("Failed to initialize tacd: {e}");
+
+            // ... and a generic message on the LCD, as it can not fit a lot of detail.
+            display.clear();
+            display.with_lock(|target| {
+                message(
+                    target,
+                    "tacd failed to start!\n\nCheck log for info.\nWaiting for watchdog\nto restart tacd.",
+                );
+            });
+
+            // Wait forever (or more likely until the systemd watchdog timer hits)
+            // to give the user a chance to actually see the error message.
+            pending().await
+        }
+    }
 }
