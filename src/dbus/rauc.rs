@@ -65,7 +65,7 @@ mod imports {
 
 #[cfg(not(feature = "demo_mode"))]
 mod imports {
-    pub(super) use anyhow::{anyhow, bail, Result};
+    pub(super) use anyhow::{bail, Result};
     pub(super) use log::error;
 
     pub(super) const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
@@ -118,43 +118,61 @@ fn compare_versions(v1: &str, v2: &str) -> Option<Ordering> {
 }
 
 #[cfg(not(feature = "demo_mode"))]
-fn booted_older_than_other(slot_status: &SlotStatus) -> Result<bool> {
+fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String>) -> Result<bool> {
     let rootfs_0 = slot_status.get("rootfs_0");
     let rootfs_1 = slot_status.get("rootfs_1");
+
+    let (rootfs_0_is_primary, rootfs_1_is_primary) = primary
+        .map(|p| (p == "rootfs_0", p == "rootfs_1"))
+        .unwrap_or((false, false));
 
     let rootfs_0_booted = rootfs_0.and_then(|r| r.get("state")).map(|s| s == "booted");
     let rootfs_1_booted = rootfs_1.and_then(|r| r.get("state")).map(|s| s == "booted");
 
-    let (booted, other) = match (rootfs_0_booted, rootfs_1_booted) {
-        (Some(true), Some(true)) => {
-            bail!("Two booted RAUC slots at the same time");
-        }
-        (Some(true), _) => (rootfs_0, rootfs_1),
-        (_, Some(true)) => (rootfs_1, rootfs_0),
-        _ => {
-            bail!("No booted RAUC slot");
-        }
-    };
+    let ((booted_slot, booted_is_primary), (other_slot, other_is_primary)) =
+        match (rootfs_0_booted, rootfs_1_booted) {
+            (Some(true), Some(true)) => {
+                bail!("Two booted RAUC slots at the same time");
+            }
+            (Some(true), _) => (
+                (rootfs_0, rootfs_0_is_primary),
+                (rootfs_1, rootfs_1_is_primary),
+            ),
+            (_, Some(true)) => (
+                (rootfs_1, rootfs_1_is_primary),
+                (rootfs_0, rootfs_0_is_primary),
+            ),
+            _ => {
+                bail!("No booted RAUC slot");
+            }
+        };
 
-    // Not having version information for the booted slot is an error.
-    let booted_version = booted
-        .and_then(|r| r.get("bundle_version"))
-        .ok_or(anyhow!("No bundle version information for booted slot"))?;
+    let booted_good = booted_slot
+        .and_then(|r| r.get("boot_status"))
+        .map(|s| s == "good");
+    let other_good = other_slot
+        .and_then(|r| r.get("boot_status"))
+        .map(|s| s == "good");
 
-    // Not having version information for the other slot just means that
-    // it is not newer.
-    if let Some(other_version) = other.and_then(|r| r.get("bundle_version")) {
-        if let Some(rel) = compare_versions(other_version, booted_version) {
-            Ok(rel.is_gt())
-        } else {
-            Err(anyhow!(
-                "Failed to compare date for bundle versions \"{}\" and \"{}\"",
-                other_version,
-                booted_version
-            ))
-        }
-    } else {
-        Ok(false)
+    let booted_ok = booted_slot.and_then(|r| r.get("status")).map(|s| s == "ok");
+    let other_ok = other_slot.and_then(|r| r.get("status")).map(|s| s == "ok");
+
+    let booted_viable = booted_good.unwrap_or(false) && booted_ok.unwrap_or(false);
+    let other_viable = other_good.unwrap_or(false) && other_ok.unwrap_or(false);
+
+    match (
+        booted_viable,
+        other_viable,
+        booted_is_primary,
+        other_is_primary,
+    ) {
+        (true, false, _, _) => Ok(false),
+        (false, true, _, _) => Ok(true),
+        (true, true, true, false) => Ok(false),
+        (true, true, false, true) => Ok(true),
+        (false, false, _, _) => bail!("No bootable slot present"),
+        (_, _, false, false) => bail!("No primary slot present"),
+        (true, true, true, true) => bail!("Two primary slots present"),
     }
 }
 
@@ -321,7 +339,7 @@ impl Rauc {
                 // (The one that should be booted next _if it is bootable_)
                 let new_primary = proxy.get_primary().await.ok().map(|p| p.replace('.', "_"));
 
-                if let Some(p) = new_primary {
+                if let Some(p) = new_primary.clone() {
                     primary.set_if_changed(p);
                 }
 
@@ -385,7 +403,7 @@ impl Rauc {
 
                     // Provide a simple yes/no "should reboot into other slot?" information
                     // based on the bundle versions in the booted slot and the other slot.
-                    match booted_older_than_other(&slots) {
+                    match would_reboot_into_other_slot(&slots, new_primary) {
                         Ok(b) => should_reboot.set_if_changed(b),
                         Err(e) => warn!("Could not determine if TAC should be rebooted: {e}"),
                     }
@@ -475,5 +493,89 @@ impl Rauc {
         ));
 
         inst
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{would_reboot_into_other_slot, SlotStatus};
+
+    #[test]
+    fn reboot_notifications() {
+        let bootable = HashMap::from([
+            ("boot_status".to_string(), "good".to_string()),
+            ("status".to_string(), "ok".to_string()),
+        ]);
+
+        let not_bootable = HashMap::from([
+            ("boot_status".to_string(), "bad".to_string()),
+            ("status".to_string(), "ok".to_string()),
+        ]);
+
+        let cases = [
+            (bootable.clone(), bootable.clone(), 0, 1, Ok(true)),
+            (bootable.clone(), bootable.clone(), 1, 0, Ok(true)),
+            (bootable.clone(), bootable.clone(), 0, 0, Ok(false)),
+            (bootable.clone(), bootable.clone(), 1, 1, Ok(false)),
+            (not_bootable.clone(), bootable.clone(), 1, 0, Ok(false)),
+            (bootable.clone(), not_bootable.clone(), 0, 1, Ok(false)),
+            (not_bootable.clone(), bootable.clone(), 0, 0, Ok(true)),
+            (bootable.clone(), not_bootable.clone(), 1, 1, Ok(true)),
+            (not_bootable.clone(), not_bootable.clone(), 0, 1, Err(())),
+            (bootable.clone(), bootable.clone(), 2, 0, Err(())),
+            (bootable.clone(), bootable.clone(), 0, 2, Err(())),
+        ];
+
+        for (mut rootfs_0, mut rootfs_1, booted, primary, expected) in cases {
+            let slots = {
+                rootfs_0.insert(
+                    "state".to_string(),
+                    if booted == 0 {
+                        "booted".to_string()
+                    } else {
+                        "inactive".to_string()
+                    },
+                );
+
+                rootfs_1.insert(
+                    "state".to_string(),
+                    if booted == 1 {
+                        "booted".to_string()
+                    } else {
+                        "inactive".to_string()
+                    },
+                );
+
+                SlotStatus::from([
+                    ("rootfs_0".to_string(), rootfs_0),
+                    ("rootfs_1".to_string(), rootfs_1),
+                ])
+            };
+
+            let primary = Some(format!("rootfs_{primary}"));
+
+            let res = would_reboot_into_other_slot(&slots, primary.clone());
+
+            match (res, expected) {
+                (Ok(true), Ok(true)) | (Ok(false), Ok(false)) | (Err(_), Err(_)) => {}
+                (Ok(r), Ok(e)) => {
+                    eprintln!(
+                        "Slot status {slots:?} with primary {primary:?} yielded wrong result"
+                    );
+                    assert_eq!(r, e);
+                }
+                (Err(e), Ok(_)) => {
+                    eprintln!(
+                        "Slot status {slots:?} with primary {primary:?} returned unexpected error"
+                    );
+                    panic!("{:?}", e);
+                }
+                (Ok(res), Err(_)) => {
+                    panic!("Slot status {:?} with primary {:?} returned Ok({})) but should have errored", slots, primary, res);
+                }
+            }
+        }
     }
 }
