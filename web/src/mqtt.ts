@@ -24,7 +24,7 @@ export const session = new Client(
 );
 
 let subscriptions: {
-  [topic: string]: Array<(message: Message | undefined) => void>;
+  [topic: string]: Array<(message: Message | null) => void>;
 } = {};
 
 let retained: {
@@ -37,7 +37,7 @@ session.onConnectionLost = function (responseObject) {
 
     for (let topic in subscriptions) {
       for (let handler of subscriptions[topic]) {
-        handler(undefined);
+        handler(null);
       }
     }
 
@@ -64,10 +64,7 @@ session.connect({
   reconnect: true,
 });
 
-function subscribe(
-  topic: string,
-  handleMessage: (m: Message | undefined) => void,
-) {
+function subscribe(topic: string, handleMessage: (m: Message | null) => void) {
   if (subscriptions[topic] === undefined) {
     if (session.isConnected()) {
       session.subscribe(topic);
@@ -105,8 +102,8 @@ export function useMqttState<T>(topic: string, initial?: T) {
   ]);
 
   useEffect(() => {
-    function handleMessage(message: Message | undefined) {
-      if (message !== undefined) {
+    function handleMessage(message: Message | null) {
+      if (message !== null) {
         setShadow([true, JSON.parse(message.payloadString)]);
       } else {
         setShadow([false, undefined]);
@@ -155,8 +152,8 @@ export function useMqttHistory<T, M>(
   useEffect(() => {
     let priv_hist: Array<M> = [];
 
-    function handleMessage(message: Message | undefined) {
-      if (message !== undefined) {
+    function handleMessage(message: Message | null) {
+      if (message !== null) {
         let msg_json = JSON.parse(message.payloadString);
         let msg_conv = format(msg_json);
         priv_hist.push(msg_conv);
