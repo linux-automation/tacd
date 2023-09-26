@@ -39,6 +39,7 @@ use screens::{splash, ActivatableScreen, AlertScreen, NormalScreen, Screen};
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,
+    pub backlight: crate::backlight::Backlight,
     pub dig_io: crate::digital_io::DigitalIo,
     pub dut_pwr: crate::dut_power::DutPwrThread,
     pub iobus: crate::iobus::IoBus,

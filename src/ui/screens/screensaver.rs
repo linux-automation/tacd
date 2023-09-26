@@ -119,6 +119,7 @@ struct Active {
     widgets: WidgetContainer,
     locator: Arc<Topic<bool>>,
     alerts: Arc<Topic<AlertList>>,
+    brightness: Arc<Topic<f32>>,
 }
 
 impl ActivatableScreen for ScreenSaverScreen {
@@ -159,11 +160,16 @@ impl ActivatableScreen for ScreenSaverScreen {
 
         let locator = ui.locator.clone();
         let alerts = ui.alerts.clone();
+        let brightness = ui.res.backlight.brightness.clone();
+
+        // Dim to 10% brightness in screensaver mode
+        brightness.set(0.1);
 
         let active = Active {
             widgets,
             locator,
             alerts,
+            brightness,
         };
 
         Box::new(active)
@@ -177,6 +183,8 @@ impl ActiveScreen for Active {
     }
 
     async fn deactivate(mut self: Box<Self>) -> Display {
+        // Restore full backlight brightness
+        self.brightness.set(1.0);
         self.widgets.destroy().await
     }
 
