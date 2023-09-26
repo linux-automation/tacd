@@ -260,7 +260,10 @@ function measToPoint(m: Measurement) {
 }
 
 interface MqttChartProps {
+  title: string;
   topic: string;
+  maxSnapPoints: Array<number>;
+  minSnapPoints: Array<number>;
 }
 
 export function MqttChart(props: MqttChartProps) {
@@ -271,11 +274,31 @@ export function MqttChart(props: MqttChartProps) {
   );
   let values = history.current;
 
+  // Find y-axis snap points that are smaller/larger than all samples in view.
+  let minSnap = 0;
+  let maxSnap = 0;
+
+  for (let i = 0; i < values.length; i++) {
+    while (
+      minSnap < props.minSnapPoints.length - 1 &&
+      values[i]["y"] < props.minSnapPoints[minSnap]
+    ) {
+      minSnap++;
+    }
+
+    while (
+      maxSnap < props.maxSnapPoints.length - 1 &&
+      values[i]["y"] > props.maxSnapPoints[maxSnap]
+    ) {
+      maxSnap++;
+    }
+  }
+
   let end = values.length >= 1 ? values[values.length - 1]["x"] : new Date();
 
   let series: MixedLineBarChartProps.ChartSeries<Date> = {
     type: "line",
-    title: "eh",
+    title: props.title,
     data: values,
   };
 
@@ -290,6 +313,7 @@ export function MqttChart(props: MqttChartProps) {
             ((Number(e) - Number(end)) / 1000).toFixed(1) + "s",
         }}
         height={200}
+        yDomain={[props.minSnapPoints[minSnap], props.maxSnapPoints[maxSnap]]}
         hideFilter
         hideLegend
       />
