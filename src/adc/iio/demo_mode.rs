@@ -98,18 +98,18 @@ impl CalibratedChannel {
     pub fn try_get_multiple<const N: usize>(
         &self,
         channels: [&Self; N],
-    ) -> Option<[Measurement; N]> {
+    ) -> Result<[Measurement; N]> {
         let ts = Timestamp::now();
         let mut results = [Measurement { ts, value: 0.0 }; N];
 
         for i in 0..N {
-            results[i].value = channels[i].get().value;
+            results[i].value = channels[i].get().unwrap().value;
         }
 
-        Some(results)
+        Ok(results)
     }
 
-    pub fn get(&self) -> Measurement {
+    pub fn get(&self) -> Result<Measurement> {
         let ts = Timestamp::now();
 
         let dt = {
@@ -135,13 +135,13 @@ impl CalibratedChannel {
             .inner
             .parents
             .iter()
-            .map(|p| p.get().value)
+            .map(|p| p.get().unwrap().value)
             .sum::<f32>();
         value += nominal;
 
         self.inner.value.store(value.to_bits(), Ordering::Relaxed);
 
-        Measurement { ts, value }
+        Ok(Measurement { ts, value })
     }
 
     pub fn set(&self, state: bool) {

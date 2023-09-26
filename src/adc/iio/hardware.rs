@@ -27,7 +27,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Error, Result};
 use async_std::channel::bounded;
-use async_std::stream::StreamExt;
 use async_std::sync::Arc;
 
 use industrial_io::{Buffer, Channel};
@@ -106,7 +105,19 @@ const CHANNELS_PWR: &[ChannelDesc] = &[
 
 const TRIGGER_HR_PWR_DIR: &str = "/sys/kernel/config/iio/triggers/hrtimer/tacd-pwr";
 
+// Timestamps are stored in a 64 Bit atomic variable containing the
+// time in nanoseconds passed since the tacd was started.
+// To reach u64::MAX the tacd would need to run for 2^64ns which is
+// about 584 years.
 const TIMESTAMP_ERROR: u64 = u64::MAX;
+
+#[derive(Debug)]
+pub enum AdcReadError {
+    Again,
+    MismatchedChannels,
+    AquisitionError,
+    TimeStampError,
+}
 
 #[derive(Clone, Copy)]
 struct Calibration {
@@ -185,22 +196,23 @@ impl CalibratedChannel {
     pub fn try_get_multiple<const N: usize>(
         &self,
         channels: [&Self; N],
-    ) -> Option<[Measurement; N]> {
+    ) -> Result<[Measurement; N], AdcReadError> {
         let ts_before = self.iio_thread.timestamp.load(Ordering::Acquire);
 
         let mut values_raw = [0; N];
         for (d, ch) in values_raw.iter_mut().zip(channels.iter()) {
-            assert!(
-                Arc::ptr_eq(&self.iio_thread, &ch.iio_thread),
-                "Can only get synchronized adc values for the same thread"
-            );
+            // Can only get time-aligned values for channels of the same ADC
+            if !Arc::ptr_eq(&self.iio_thread, &ch.iio_thread) {
+                return Err(AdcReadError::MismatchedChannels);
+            }
+
             *d = self.iio_thread.values[ch.index].load(Ordering::Relaxed);
         }
 
         let ts_after = self.iio_thread.timestamp.load(Ordering::Acquire);
 
         if ts_before == TIMESTAMP_ERROR || ts_after == TIMESTAMP_ERROR {
-            panic!("Failed to read from ADC");
+            return Err(AdcReadError::AquisitionError);
         }
 
         if ts_before == ts_after {
@@ -208,7 +220,7 @@ impl CalibratedChannel {
                 .iio_thread
                 .ref_instant
                 .checked_add(Duration::from_nanos(ts_before))
-                .unwrap();
+                .ok_or(AdcReadError::TimeStampError)?;
             let ts = Timestamp::new(ts);
 
             let mut values = [Measurement { ts, value: 0.0 }; N];
@@ -216,23 +228,24 @@ impl CalibratedChannel {
                 values[i].value = channels[i].calibration.apply(values_raw[i] as f32);
             }
 
-            Some(values)
+            Ok(values)
         } else {
-            None
+            Err(AdcReadError::Again)
         }
     }
 
     /// Get the value of the channel, or None if the timestamp changed while
     /// reading the value (which should be extremely rare)
-    pub fn try_get(&self) -> Option<Measurement> {
+    pub fn try_get(&self) -> Result<Measurement, AdcReadError> {
         self.try_get_multiple([self]).map(|res| res[0])
     }
 
     // Get the current value of the channel
-    pub fn get(&self) -> Measurement {
+    pub fn get(&self) -> Result<Measurement, AdcReadError> {
         loop {
-            if let Some(r) = self.try_get() {
-                break r;
+            match self.try_get() {
+                Err(AdcReadError::Again) => {}
+                res => break res,
             }
         }
     }
@@ -269,17 +282,22 @@ impl IioThread {
             warn!("Failed to disable {} ADC buffer: {}", adc_name, err);
         }
 
-        let channels: Vec<Channel> = channel_descs
+        let channels: Result<Vec<Channel>> = channel_descs
             .iter()
             .map(|ChannelDesc { kernel_name, .. }| {
                 let ch = adc
                     .find_channel(kernel_name, false)
-                    .unwrap_or_else(|| panic!("Failed to open kernel channel {}", kernel_name));
+                    .ok_or_else(|| anyhow!("Failed to open iio channel {}", kernel_name));
 
-                ch.enable();
+                if let Ok(ch) = ch.as_ref() {
+                    ch.enable();
+                }
+
                 ch
             })
             .collect();
+
+        let channels = channels?;
 
         let trig = ctx
             .find_device(trigger_name)
@@ -292,9 +310,13 @@ impl IioThread {
 
         let buf = adc.create_buffer(buffer_len, false)?;
 
+        let prio = ThreadPriorityValue::try_from(10).map_err(|e| {
+            anyhow!("Failed to set thread priority to 10 as you OS does not support it: {e:?}")
+        })?;
+
         set_thread_priority_and_policy(
             thread_native_id(),
-            ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
+            ThreadPriority::Crossplatform(prio),
             ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
         )
         .map_err(|e| anyhow!("Failed to set realtime thread priority: {e:?}"))?;
@@ -317,7 +339,7 @@ impl IioThread {
         // setup was sucessful.
         // This is why we create Self inside the thread and send it back
         // to the calling thread via a queue.
-        let (thread_res_tx, mut thread_res_rx) = bounded(1);
+        let (thread_res_tx, thread_res_rx) = bounded(1);
 
         // Spawn a high priority thread that updates the atomic values in `thread`.
         let join = thread::Builder::new()
@@ -343,6 +365,8 @@ impl IioThread {
                         (thread, channels, buf)
                     }
                     Err(e) => {
+                        // Can not fail in practice as the queue is known to be empty
+                        // at this point.
                         thread_res_tx.try_send(Err(e)).unwrap();
                         return;
                     }
@@ -364,6 +388,8 @@ impl IioThread {
                         // This gives us a chance to return an Err from new().
                         // If the queue was already used just print an error instead.
                         if let Some((_, tx)) = signal_ready.take() {
+                            // Can not fail in practice as the queue is only .take()n
+                            // once and thus known to be empty.
                             tx.try_send(Err(Error::new(e))).unwrap();
                         }
 
@@ -379,24 +405,31 @@ impl IioThread {
                         d.store(s, Ordering::Relaxed)
                     }
 
+                    // These should only fail if
+                    // a) The monotonic time started running backward
+                    // b) The tacd has been running for more than 2**64ns (584 years).
                     let ts: u64 = Instant::now()
                         .checked_duration_since(thread.ref_instant)
-                        .unwrap()
-                        .as_nanos()
-                        .try_into()
-                        .unwrap();
+                        .and_then(|d| d.as_nanos().try_into().ok())
+                        .unwrap_or(TIMESTAMP_ERROR);
 
                     thread.timestamp.store(ts, Ordering::Release);
 
                     // Now that we know that the ADC actually works and we have
                     // initial values: return a handle to it.
                     if let Some((content, tx)) = signal_ready.take() {
+                        // Can not fail in practice as the queue is only .take()n
+                        // once and thus known to be empty.
                         tx.try_send(Ok(content)).unwrap();
                     }
                 }
             })?;
 
-        let thread = thread_res_rx.next().await.unwrap()?;
+        let thread = thread_res_rx.recv().await??;
+
+        // Locking the Mutex could only fail if the Mutex was poisoned by
+        // a thread that held the lock and panicked.
+        // At this point the Mutex has not yet been locked in another thread.
         *thread.join.lock().unwrap() = Some(join);
 
         Ok(thread)
@@ -418,7 +451,7 @@ impl IioThread {
         let hr_trigger_path = Path::new(TRIGGER_HR_PWR_DIR);
 
         if !hr_trigger_path.is_dir() {
-            create_dir(hr_trigger_path).unwrap();
+            create_dir(hr_trigger_path)?;
         }
 
         Self::new("powerboard", "lmp92064", "tacd-pwr", 20, CHANNELS_PWR, 1).await

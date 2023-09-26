@@ -195,7 +195,20 @@ impl Adc {
             time: bb.topic_ro("/v1/tac/time/now", None),
         };
 
-        let adc_clone = adc.clone();
+        let channels = [
+            adc.usb_host_curr.clone(),
+            adc.usb_host1_curr.clone(),
+            adc.usb_host2_curr.clone(),
+            adc.usb_host3_curr.clone(),
+            adc.out0_volt.clone(),
+            adc.out1_volt.clone(),
+            adc.iobus_curr.clone(),
+            adc.iobus_volt.clone(),
+            adc.pwr_volt.clone(),
+            adc.pwr_curr.clone(),
+        ];
+
+        let time = adc.time.clone();
 
         // Spawn an async task to transfer values from the Atomic value based
         // "fast" interface to the broker based "slow" interface.
@@ -203,42 +216,15 @@ impl Adc {
             loop {
                 sleep(SLOW_INTERVAL).await;
 
-                adc_clone
-                    .usb_host_curr
-                    .topic
-                    .set(adc_clone.usb_host_curr.fast.get());
-                adc_clone
-                    .usb_host1_curr
-                    .topic
-                    .set(adc_clone.usb_host1_curr.fast.get());
-                adc_clone
-                    .usb_host2_curr
-                    .topic
-                    .set(adc_clone.usb_host2_curr.fast.get());
-                adc_clone
-                    .usb_host3_curr
-                    .topic
-                    .set(adc_clone.usb_host3_curr.fast.get());
-                adc_clone
-                    .out0_volt
-                    .topic
-                    .set(adc_clone.out0_volt.fast.get());
-                adc_clone
-                    .out1_volt
-                    .topic
-                    .set(adc_clone.out1_volt.fast.get());
-                adc_clone
-                    .iobus_curr
-                    .topic
-                    .set(adc_clone.iobus_curr.fast.get());
-                adc_clone
-                    .iobus_volt
-                    .topic
-                    .set(adc_clone.iobus_volt.fast.get());
-                adc_clone.pwr_volt.topic.set(adc_clone.pwr_volt.fast.get());
-                adc_clone.pwr_curr.topic.set(adc_clone.pwr_curr.fast.get());
+                for channel in &channels {
+                    if let Ok(val) = channel.fast.get() {
+                        // The adc channel topic should likely be wrapped in a Result
+                        // or otherwise be able to contain an error state.
+                        channel.topic.set(val)
+                    }
+                }
 
-                adc_clone.time.set(Timestamp::now());
+                time.set(Timestamp::now());
             }
         });
 

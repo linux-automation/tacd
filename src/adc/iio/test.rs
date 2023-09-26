@@ -57,7 +57,7 @@ impl CalibratedChannel {
     pub fn try_get_multiple<const N: usize>(
         &self,
         channels: [&Self; N],
-    ) -> Option<[Measurement; N]> {
+    ) -> Result<[Measurement; N]> {
         let mut ts = Timestamp::now();
 
         if self.stall.load(Ordering::Relaxed) {
@@ -78,19 +78,15 @@ impl CalibratedChannel {
             results[i].value = f32::from_bits(val_u32);
         }
 
-        Some(results)
+        Ok(results)
     }
 
-    pub fn try_get(&self) -> Option<Measurement> {
+    pub fn try_get(&self) -> Result<Measurement> {
         self.try_get_multiple([self]).map(|res| res[0])
     }
 
-    pub fn get(&self) -> Measurement {
-        loop {
-            if let Some(r) = self.try_get() {
-                break r;
-            }
-        }
+    pub fn get(&self) -> Result<Measurement> {
+        self.try_get()
     }
 
     pub fn set(&self, val: f32) {

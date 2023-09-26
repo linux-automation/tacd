@@ -353,7 +353,12 @@ impl DutPwrThread {
                             .fast
                             .try_get_multiple([&pwr_volt.fast, &pwr_curr.fast]);
 
-                        if let Some(m) = feedback {
+                        // We do not care too much about _why_ we could not get
+                        // a new value from the ADC.
+                        // If we get a new valid value before the timeout we
+                        // are fine.
+                        // If not we are not.
+                        if let Ok(m) = feedback {
                             last_ts = Some(m[0].ts.as_instant());
                         }
 
@@ -374,7 +379,7 @@ impl DutPwrThread {
                             tick.fetch_add(1, Ordering::Relaxed);
                         }
 
-                        if let Some(m) = feedback {
+                        if let Ok(m) = feedback {
                             break (m[0].value, m[1].value);
                         }
                     };
