@@ -503,3 +503,20 @@ export function IOBusFaultNotification() {
     </Alert>
   );
 }
+
+export function OverTemperatureNotification() {
+  const warning = useMqttSubscription<string>("/v1/tac/temperatures/warning");
+
+  return (
+    <Alert
+      statusIconAriaLabel="Warning"
+      type="warning"
+      visible={warning !== null && warning !== "Okay"}
+      header="Your LXA TAC is overheating"
+    >
+      The LXA TAC's temperature is{" "}
+      {warning === "SocCritical" ? "critical" : "high"}. Provide better airflow
+      and check for overloads!
+    </Alert>
+  );
+}

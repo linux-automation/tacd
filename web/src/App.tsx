@@ -36,6 +36,7 @@ import {
   UpdateNotification,
   ProgressNotification,
   LocatorNotification,
+  OverTemperatureNotification,
 } from "./TacComponents";
 
 function Navigation() {
@@ -156,6 +157,7 @@ function Notifications() {
     <>
       <ConnectionNotification />
       <RebootNotification />
+      <OverTemperatureNotification />
       <ProgressNotification />
       <UpdateNotification />
       <LocatorNotification />

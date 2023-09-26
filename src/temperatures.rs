@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use async_std::sync::Arc;
 use async_std::task::spawn_blocking;
+use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::Measurement;
@@ -59,9 +60,31 @@ mod hw {
 use hw::{HwMon, SysClass};
 
 const UPDATE_INTERVAL: Duration = Duration::from_millis(500);
+const TEMPERATURE_SOC_CRITICAL: f32 = 90.0;
+const TEMPERATURE_SOC_HIGH: f32 = 70.0;
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub enum Warning {
+    Okay,
+    SocHigh,
+    SocCritical,
+}
+
+impl Warning {
+    fn from_temperatures(soc: f32) -> Self {
+        if soc > TEMPERATURE_SOC_CRITICAL {
+            Self::SocCritical
+        } else if soc > TEMPERATURE_SOC_HIGH {
+            Self::SocHigh
+        } else {
+            Self::Okay
+        }
+    }
+}
 
 pub struct Temperatures {
     pub soc_temperature: Arc<Topic<Measurement>>,
+    pub warning: Arc<Topic<Warning>>,
     run: Option<Arc<AtomicBool>>,
 }
 
@@ -69,9 +92,11 @@ impl Temperatures {
     pub fn new(bb: &mut BrokerBuilder) -> Self {
         let run = Arc::new(AtomicBool::new(true));
         let soc_temperature = bb.topic_ro("/v1/tac/temperatures/soc", None);
+        let warning = bb.topic_ro("/v1/tac/temperatures/warning", None);
 
         let run_thread = run.clone();
         let soc_temperature_thread = soc_temperature.clone();
+        let warning_thread = warning.clone();
 
         spawn_blocking(move || {
             while run_thread.load(Ordering::Relaxed) {
@@ -82,7 +107,15 @@ impl Temperatures {
                     .input()
                     .unwrap();
 
-                let meas = Measurement::now(val as f32 / 1000.0);
+                let val = val as f32 / 1000.0;
+
+                // Provide a topic that only provides "is overheating"/"is okay"
+                // updates and not the 2Hz temperature feed.
+                // Subscribing to this topic is cheaper w.r.t. cpu/network use.
+                let warning = Warning::from_temperatures(val);
+                warning_thread.set_if_changed(warning);
+
+                let meas = Measurement::now(val);
                 soc_temperature_thread.set(meas);
 
                 sleep(UPDATE_INTERVAL);
@@ -91,6 +124,7 @@ impl Temperatures {
 
         Self {
             soc_temperature,
+            warning,
             run: Some(run),
         }
     }
