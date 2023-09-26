@@ -22,7 +22,11 @@ use async_std::task::{sleep, spawn};
 
 use serde::{Deserialize, Serialize};
 
+use crate::adc::CalibratedChannel;
 use crate::broker::{BrokerBuilder, Topic};
+
+const CURRENT_MAX: f32 = 0.2;
+const VOLTAGE_MIN: f32 = 10.0;
 
 #[cfg(feature = "demo_mode")]
 mod http {
@@ -97,15 +101,23 @@ pub struct ServerInfo {
 }
 
 pub struct IoBus {
+    pub supply_fault: Arc<Topic<bool>>,
     pub server_info: Arc<Topic<ServerInfo>>,
     pub nodes: Arc<Topic<Nodes>>,
 }
 
 impl IoBus {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
+    pub fn new(
+        bb: &mut BrokerBuilder,
+        iobus_pwr_en: Arc<Topic<bool>>,
+        iobus_curr: CalibratedChannel,
+        iobus_volt: CalibratedChannel,
+    ) -> Self {
+        let supply_fault = bb.topic_ro("/v1/iobus/feedback/fault", None);
         let server_info = bb.topic_ro("/v1/iobus/server/info", None);
         let nodes = bb.topic_ro("/v1/iobus/server/nodes", None);
 
+        let supply_fault_task = supply_fault.clone();
         let server_info_task = server_info.clone();
         let nodes_task = nodes.clone();
 
@@ -125,10 +137,24 @@ impl IoBus {
                     nodes_task.set_if_changed(nodes);
                 }
 
+                // Report the power supply health
+                let pwr_en = iobus_pwr_en.try_get().unwrap_or(false);
+                let current = iobus_curr.get();
+                let voltage = iobus_volt.get();
+
+                let undervolt = pwr_en && (voltage.value < VOLTAGE_MIN);
+                let overcurrent = current.value > CURRENT_MAX;
+
+                supply_fault_task.set_if_changed(undervolt || overcurrent);
+
                 sleep(Duration::from_secs(1)).await;
             }
         });
 
-        Self { server_info, nodes }
+        Self {
+            supply_fault,
+            server_info,
+            nodes,
+        }
     }
 }

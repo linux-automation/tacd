@@ -487,3 +487,19 @@ export function LocatorNotification() {
     </Alert>
   );
 }
+
+export function IOBusFaultNotification() {
+  const overload = useMqttSubscription<boolean>("/v1/iobus/feedback/fault");
+
+  return (
+    <Alert
+      statusIconAriaLabel="Warning"
+      type="warning"
+      visible={overload === true}
+      header="The IOBus power supply is overloaded"
+    >
+      The power supply on the IOBus connector is either shorted or overloaded by
+      too many devices on the bus.
+    </Alert>
+  );
+}

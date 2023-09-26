@@ -84,7 +84,12 @@ async fn main() -> Result<(), std::io::Error> {
 
     // Expose other software on the TAC via the broker framework by connecting
     // to them via HTTP / DBus APIs.
-    let iobus = IoBus::new(&mut bb);
+    let iobus = IoBus::new(
+        &mut bb,
+        regulators.iobus_pwr_en.clone(),
+        adc.iobus_curr.fast.clone(),
+        adc.iobus_volt.fast.clone(),
+    );
     let (network, rauc, systemd) = {
         let dbus = DbusSession::new(&mut bb, led.eth_dut.clone(), led.eth_lab.clone()).await;
 
