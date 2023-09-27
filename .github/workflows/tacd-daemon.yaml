@@ -14,30 +14,6 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
-  check:
-    strategy:
-      matrix:
-        features:
-          - ""
-          - "--features=demo_mode --no-default-features"
-          - "--tests"
-    name: cargo check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - run: sudo apt update
-      - run: sudo apt install libsystemd-dev libiio-dev
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: ${{ matrix.features }}
-
   fmt:
     name: cargo fmt
     runs-on: ubuntu-latest
