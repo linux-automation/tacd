@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use futures::{select, FutureExt};
 
 mod adc;
@@ -54,7 +55,7 @@ use usb_hub::UsbHub;
 use watchdog::Watchdog;
 
 #[async_std::main]
-async fn main() -> Result<(), std::io::Error> {
+async fn main() -> Result<()> {
     env_logger::init();
 
     // Show a splash screen very early on
@@ -66,17 +67,16 @@ async fn main() -> Result<(), std::io::Error> {
     let mut bb = BrokerBuilder::new();
 
     // Expose hardware on the TAC via the broker framework.
-    let backlight = Backlight::new(&mut bb).unwrap();
+    let backlight = Backlight::new(&mut bb)?;
     let led = Led::new(&mut bb);
-    let adc = Adc::new(&mut bb).await.unwrap();
+    let adc = Adc::new(&mut bb).await?;
     let dut_pwr = DutPwrThread::new(
         &mut bb,
         adc.pwr_volt.clone(),
         adc.pwr_curr.clone(),
         led.dut_pwr.clone(),
     )
-    .await
-    .unwrap();
+    .await?;
     let dig_io = DigitalIo::new(&mut bb, led.out_0.clone(), led.out_1.clone());
     let regulators = Regulators::new(&mut bb);
     let temperatures = Temperatures::new(&mut bb);
@@ -156,11 +156,13 @@ async fn main() -> Result<(), std::io::Error> {
             ui_err = ui.run(display).fuse() => ui_err,
             wi_err = http_server.serve().fuse() => wi_err,
             wd_err = watchdog.keep_fed().fuse() => wd_err,
-        }
+        }?
     } else {
         select! {
             ui_err = ui.run(display).fuse() => ui_err,
             wi_err = http_server.serve().fuse() => wi_err,
-        }
+        }?
     }
+
+    Ok(())
 }
