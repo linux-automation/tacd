@@ -78,11 +78,12 @@ pub struct Adc {
 
 impl Adc {
     pub async fn new(bb: &mut BrokerBuilder) -> Result<Self> {
-        let iio_thread = IioThread::new().await?;
+        let stm32_thread = IioThread::new_stm32().await?;
+        let powerboard_thread = IioThread::new_powerboard().await?;
 
         let adc = Self {
             usb_host_curr: AdcChannel {
-                fast: iio_thread.clone().get_channel("usb-host-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("usb-host-curr").unwrap(),
                 topic: bb.topic(
                     "/v1/usb/host/total/feedback/current",
                     true,
@@ -93,7 +94,7 @@ impl Adc {
                 ),
             },
             usb_host1_curr: AdcChannel {
-                fast: iio_thread.clone().get_channel("usb-host1-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("usb-host1-curr").unwrap(),
                 topic: bb.topic(
                     "/v1/usb/host/port1/feedback/current",
                     true,
@@ -104,7 +105,7 @@ impl Adc {
                 ),
             },
             usb_host2_curr: AdcChannel {
-                fast: iio_thread.clone().get_channel("usb-host2-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("usb-host2-curr").unwrap(),
                 topic: bb.topic(
                     "/v1/usb/host/port2/feedback/current",
                     true,
@@ -115,7 +116,7 @@ impl Adc {
                 ),
             },
             usb_host3_curr: AdcChannel {
-                fast: iio_thread.clone().get_channel("usb-host3-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("usb-host3-curr").unwrap(),
                 topic: bb.topic(
                     "/v1/usb/host/port3/feedback/current",
                     true,
@@ -126,7 +127,7 @@ impl Adc {
                 ),
             },
             out0_volt: AdcChannel {
-                fast: iio_thread.clone().get_channel("out0-volt").unwrap(),
+                fast: stm32_thread.clone().get_channel("out0-volt").unwrap(),
                 topic: bb.topic(
                     "/v1/output/out_0/feedback/voltage",
                     true,
@@ -137,7 +138,7 @@ impl Adc {
                 ),
             },
             out1_volt: AdcChannel {
-                fast: iio_thread.clone().get_channel("out1-volt").unwrap(),
+                fast: stm32_thread.clone().get_channel("out1-volt").unwrap(),
                 topic: bb.topic(
                     "/v1/output/out_1/feedback/voltage",
                     true,
@@ -148,7 +149,7 @@ impl Adc {
                 ),
             },
             iobus_curr: AdcChannel {
-                fast: iio_thread.clone().get_channel("iobus-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("iobus-curr").unwrap(),
                 topic: bb.topic(
                     "/v1/iobus/feedback/current",
                     true,
@@ -159,7 +160,7 @@ impl Adc {
                 ),
             },
             iobus_volt: AdcChannel {
-                fast: iio_thread.clone().get_channel("iobus-volt").unwrap(),
+                fast: stm32_thread.clone().get_channel("iobus-volt").unwrap(),
                 topic: bb.topic(
                     "/v1/iobus/feedback/voltage",
                     true,
@@ -170,7 +171,7 @@ impl Adc {
                 ),
             },
             pwr_volt: AdcChannel {
-                fast: iio_thread.clone().get_channel("pwr-volt").unwrap(),
+                fast: powerboard_thread.clone().get_channel("pwr-volt").unwrap(),
                 topic: bb.topic(
                     "/v1/dut/feedback/voltage",
                     true,
@@ -181,7 +182,7 @@ impl Adc {
                 ),
             },
             pwr_curr: AdcChannel {
-                fast: iio_thread.get_channel("pwr-curr").unwrap(),
+                fast: powerboard_thread.get_channel("pwr-curr").unwrap(),
                 topic: bb.topic(
                     "/v1/dut/feedback/current",
                     true,
@@ -194,7 +195,20 @@ impl Adc {
             time: bb.topic_ro("/v1/tac/time/now", None),
         };
 
-        let adc_clone = adc.clone();
+        let channels = [
+            adc.usb_host_curr.clone(),
+            adc.usb_host1_curr.clone(),
+            adc.usb_host2_curr.clone(),
+            adc.usb_host3_curr.clone(),
+            adc.out0_volt.clone(),
+            adc.out1_volt.clone(),
+            adc.iobus_curr.clone(),
+            adc.iobus_volt.clone(),
+            adc.pwr_volt.clone(),
+            adc.pwr_curr.clone(),
+        ];
+
+        let time = adc.time.clone();
 
         // Spawn an async task to transfer values from the Atomic value based
         // "fast" interface to the broker based "slow" interface.
@@ -202,42 +216,15 @@ impl Adc {
             loop {
                 sleep(SLOW_INTERVAL).await;
 
-                adc_clone
-                    .usb_host_curr
-                    .topic
-                    .set(adc_clone.usb_host_curr.fast.get());
-                adc_clone
-                    .usb_host1_curr
-                    .topic
-                    .set(adc_clone.usb_host1_curr.fast.get());
-                adc_clone
-                    .usb_host2_curr
-                    .topic
-                    .set(adc_clone.usb_host2_curr.fast.get());
-                adc_clone
-                    .usb_host3_curr
-                    .topic
-                    .set(adc_clone.usb_host3_curr.fast.get());
-                adc_clone
-                    .out0_volt
-                    .topic
-                    .set(adc_clone.out0_volt.fast.get());
-                adc_clone
-                    .out1_volt
-                    .topic
-                    .set(adc_clone.out1_volt.fast.get());
-                adc_clone
-                    .iobus_curr
-                    .topic
-                    .set(adc_clone.iobus_curr.fast.get());
-                adc_clone
-                    .iobus_volt
-                    .topic
-                    .set(adc_clone.iobus_volt.fast.get());
-                adc_clone.pwr_volt.topic.set(adc_clone.pwr_volt.fast.get());
-                adc_clone.pwr_curr.topic.set(adc_clone.pwr_curr.fast.get());
+                for channel in &channels {
+                    if let Ok(val) = channel.fast.get() {
+                        // The adc channel topic should likely be wrapped in a Result
+                        // or otherwise be able to contain an error state.
+                        channel.topic.set(val)
+                    }
+                }
 
-                adc_clone.time.set(Timestamp::now());
+                time.set(Timestamp::now());
             }
         });
 

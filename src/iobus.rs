@@ -142,10 +142,12 @@ impl IoBus {
                 let current = iobus_curr.get();
                 let voltage = iobus_volt.get();
 
-                let undervolt = pwr_en && (voltage.value < VOLTAGE_MIN);
-                let overcurrent = current.value > CURRENT_MAX;
+                if let (Ok(current), Ok(voltage)) = (current, voltage) {
+                    let undervolt = pwr_en && (voltage.value < VOLTAGE_MIN);
+                    let overcurrent = current.value > CURRENT_MAX;
 
-                supply_fault_task.set_if_changed(undervolt || overcurrent);
+                    supply_fault_task.set_if_changed(undervolt || overcurrent);
+                }
 
                 sleep(Duration::from_secs(1)).await;
             }

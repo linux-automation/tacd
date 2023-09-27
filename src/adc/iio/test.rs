@@ -25,7 +25,7 @@ use crate::measurement::{Measurement, Timestamp};
 
 const NO_TRANSIENT: u32 = u32::MAX;
 
-const CHANNELS: &[&str] = &[
+const CHANNELS_STM32: &[&str] = &[
     "usb-host-curr",
     "usb-host1-curr",
     "usb-host2-curr",
@@ -34,9 +34,9 @@ const CHANNELS: &[&str] = &[
     "out1-volt",
     "iobus-curr",
     "iobus-volt",
-    "pwr-volt",
-    "pwr-curr",
 ];
+
+const CHANNELS_PWR: &[&str] = &["pwr-volt", "pwr-curr"];
 
 #[derive(Clone)]
 pub struct CalibratedChannel {
@@ -57,7 +57,7 @@ impl CalibratedChannel {
     pub fn try_get_multiple<const N: usize>(
         &self,
         channels: [&Self; N],
-    ) -> Option<[Measurement; N]> {
+    ) -> Result<[Measurement; N]> {
         let mut ts = Timestamp::now();
 
         if self.stall.load(Ordering::Relaxed) {
@@ -78,19 +78,15 @@ impl CalibratedChannel {
             results[i].value = f32::from_bits(val_u32);
         }
 
-        Some(results)
+        Ok(results)
     }
 
-    pub fn try_get(&self) -> Option<Measurement> {
+    pub fn try_get(&self) -> Result<Measurement> {
         self.try_get_multiple([self]).map(|res| res[0])
     }
 
-    pub fn get(&self) -> Measurement {
-        loop {
-            if let Some(r) = self.try_get() {
-                break r;
-            }
-        }
+    pub fn get(&self) -> Result<Measurement> {
+        self.try_get()
     }
 
     pub fn set(&self, val: f32) {
@@ -111,10 +107,20 @@ pub struct IioThread {
 }
 
 impl IioThread {
-    pub async fn new() -> Result<Arc<Self>> {
+    pub async fn new_stm32() -> Result<Arc<Self>> {
         let mut channels = Vec::new();
 
-        for name in CHANNELS {
+        for name in CHANNELS_STM32 {
+            channels.push((*name, CalibratedChannel::new()))
+        }
+
+        Ok(Arc::new(Self { channels }))
+    }
+
+    pub async fn new_powerboard() -> Result<Arc<Self>> {
+        let mut channels = Vec::new();
+
+        for name in CHANNELS_PWR {
             channels.push((*name, CalibratedChannel::new()))
         }
 
