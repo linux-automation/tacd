@@ -27,33 +27,23 @@ pub struct LineHandle {
 }
 
 impl LineHandle {
-    pub fn set_value(&self, val: u8) -> Result<(), ()> {
+    pub fn set_value(&self, val: u8) -> Result<()> {
         // This does not actually set up any IIO things.
         // It is just a hack to let adc/iio/demo_mode.rs
         // communicate with this function so that toggling an output
         // has an effect on the measured values.
-        let iio_thread_stm32 = block_on(IioThread::new_stm32()).unwrap();
-        let iio_thread_pwr = block_on(IioThread::new_powerboard()).unwrap();
+        let iio_thread_stm32 = block_on(IioThread::new_stm32())?;
+        let iio_thread_pwr = block_on(IioThread::new_powerboard())?;
 
         match self.name.as_str() {
-            "OUT_0" => iio_thread_stm32
-                .get_channel("out0-volt")
-                .unwrap()
-                .set(val != 0),
-            "OUT_1" => iio_thread_stm32
-                .get_channel("out1-volt")
-                .unwrap()
-                .set(val != 0),
+            "OUT_0" => iio_thread_stm32.get_channel("out0-volt")?.set(val != 0),
+            "OUT_1" => iio_thread_stm32.get_channel("out1-volt")?.set(val != 0),
             "DUT_PWR_EN" => {
                 iio_thread_pwr
                     .clone()
-                    .get_channel("pwr-curr")
-                    .unwrap()
+                    .get_channel("pwr-curr")?
                     .set(val == 0);
-                iio_thread_pwr
-                    .get_channel("pwr-volt")
-                    .unwrap()
-                    .set(val == 0);
+                iio_thread_pwr.get_channel("pwr-volt")?.set(val == 0);
             }
             _ => {}
         }

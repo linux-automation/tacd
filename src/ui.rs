@@ -17,6 +17,7 @@
 
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
@@ -176,7 +177,7 @@ impl Ui {
         }
     }
 
-    pub async fn run(mut self, display: Display) -> Result<(), std::io::Error> {
+    pub async fn run(mut self, display: Display) -> Result<()> {
         let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded();
         let (mut alerts_rx, _) = self.alerts.clone().subscribe_unbounded();
         let (mut button_events, _) = self.buttons.clone().subscribe_unbounded();

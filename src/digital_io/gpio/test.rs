@@ -33,7 +33,7 @@ pub struct LineHandle {
 }
 
 impl LineHandle {
-    pub fn set_value(&self, val: u8) -> Result<(), ()> {
+    pub fn set_value(&self, val: u8) -> Result<()> {
         println!("GPIO simulation set {} to {}", self.name, val);
         self.val.store(val, Ordering::Relaxed);
         Ok(())

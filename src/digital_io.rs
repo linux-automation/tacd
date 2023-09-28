@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::{Context, Result};
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
@@ -58,27 +59,26 @@ fn handle_line_wo(
     initial: bool,
     inverted: bool,
     led_topic: Option<Arc<Topic<BlinkPattern>>>,
-) -> Arc<Topic<bool>> {
+) -> Result<Arc<Topic<bool>>> {
     let topic = bb.topic_rw(path, Some(initial));
-    let line = find_line(line_name).unwrap();
-    let dst = line
-        .request(LineRequestFlags::OUTPUT, (initial ^ inverted) as _, "tacd")
-        .unwrap();
+    let line = find_line(line_name).with_context(|| format!("couldn't find line {line_name}"))?;
+    let dst = line.request(LineRequestFlags::OUTPUT, (initial ^ inverted) as _, "tacd")?;
 
     let (mut src, _) = topic.clone().subscribe_unbounded();
 
     spawn(async move {
         while let Some(ev) = src.next().await {
-            dst.set_value((ev ^ inverted) as _).unwrap();
+            dst.set_value((ev ^ inverted) as _)?;
 
             if let Some(led) = &led_topic {
                 let pattern = BlinkPattern::solid(if ev { 1.0 } else { 0.0 });
                 led.set(pattern);
             }
         }
+        anyhow::Ok(())
     });
 
-    topic
+    Ok(topic)
 }
 
 impl DigitalIo {
@@ -86,7 +86,7 @@ impl DigitalIo {
         bb: &mut BrokerBuilder,
         led_0: Arc<Topic<BlinkPattern>>,
         led_1: Arc<Topic<BlinkPattern>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let out_0 = handle_line_wo(
             bb,
             "/v1/output/out_0/asserted",
@@ -94,7 +94,7 @@ impl DigitalIo {
             false,
             false,
             Some(led_0),
-        );
+        )?;
 
         let out_1 = handle_line_wo(
             bb,
@@ -103,16 +103,16 @@ impl DigitalIo {
             false,
             false,
             Some(led_1),
-        );
+        )?;
 
-        let uart_rx_en = handle_line_wo(bb, "/v1/uart/rx/enabled", "UART_RX_EN", true, true, None);
-        let uart_tx_en = handle_line_wo(bb, "/v1/uart/tx/enabled", "UART_TX_EN", true, true, None);
+        let uart_rx_en = handle_line_wo(bb, "/v1/uart/rx/enabled", "UART_RX_EN", true, true, None)?;
+        let uart_tx_en = handle_line_wo(bb, "/v1/uart/tx/enabled", "UART_TX_EN", true, true, None)?;
 
-        Self {
+        Ok(Self {
             out_0,
             out_1,
             uart_rx_en,
             uart_tx_en,
-        }
+        })
     }
 }

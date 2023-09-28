@@ -18,6 +18,7 @@
 use std::ops::{Deref, DerefMut};
 use std::time::{Instant, SystemTime};
 
+use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone, Copy)]
@@ -57,9 +58,11 @@ impl Timestamp {
     ///
     /// The idea is to take the current Instant (monotonic time) and System Time
     /// (calendar time) and calculate: now_system - (now_instant - ts_instant).
-    pub fn in_system_time(&self) -> SystemTime {
+    pub fn in_system_time(&self) -> Result<SystemTime> {
         let age = self.0.elapsed();
-        SystemTime::now().checked_sub(age).unwrap()
+        SystemTime::now()
+            .checked_sub(age)
+            .with_context(|| "couldn't get system time")
     }
 }
 
@@ -80,25 +83,33 @@ impl DerefMut for Timestamp {
 impl Serialize for Timestamp {
     /// Serialize an Instant as a javascript timestamp (f64 containing the number
     /// of milliseconds since Unix Epoch 0).
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let age_as_sys = self.in_system_time();
-        let timestamp = age_as_sys.duration_since(SystemTime::UNIX_EPOCH).unwrap();
-        let js_timestamp = 1000.0 * timestamp.as_secs_f64();
-        js_timestamp.serialize(serializer)
+        use serde::ser::Error;
+        match {
+            || {
+                let time = self.in_system_time()?;
+                let timestamp = time.duration_since(SystemTime::UNIX_EPOCH)?;
+                let js_timestamp = 1000.0 * timestamp.as_secs_f64();
+                anyhow::Ok(js_timestamp)
+            }
+        }() {
+            Ok(timestamp) => timestamp.serialize(serializer),
+            Err(e) => Err(Error::custom(format!(
+                "failed to serialize Timestamp with {e}"
+            ))),
+        }
     }
 }
 
 impl<'d> Deserialize<'d> for Timestamp {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'d>,
     {
-        let _js_timestamp = f64::deserialize(deserializer)?;
-        // We need both Serialize and Deserialize for Topics, even when they
-        // are never deserialized in practice like Timestamps.
-        unimplemented!();
+        use serde::de::Error;
+        Err(Error::custom("unused implementation"))
     }
 }
