@@ -23,7 +23,16 @@ use serde::{Deserialize, Serialize};
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
 
+// Macro use makes these modules quite heavy, so we keep them commented
+// out until they are actually used
+//mod active_connection;
 mod devices;
+//mod dhcp4_config;
+//mod dhcp6_config;
+mod ipv4_config;
+//mod ipv6_config;
+mod manager;
+//mod settings;
 
 // All of the following includes are not used in demo_mode.
 // Put them inside a mod so we do not have to decorate each one with
@@ -38,13 +47,14 @@ mod optional_includes {
     pub(super) use std::time::Duration;
     pub(super) use zbus::{Connection, PropertyStream};
     pub(super) use zvariant::{ObjectPath, OwnedObjectPath};
+
+    pub(super) use super::devices::{DeviceProxy, WiredProxy};
+    pub(super) use super::ipv4_config::IP4ConfigProxy;
+    pub(super) use super::manager::NetworkManagerProxy;
 }
 
 #[cfg(not(feature = "demo_mode"))]
 use optional_includes::*;
-
-#[allow(clippy::module_inception)]
-mod networkmanager;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LinkInfo {
@@ -54,14 +64,11 @@ pub struct LinkInfo {
 
 #[cfg(not(feature = "demo_mode"))]
 async fn path_from_interface(con: &Connection, interface: &str) -> Result<OwnedObjectPath> {
-    let proxy = networkmanager::NetworkManagerProxy::new(con).await?;
+    let proxy = NetworkManagerProxy::new(con).await?;
     let device_paths = proxy.get_devices().await?;
 
     for path in device_paths {
-        let device_proxy = devices::DeviceProxy::builder(con)
-            .path(&path)?
-            .build()
-            .await?;
+        let device_proxy = DeviceProxy::builder(con).path(&path)?.build().await?;
 
         let interface_name = device_proxy.interface().await?; // name
 
@@ -75,10 +82,7 @@ async fn path_from_interface(con: &Connection, interface: &str) -> Result<OwnedO
 
 #[cfg(not(feature = "demo_mode"))]
 async fn get_link_info(con: &Connection, path: &str) -> Result<LinkInfo> {
-    let eth_proxy = devices::WiredProxy::builder(con)
-        .path(path)?
-        .build()
-        .await?;
+    let eth_proxy = WiredProxy::builder(con).path(path)?.build().await?;
 
     let speed = eth_proxy.speed().await?;
     let carrier = eth_proxy.carrier().await?;
@@ -94,12 +98,9 @@ where
     P: TryInto<ObjectPath<'a>>,
     P::Error: Into<zbus::Error>,
 {
-    let ip_4_proxy = devices::ip4::IP4ConfigProxy::builder(con)
-        .path(path)?
-        .build()
-        .await?;
+    let ip_4_proxy = IP4ConfigProxy::builder(con).path(path)?.build().await?;
 
-    let ip_address = ip_4_proxy.address_data2().await?;
+    let ip_address = ip_4_proxy.address_data().await?;
     trace!("get IPv4: {:?}", ip_address);
     let ip_address = ip_address
         .get(0)
@@ -127,7 +128,7 @@ impl<'a> LinkStream<'a> {
             .as_str()
             .to_string();
 
-        let eth_proxy = devices::WiredProxy::builder(&con)
+        let eth_proxy = WiredProxy::builder(&con)
             .path(path.clone())?
             .build()
             .await?;
@@ -191,7 +192,7 @@ impl<'a> IpStream<'a> {
             .as_str()
             .to_string();
 
-        let device_proxy = devices::DeviceProxy::builder(&con)
+        let device_proxy = DeviceProxy::builder(&con)
             .path(path.clone())?
             .build()
             .await?;
@@ -207,7 +208,7 @@ impl<'a> IpStream<'a> {
     }
 
     pub async fn now(&mut self, con: &Connection) -> Result<Vec<String>> {
-        let device_proxy = devices::DeviceProxy::builder(con)
+        let device_proxy = DeviceProxy::builder(con)
             .path(self.path.as_str())?
             .build()
             .await?;
