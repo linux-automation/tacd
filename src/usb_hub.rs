@@ -61,7 +61,7 @@ mod rw {
 
     static FILESYSTEM: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
 
-    pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
+    pub(super) fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
         let path = path.as_ref().to_str().unwrap();
 
         if let Some(stored) = FILESYSTEM
@@ -83,7 +83,7 @@ mod rw {
         Ok("0".to_string())
     }
 
-    pub fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
+    pub(super) fn write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
         let path: &Path = path.as_ref();
         let path = path.to_str().unwrap().to_string();
         let contents: &[u8] = contents.as_ref();
@@ -114,7 +114,7 @@ mod rw {
 
 #[cfg(not(feature = "demo_mode"))]
 mod rw {
-    pub use std::fs::*;
+    pub(super) use std::fs::*;
 }
 
 use rw::{read_to_string, write};

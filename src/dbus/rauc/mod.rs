@@ -43,7 +43,7 @@ use installer::InstallerProxy;
 
 #[cfg(feature = "demo_mode")]
 mod imports {
-    pub struct InstallerProxy<'a> {
+    pub(super) struct InstallerProxy<'a> {
         _dummy: &'a (),
     }
 
@@ -60,16 +60,15 @@ mod imports {
         }
     }
 
-    pub const CHANNELS_DIR: &str = "demo_files/usr/share/tacd/update_channels";
+    pub(super) const CHANNELS_DIR: &str = "demo_files/usr/share/tacd/update_channels";
 }
 
 #[cfg(not(feature = "demo_mode"))]
 mod imports {
-    pub use anyhow::{anyhow, bail, Result};
-    pub use futures::FutureExt;
-    pub use log::error;
+    pub(super) use anyhow::{anyhow, bail, Result};
+    pub(super) use log::error;
 
-    pub const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
+    pub(super) const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
 }
 
 const RELOAD_RATE_LIMIT: Duration = Duration::from_secs(10 * 60);

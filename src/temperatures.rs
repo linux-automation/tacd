@@ -28,12 +28,12 @@ use crate::measurement::Measurement;
 
 #[cfg(feature = "demo_mode")]
 mod hw {
-    pub trait SysClass {
+    pub(super) trait SysClass {
         fn input(&self) -> Result<u32, ()>;
     }
 
-    pub struct HwMon;
-    pub struct TempDecoy;
+    pub(super) struct HwMon;
+    pub(super) struct TempDecoy;
 
     impl SysClass for TempDecoy {
         fn input(&self) -> Result<u32, ()> {
@@ -42,11 +42,11 @@ mod hw {
     }
 
     impl HwMon {
-        pub fn new(_: &'static str) -> Result<Self, ()> {
+        pub(super) fn new(_: &'static str) -> Result<Self, ()> {
             Ok(Self)
         }
 
-        pub fn temp(&self, _: u64) -> Result<TempDecoy, ()> {
+        pub(super) fn temp(&self, _: u64) -> Result<TempDecoy, ()> {
             Ok(TempDecoy)
         }
     }
@@ -54,7 +54,7 @@ mod hw {
 
 #[cfg(not(feature = "demo_mode"))]
 mod hw {
-    pub use sysfs_class::*;
+    pub(super) use sysfs_class::*;
 }
 
 use hw::{HwMon, SysClass};
