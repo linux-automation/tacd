@@ -43,6 +43,7 @@ pub struct UiResources {
     pub backlight: crate::backlight::Backlight,
     pub dig_io: crate::digital_io::DigitalIo,
     pub dut_pwr: crate::dut_power::DutPwrThread,
+    pub hostname: crate::dbus::Hostname,
     pub iobus: crate::iobus::IoBus,
     pub led: crate::led::Led,
     pub network: crate::dbus::Network,
