@@ -42,13 +42,12 @@ mod optional_includes {
     pub(super) use async_std::stream::StreamExt;
     pub(super) use async_std::task::sleep;
     pub(super) use futures::{future::FutureExt, pin_mut, select};
-    pub(super) use log::trace;
-    pub(super) use std::convert::TryInto;
+    pub(super) use log::{info, trace};
     pub(super) use std::time::Duration;
     pub(super) use zbus::{Connection, PropertyStream};
-    pub(super) use zvariant::{ObjectPath, OwnedObjectPath};
+    pub(super) use zvariant::OwnedObjectPath;
 
-    pub(super) use super::devices::{DeviceProxy, WiredProxy};
+    pub(super) use super::devices::{DeviceProxy, WiredProxy, NM_DEVICE_STATE_ACTIVATED};
     pub(super) use super::ipv4_config::IP4ConfigProxy;
     pub(super) use super::manager::NetworkManagerProxy;
 }
@@ -90,25 +89,6 @@ async fn get_link_info(con: &Connection, path: &str) -> Result<LinkInfo> {
     let info = LinkInfo { speed, carrier };
 
     Ok(info)
-}
-
-#[cfg(not(feature = "demo_mode"))]
-pub async fn get_ip4_address<'a, P>(con: &Connection, path: P) -> Result<Vec<String>>
-where
-    P: TryInto<ObjectPath<'a>>,
-    P::Error: Into<zbus::Error>,
-{
-    let ip_4_proxy = IP4ConfigProxy::builder(con).path(path)?.build().await?;
-
-    let ip_address = ip_4_proxy.address_data().await?;
-    trace!("get IPv4: {:?}", ip_address);
-    let ip_address = ip_address
-        .get(0)
-        .and_then(|e| e.get("address"))
-        .and_then(|e| e.downcast_ref::<zvariant::Str>())
-        .map(|e| e.as_str())
-        .ok_or(anyhow!("IP not found"))?;
-    Ok(Vec::from([ip_address.to_string()]))
 }
 
 #[cfg(not(feature = "demo_mode"))]
@@ -177,62 +157,108 @@ impl<'a> LinkStream<'a> {
 }
 
 #[cfg(not(feature = "demo_mode"))]
-pub struct IpStream<'a> {
-    pub interface: String,
-    _con: Arc<Connection>,
-    ip_4_config: PropertyStream<'a, OwnedObjectPath>,
-    path: String,
+async fn get_device_path(conn: &Arc<Connection>, interface_name: &str) -> OwnedObjectPath {
+    let manager = loop {
+        match NetworkManagerProxy::new(conn).await {
+            Ok(m) => break m,
+            Err(_e) => {
+                info!("Failed to connect to NetworkManager via DBus. Retry in 1s");
+            }
+        }
+
+        sleep(Duration::from_secs(1)).await;
+    };
+
+    loop {
+        match manager.get_device_by_ip_iface(interface_name).await {
+            Ok(d) => break d,
+            Err(_e) => {
+                info!("Failed to get interface {interface_name} from NetworkManager. Retry in 1s.")
+            }
+        }
+
+        sleep(Duration::from_secs(1)).await;
+    }
 }
 
 #[cfg(not(feature = "demo_mode"))]
-impl<'a> IpStream<'a> {
-    pub async fn new(con: Arc<Connection>, interface: &str) -> Result<IpStream<'a>> {
-        let path = path_from_interface(&con, interface)
-            .await?
-            .as_str()
-            .to_string();
+async fn handle_ipv4_updates(
+    conn: &Arc<Connection>,
+    topic: Arc<Topic<Vec<String>>>,
+    interface_name: &str,
+) -> Result<()> {
+    let device_path = get_device_path(conn, interface_name).await;
+    let device = DeviceProxy::builder(conn)
+        .path(device_path)?
+        .build()
+        .await?;
 
-        let device_proxy = DeviceProxy::builder(&con)
-            .path(path.clone())?
-            .build()
-            .await?;
+    let mut state_changes = device.receive_state_property_changed().await;
 
-        let ip_4_config = device_proxy.receive_ip4_config_changed().await;
+    loop {
+        // The NetworkManager DBus documentation says the Ip4Config property is
+        // "Only valid when the device is in the NM_DEVICE_STATE_ACTIVATED state".
+        // Loop until that is the case.
+        'wait_activated: loop {
+            let state = state_changes
+                .next()
+                .await
+                .ok_or_else(|| anyhow!("Unexpected end of state change subscription"))?
+                .get()
+                .await?;
 
-        Ok(Self {
-            interface: interface.to_string(),
-            _con: con,
-            ip_4_config,
-            path: path.to_string(),
-        })
-    }
+            trace!("Interface {interface_name} changed state to {state}");
 
-    pub async fn now(&mut self, con: &Connection) -> Result<Vec<String>> {
-        let device_proxy = DeviceProxy::builder(con)
-            .path(self.path.as_str())?
-            .build()
-            .await?;
-
-        let ip_4_config = device_proxy.ip4_config().await?;
-
-        Ok(get_ip4_address(con, ip_4_config)
-            .await
-            .unwrap_or_else(|_e| Vec::new()))
-    }
-
-    pub async fn next(&mut self, con: &Connection) -> Result<Vec<String>> {
-        let ip_4_config = StreamExt::next(&mut self.ip_4_config).await;
-
-        if let Some(path) = ip_4_config {
-            let path = path.get().await?;
-            if let Ok(ips) = get_ip4_address(con, &path).await {
-                trace!("updata ip: {} {:?}", self.interface, ips);
-                return Ok(ips);
-            } else {
-                return Ok(Vec::new());
+            if state == NM_DEVICE_STATE_ACTIVATED {
+                break 'wait_activated;
             }
         }
-        Err(anyhow!("No IP found"))
+
+        let ip4_config_path = device.ip4_config().await?;
+        let ip4_config = IP4ConfigProxy::builder(conn)
+            .path(ip4_config_path)?
+            .build()
+            .await?;
+
+        let mut address_data_changes = ip4_config.receive_address_data_changed().await;
+
+        'wait_deactivated: loop {
+            select! {
+                new_state = state_changes.next().fuse() => {
+                    let state = new_state
+                        .ok_or_else(|| anyhow!("Unexpected end of state change subscription"))?
+                        .get()
+                        .await?;
+
+                    trace!("Interface {interface_name} changed state to {state}");
+
+                    topic.set(Vec::new());
+
+                    if state != NM_DEVICE_STATE_ACTIVATED {
+                        break 'wait_deactivated;
+                    }
+                }
+                address_data = address_data_changes.next().fuse() => {
+                    let address_data = address_data
+                        .ok_or_else(|| anyhow!("Unexpected end of address data update stream"))?
+                        .get()
+                        .await?;
+
+                    let addresses: Vec<String> = address_data
+                        .iter()
+                        .filter_map(|a| {
+                            a.get("address")
+                                .and_then(|e| e.downcast_ref::<zvariant::Str>())
+                                .map(|e| e.as_str().to_owned())
+                        })
+                        .collect();
+
+                    trace!("Interface {interface_name} got new IP addresses: {addresses:?}");
+
+                    topic.set(addresses);
+                }
+            }
+        }
     }
 }
 
@@ -245,7 +271,7 @@ pub struct Network {
 impl Network {
     fn setup_topics(bb: &mut BrokerBuilder) -> Self {
         Self {
-            bridge_interface: bb.topic_ro("/v1/tac/network/interface/tac-bridge", None),
+            bridge_interface: bb.topic_ro("/v1/tac/network/interface/tac-bridge", Some(Vec::new())),
             dut_interface: bb.topic_ro("/v1/tac/network/interface/dut", None),
             uplink_interface: bb.topic_ro("/v1/tac/network/interface/uplink", None),
         }
@@ -338,20 +364,11 @@ impl Network {
         {
             let conn = conn.clone();
             let bridge_interface = this.bridge_interface.clone();
+
             async_std::task::spawn(async move {
-                let mut ip_stream = loop {
-                    if let Ok(ips) = IpStream::new(conn.clone(), "tac-bridge").await {
-                        break ips;
-                    }
-
-                    sleep(Duration::from_secs(1)).await;
-                };
-
-                bridge_interface.set(ip_stream.now(&conn).await.unwrap());
-
-                while let Ok(info) = ip_stream.next(&conn).await {
-                    bridge_interface.set(info);
-                }
+                handle_ipv4_updates(&conn, bridge_interface, "tac-bridge")
+                    .await
+                    .unwrap();
             });
         }
 
