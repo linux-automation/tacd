@@ -41,10 +41,10 @@ mod optional_includes {
     pub(super) use anyhow::{anyhow, Result};
     pub(super) use async_std::stream::StreamExt;
     pub(super) use async_std::task::sleep;
-    pub(super) use futures::{future::FutureExt, pin_mut, select};
+    pub(super) use futures::{future::FutureExt, select};
     pub(super) use log::{info, trace};
     pub(super) use std::time::Duration;
-    pub(super) use zbus::{Connection, PropertyStream};
+    pub(super) use zbus::Connection;
     pub(super) use zvariant::OwnedObjectPath;
 
     pub(super) use super::devices::{DeviceProxy, WiredProxy, NM_DEVICE_STATE_ACTIVATED};
@@ -59,101 +59,6 @@ use optional_includes::*;
 pub struct LinkInfo {
     pub speed: u32,
     pub carrier: bool,
-}
-
-#[cfg(not(feature = "demo_mode"))]
-async fn path_from_interface(con: &Connection, interface: &str) -> Result<OwnedObjectPath> {
-    let proxy = NetworkManagerProxy::new(con).await?;
-    let device_paths = proxy.get_devices().await?;
-
-    for path in device_paths {
-        let device_proxy = DeviceProxy::builder(con).path(&path)?.build().await?;
-
-        let interface_name = device_proxy.interface().await?; // name
-
-        // Is this the interface we are interested in?
-        if interface_name == interface {
-            return Ok(path);
-        }
-    }
-    Err(anyhow!("No interface found: {}", interface))
-}
-
-#[cfg(not(feature = "demo_mode"))]
-async fn get_link_info(con: &Connection, path: &str) -> Result<LinkInfo> {
-    let eth_proxy = WiredProxy::builder(con).path(path)?.build().await?;
-
-    let speed = eth_proxy.speed().await?;
-    let carrier = eth_proxy.carrier().await?;
-
-    let info = LinkInfo { speed, carrier };
-
-    Ok(info)
-}
-
-#[cfg(not(feature = "demo_mode"))]
-pub struct LinkStream<'a> {
-    pub interface: String,
-    _con: Arc<Connection>,
-    speed: PropertyStream<'a, u32>,
-    carrier: PropertyStream<'a, bool>,
-    data: LinkInfo,
-}
-
-#[cfg(not(feature = "demo_mode"))]
-impl<'a> LinkStream<'a> {
-    pub async fn new(con: Arc<Connection>, interface: &str) -> Result<LinkStream<'a>> {
-        let path = path_from_interface(&con, interface)
-            .await?
-            .as_str()
-            .to_string();
-
-        let eth_proxy = WiredProxy::builder(&con)
-            .path(path.clone())?
-            .build()
-            .await?;
-
-        let speed = eth_proxy.receive_speed_changed().await;
-        let carrier = eth_proxy.receive_carrier_changed().await;
-
-        let info = get_link_info(&con, path.as_str()).await?;
-
-        Ok(Self {
-            interface: interface.to_string(),
-            _con: con,
-            speed,
-            carrier,
-            data: info,
-        })
-    }
-
-    pub fn now(&self) -> LinkInfo {
-        self.data.clone()
-    }
-
-    pub async fn next(&mut self) -> Result<LinkInfo> {
-        let speed = StreamExt::next(&mut self.speed).fuse();
-        let carrier = StreamExt::next(&mut self.carrier).fuse();
-
-        pin_mut!(speed, carrier);
-        select! {
-            speed2 = speed => {
-                if let Some(s) = speed2 {
-                    let s = s.get().await?;
-                    trace!("update speed: {} {:?}", self.interface, s);
-                    self.data.speed = s;
-                }
-            },
-            carrier2 = carrier => {
-                if let Some(c) = carrier2 {
-                    let c = c.get().await?;
-                    trace!("update carrier: {} {:?}", self.interface, c);
-                    self.data.carrier = c;
-                }
-            },
-        };
-        Ok(self.data.clone())
-    }
 }
 
 #[cfg(not(feature = "demo_mode"))]
@@ -178,6 +83,65 @@ async fn get_device_path(conn: &Arc<Connection>, interface_name: &str) -> OwnedO
         }
 
         sleep(Duration::from_secs(1)).await;
+    }
+}
+
+#[cfg(not(feature = "demo_mode"))]
+async fn handle_link_updates(
+    conn: &Arc<Connection>,
+    topic: Arc<Topic<LinkInfo>>,
+    interface_name: &str,
+    led: Arc<Topic<BlinkPattern>>,
+) -> Result<()> {
+    let device_path = get_device_path(conn, interface_name).await;
+    let device = WiredProxy::builder(conn).path(device_path)?.build().await?;
+
+    let mut carrier_changes = device.receive_carrier_changed().await;
+    let mut speed_changes = device.receive_speed_changed().await;
+
+    let mut info = LinkInfo {
+        carrier: carrier_changes
+            .next()
+            .await
+            .ok_or_else(|| anyhow!("Unexpected end of carrier subscription"))?
+            .get()
+            .await?,
+        speed: speed_changes
+            .next()
+            .await
+            .ok_or_else(|| anyhow!("Unexpected end of speed subscription"))?
+            .get()
+            .await?,
+    };
+
+    loop {
+        // The two color LED on the DUT interface is under the control of
+        // the switch IC. For 100MBit/s and 1GBit/s it lights in distinct
+        // colors, but for 10MBit/s it is just off.
+        // Build the most round-about link speed indicator ever so that we
+        // have speed indication for 10MBit/s.
+        led.set({
+            let led_brightness = if info.speed == 10 { 1.0 } else { 0.0 };
+
+            BlinkPattern::solid(led_brightness)
+        });
+
+        topic.set(info.clone());
+
+        select! {
+            carrier = carrier_changes.next().fuse() => {
+                info.carrier = carrier
+                    .ok_or_else(|| anyhow!("Unexpected end of carrier subscription"))?
+                    .get()
+                    .await?;
+            }
+            speed = speed_changes.next().fuse() => {
+                info.speed = speed
+                    .ok_or_else(|| anyhow!("Unexpected end of speed subscription"))?
+                    .get()
+                    .await?;
+            }
+        }
     }
 }
 
@@ -308,69 +272,29 @@ impl Network {
     ) -> Self {
         let this = Self::setup_topics(bb);
 
-        {
-            let conn = conn.clone();
-            let dut_interface = this.dut_interface.clone();
-            async_std::task::spawn(async move {
-                let mut link_stream = loop {
-                    if let Ok(ls) = LinkStream::new(conn.clone(), "dut").await {
-                        break ls;
-                    }
+        let conn_task = conn.clone();
+        let dut_interface = this.dut_interface.clone();
+        async_std::task::spawn(async move {
+            handle_link_updates(&conn_task, dut_interface, "dut", led_dut)
+                .await
+                .unwrap();
+        });
 
-                    sleep(Duration::from_secs(1)).await;
-                };
+        let conn_task = conn.clone();
+        let uplink_interface = this.uplink_interface.clone();
+        async_std::task::spawn(async move {
+            handle_link_updates(&conn_task, uplink_interface, "uplink", led_uplink)
+                .await
+                .unwrap();
+        });
 
-                dut_interface.set(link_stream.now());
-
-                while let Ok(info) = link_stream.next().await {
-                    // The two color LED on the DUT interface is under the control of
-                    // the switch IC. For 100MBit/s and 1GBit/s it lights in distinct
-                    // colors, but for 10MBit/s it is just off.
-                    // Build the most round-about link speed indicator ever so that we
-                    // have speed indication for 10MBit/s.
-                    let led_brightness = if info.speed == 10 { 1.0 } else { 0.0 };
-                    led_dut.set(BlinkPattern::solid(led_brightness));
-
-                    dut_interface.set(info);
-                }
-            });
-        }
-
-        {
-            let conn = conn.clone();
-            let uplink_interface = this.uplink_interface.clone();
-            async_std::task::spawn(async move {
-                let mut link_stream = loop {
-                    if let Ok(ls) = LinkStream::new(conn.clone(), "uplink").await {
-                        break ls;
-                    }
-
-                    sleep(Duration::from_secs(1)).await;
-                };
-
-                uplink_interface.set(link_stream.now());
-
-                while let Ok(info) = link_stream.next().await {
-                    // See the equivalent section on the uplink interface on why
-                    // this is here.
-                    let led_brightness = if info.speed == 10 { 1.0 } else { 0.0 };
-                    led_uplink.set(BlinkPattern::solid(led_brightness));
-
-                    uplink_interface.set(info);
-                }
-            });
-        }
-
-        {
-            let conn = conn.clone();
-            let bridge_interface = this.bridge_interface.clone();
-
-            async_std::task::spawn(async move {
-                handle_ipv4_updates(&conn, bridge_interface, "tac-bridge")
-                    .await
-                    .unwrap();
-            });
-        }
+        let conn_task = conn.clone();
+        let bridge_interface = this.bridge_interface.clone();
+        async_std::task::spawn(async move {
+            handle_ipv4_updates(&conn_task, bridge_interface, "tac-bridge")
+                .await
+                .unwrap();
+        });
 
         this
     }
