@@ -17,11 +17,13 @@
 
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::sync::Arc;
-use async_std::task::{block_on, sleep, spawn, spawn_blocking, JoinHandle};
+use async_std::task::{block_on, sleep, spawn, JoinHandle};
 use serde::{Deserialize, Serialize};
 
 use crate::broker::Topic;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 pub const LONG_PRESS: Duration = Duration::from_millis(500);
 
@@ -133,8 +135,12 @@ impl ButtonEvent {
 
 /// Spawn a thread that blockingly reads user input and pushes them into
 /// a broker framework topic.
-pub fn handle_buttons(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
-    spawn_blocking(move || {
+pub fn handle_buttons(
+    wtb: &mut WatchedTasksBuilder,
+    path: &'static str,
+    topic: Arc<Topic<ButtonEvent>>,
+) -> Result<()> {
+    wtb.spawn_thread("button-input-thread", move || {
         let mut device = Device::open(path).unwrap();
         let mut press_task: [Option<JoinHandle<()>>; 2] = [None, None];
         let mut start_time = [None, None];
@@ -179,5 +185,7 @@ pub fn handle_buttons(path: &'static str, topic: Arc<Topic<ButtonEvent>>) {
                 }
             }
         }
-    });
+    })?;
+
+    Ok(())
 }

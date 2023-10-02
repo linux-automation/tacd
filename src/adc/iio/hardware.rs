@@ -20,9 +20,6 @@ use std::fs::create_dir;
 use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
-use std::sync::Mutex;
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Error, Result};
@@ -35,6 +32,7 @@ use log::{debug, error, warn};
 use thread_priority::*;
 
 use crate::measurement::{Measurement, Timestamp};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 struct ChannelDesc {
     kernel_name: &'static str,
@@ -255,7 +253,6 @@ pub struct IioThread {
     ref_instant: Instant,
     timestamp: AtomicU64,
     values: Vec<AtomicU16>,
-    join: Mutex<Option<JoinHandle<()>>>,
     channel_descs: &'static [ChannelDesc],
 }
 
@@ -325,7 +322,8 @@ impl IioThread {
     }
 
     async fn new(
-        thread_name: &str,
+        wtb: &mut WatchedTasksBuilder,
+        thread_name: &'static str,
         adc_name: &'static str,
         trigger_name: &'static str,
         sample_rate: i64,
@@ -342,9 +340,8 @@ impl IioThread {
         let (thread_res_tx, thread_res_rx) = bounded(1);
 
         // Spawn a high priority thread that updates the atomic values in `thread`.
-        let join = thread::Builder::new()
-            .name(format!("tacd {thread_name} iio"))
-            .spawn(move || {
+        wtb.spawn_thread(thread_name, move || {
+            {
                 let adc_setup_res = Self::adc_setup(
                     adc_name,
                     trigger_name,
@@ -358,17 +355,15 @@ impl IioThread {
                             ref_instant: Instant::now(),
                             timestamp: AtomicU64::new(TIMESTAMP_ERROR),
                             values: channels.iter().map(|_| AtomicU16::new(0)).collect(),
-                            join: Mutex::new(None),
                             channel_descs,
                         });
-
                         (thread, channels, buf)
                     }
                     Err(e) => {
                         // Can not fail in practice as the queue is known to be empty
                         // at this point.
                         thread_res_tx.try_send(Err(e)).unwrap();
-                        return;
+                        return Ok(());
                     }
                 };
 
@@ -423,21 +418,20 @@ impl IioThread {
                         tx.try_send(Ok(content)).unwrap();
                     }
                 }
-            })?;
+            };
+
+            Ok(())
+        })?;
 
         let thread = thread_res_rx.recv().await??;
-
-        // Locking the Mutex could only fail if the Mutex was poisoned by
-        // a thread that held the lock and panicked.
-        // At this point the Mutex has not yet been locked in another thread.
-        *thread.join.lock().unwrap() = Some(join);
 
         Ok(thread)
     }
 
-    pub async fn new_stm32() -> Result<Arc<Self>> {
+    pub async fn new_stm32(wtb: &mut WatchedTasksBuilder) -> Result<Arc<Self>> {
         Self::new(
-            "stm32",
+            wtb,
+            "adc-stm32",
             "48003000.adc:adc@0",
             "tim4_trgo",
             80,
@@ -447,14 +441,23 @@ impl IioThread {
         .await
     }
 
-    pub async fn new_powerboard() -> Result<Arc<Self>> {
+    pub async fn new_powerboard(wtb: &mut WatchedTasksBuilder) -> Result<Arc<Self>> {
         let hr_trigger_path = Path::new(TRIGGER_HR_PWR_DIR);
 
         if !hr_trigger_path.is_dir() {
             create_dir(hr_trigger_path)?;
         }
 
-        Self::new("powerboard", "lmp92064", "tacd-pwr", 20, CHANNELS_PWR, 1).await
+        Self::new(
+            wtb,
+            "adc-powerboard",
+            "lmp92064",
+            "tacd-pwr",
+            20,
+            CHANNELS_PWR,
+            1,
+        )
+        .await
     }
 
     /// Use the channel names defined at the top of the file to get a reference

@@ -320,9 +320,8 @@ impl DutPwrThread {
 
         // Spawn a high priority thread that handles the power status
         // in a realtimey fashion.
-        thread::Builder::new()
-            .name("tacd power".into())
-            .spawn(move || {
+        wtb.spawn_thread("power-thread", move || {
+            {
                 let mut last_ts: Option<Instant> = None;
 
                 // There may be transients in the measured voltage/current, e.g. due to EMI or
@@ -482,7 +481,10 @@ impl DutPwrThread {
 
                 // Make sure to enter fail safe mode before leaving the thread
                 turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
-            })?;
+            };
+
+            Ok(())
+        })?;
 
         let (tick, request, state) = thread_res_rx.next().await.unwrap()?;
 

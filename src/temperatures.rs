@@ -19,34 +19,37 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::sync::Arc;
-use async_std::task::spawn_blocking;
 use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::Measurement;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod hw {
+    use anyhow::Result;
+
     pub(super) trait SysClass {
-        fn input(&self) -> Result<u32, ()>;
+        fn input(&self) -> Result<u32>;
     }
 
     pub(super) struct HwMon;
     pub(super) struct TempDecoy;
 
     impl SysClass for TempDecoy {
-        fn input(&self) -> Result<u32, ()> {
+        fn input(&self) -> Result<u32> {
             Ok(30_000)
         }
     }
 
     impl HwMon {
-        pub(super) fn new(_: &'static str) -> Result<Self, ()> {
+        pub(super) fn new(_: &'static str) -> Result<Self> {
             Ok(Self)
         }
 
-        pub(super) fn temp(&self, _: u64) -> Result<TempDecoy, ()> {
+        pub(super) fn temp(&self, _: u64) -> Result<TempDecoy> {
             Ok(TempDecoy)
         }
     }
@@ -89,7 +92,7 @@ pub struct Temperatures {
 }
 
 impl Temperatures {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
+    pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
         let run = Arc::new(AtomicBool::new(true));
         let soc_temperature = bb.topic_ro("/v1/tac/temperatures/soc", None);
         let warning = bb.topic_ro("/v1/tac/temperatures/warning", None);
@@ -98,14 +101,9 @@ impl Temperatures {
         let soc_temperature_thread = soc_temperature.clone();
         let warning_thread = warning.clone();
 
-        spawn_blocking(move || {
+        wtb.spawn_thread("temperature-update", move || {
             while run_thread.load(Ordering::Relaxed) {
-                let val = HwMon::new("hwmon0")
-                    .unwrap()
-                    .temp(1)
-                    .unwrap()
-                    .input()
-                    .unwrap();
+                let val = HwMon::new("hwmon0")?.temp(1)?.input()?;
 
                 let val = val as f32 / 1000.0;
 
@@ -120,13 +118,15 @@ impl Temperatures {
 
                 sleep(UPDATE_INTERVAL);
             }
-        });
 
-        Self {
+            Ok(())
+        })?;
+
+        Ok(Self {
             soc_temperature,
             warning,
             run: Some(run),
-        }
+        })
     }
 }
 

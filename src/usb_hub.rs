@@ -94,7 +94,7 @@ mod rw {
 
         for (path_tail, iio_channel) in DISABLE_CHANNELS {
             if path.ends_with(path_tail) {
-                let iio_thread = block_on(IioThread::new_stm32()).unwrap();
+                let iio_thread = block_on(IioThread::new_stm32(&())).unwrap();
 
                 iio_thread
                     .get_channel(iio_channel)

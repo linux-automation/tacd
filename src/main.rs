@@ -82,7 +82,7 @@ async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
     .await?;
     let dig_io = DigitalIo::new(&mut bb, &mut wtb, led.out_0.clone(), led.out_1.clone());
     let regulators = Regulators::new(&mut bb, &mut wtb);
-    let temperatures = Temperatures::new(&mut bb);
+    let temperatures = Temperatures::new(&mut bb, &mut wtb)?;
     let usb_hub = UsbHub::new(
         &mut bb,
         &mut wtb,

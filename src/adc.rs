@@ -79,8 +79,8 @@ pub struct Adc {
 
 impl Adc {
     pub async fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
-        let stm32_thread = IioThread::new_stm32().await?;
-        let powerboard_thread = IioThread::new_powerboard().await?;
+        let stm32_thread = IioThread::new_stm32(wtb).await?;
+        let powerboard_thread = IioThread::new_powerboard(wtb).await?;
 
         let adc = Self {
             usb_host_curr: AdcChannel {

@@ -141,9 +141,10 @@ impl Ui {
         let screens = screens::init(wtb, &res, &alerts, &buttons, &reboot_message, &locator);
 
         handle_buttons(
+            wtb,
             "/dev/input/by-path/platform-gpio-keys-event",
             buttons.clone(),
-        );
+        )?;
 
         // Blink the status LED when locator is active
         let led_status_pattern = res.led.status.clone();
