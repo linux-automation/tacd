@@ -321,167 +321,165 @@ impl DutPwrThread {
         // Spawn a high priority thread that handles the power status
         // in a realtimey fashion.
         wtb.spawn_thread("power-thread", move || {
-            {
-                let mut last_ts: Option<Instant> = None;
+            let mut last_ts: Option<Instant> = None;
 
-                // There may be transients in the measured voltage/current, e.g. due to EMI or
-                // inrush currents.
-                // Nothing will break if they are sufficiently short, so the DUT can stay powered.
-                // Filter out transients by taking the last four values, throwing away the largest
-                // and smallest and averaging the two remaining ones.
-                let mut volt_filter = MedianFilter::<4>::new();
-                let mut curr_filter = MedianFilter::<4>::new();
+            // There may be transients in the measured voltage/current, e.g. due to EMI or
+            // inrush currents.
+            // Nothing will break if they are sufficiently short, so the DUT can stay powered.
+            // Filter out transients by taking the last four values, throwing away the largest
+            // and smallest and averaging the two remaining ones.
+            let mut volt_filter = MedianFilter::<4>::new();
+            let mut curr_filter = MedianFilter::<4>::new();
 
-                let (tick_weak, request, state) = match realtime_priority() {
-                    Ok(_) => {
-                        let tick = Arc::new(AtomicU32::new(0));
-                        let tick_weak = Arc::downgrade(&tick);
+            let (tick_weak, request, state) = match realtime_priority() {
+                Ok(_) => {
+                    let tick = Arc::new(AtomicU32::new(0));
+                    let tick_weak = Arc::downgrade(&tick);
 
-                        let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
-                        let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
+                    let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
+                    let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
 
-                        thread_res_tx
-                            .try_send(Ok((tick, request.clone(), state.clone())))
-                            .unwrap();
+                    thread_res_tx
+                        .try_send(Ok((tick, request.clone(), state.clone())))
+                        .unwrap();
 
-                        (tick_weak, request, state)
+                    (tick_weak, request, state)
+                }
+                Err(e) => {
+                    thread_res_tx.try_send(Err(e)).unwrap();
+                    panic!()
+                }
+            };
+
+            // Run as long as there is a strong reference to `tick`.
+            // As tick is a private member of the struct this is equivalent
+            // to running as long as the DutPwrThread was not dropped.
+            while let Some(tick) = tick_weak.upgrade() {
+                thread::sleep(THREAD_INTERVAL);
+
+                // Get new voltage and current readings while making sure
+                // that they are not stale
+                let (volt, curr) = loop {
+                    let feedback = pwr_volt
+                        .fast
+                        .try_get_multiple([&pwr_volt.fast, &pwr_curr.fast]);
+
+                    // We do not care too much about _why_ we could not get
+                    // a new value from the ADC.
+                    // If we get a new valid value before the timeout we
+                    // are fine.
+                    // If not we are not.
+                    if let Ok(m) = feedback {
+                        last_ts = Some(m[0].ts.as_instant());
                     }
-                    Err(e) => {
-                        thread_res_tx.try_send(Err(e)).unwrap();
-                        panic!()
+
+                    let too_old = last_ts
+                        .map(|ts| Instant::now().duration_since(ts) > MAX_AGE)
+                        .unwrap_or(false);
+
+                    if too_old {
+                        turn_off_with_reason(
+                            OutputState::RealtimeViolation,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
+                    } else {
+                        // We have a fresh ADC value. Signal "everything is well"
+                        // to the watchdog task.
+                        tick.fetch_add(1, Ordering::Relaxed);
+                    }
+
+                    if let Ok(m) = feedback {
+                        break (m[0].value, m[1].value);
                     }
                 };
 
-                // Run as long as there is a strong reference to `tick`.
-                // As tick is a private member of the struct this is equivalent
-                // to running as long as the DutPwrThread was not dropped.
-                while let Some(tick) = tick_weak.upgrade() {
-                    thread::sleep(THREAD_INTERVAL);
+                // The median filter needs some values in it's backlog before it
+                // starts outputting values.
+                let (volt, curr) = match (volt_filter.step(volt), curr_filter.step(curr)) {
+                    (Some(volt), Some(curr)) => (volt, curr),
+                    _ => continue,
+                };
 
-                    // Get new voltage and current readings while making sure
-                    // that they are not stale
-                    let (volt, curr) = loop {
-                        let feedback = pwr_volt
-                            .fast
-                            .try_get_multiple([&pwr_volt.fast, &pwr_curr.fast]);
+                // Take the next pending OutputRequest (if any) even if it
+                // may not be used due to a pending error condition, as it
+                // could be quite surprising for the output to turn on
+                // immediately when a fault is cleared after quite some time
+                // of the output being off.
+                let req = request
+                    .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
+                    .into();
 
-                        // We do not care too much about _why_ we could not get
-                        // a new value from the ADC.
-                        // If we get a new valid value before the timeout we
-                        // are fine.
-                        // If not we are not.
-                        if let Ok(m) = feedback {
-                            last_ts = Some(m[0].ts.as_instant());
-                        }
+                // Don't even look at the requests if there is an ongoing
+                // overvoltage condition. Instead turn the output off and
+                // go back to measuring.
+                if volt > MAX_VOLTAGE {
+                    turn_off_with_reason(
+                        OutputState::OverVoltage,
+                        &pwr_line,
+                        &discharge_line,
+                        &state,
+                    );
 
-                        let too_old = last_ts
-                            .map(|ts| Instant::now().duration_since(ts) > MAX_AGE)
-                            .unwrap_or(false);
-
-                        if too_old {
-                            turn_off_with_reason(
-                                OutputState::RealtimeViolation,
-                                &pwr_line,
-                                &discharge_line,
-                                &state,
-                            );
-                        } else {
-                            // We have a fresh ADC value. Signal "everything is well"
-                            // to the watchdog task.
-                            tick.fetch_add(1, Ordering::Relaxed);
-                        }
-
-                        if let Ok(m) = feedback {
-                            break (m[0].value, m[1].value);
-                        }
-                    };
-
-                    // The median filter needs some values in it's backlog before it
-                    // starts outputting values.
-                    let (volt, curr) = match (volt_filter.step(volt), curr_filter.step(curr)) {
-                        (Some(volt), Some(curr)) => (volt, curr),
-                        _ => continue,
-                    };
-
-                    // Take the next pending OutputRequest (if any) even if it
-                    // may not be used due to a pending error condition, as it
-                    // could be quite surprising for the output to turn on
-                    // immediately when a fault is cleared after quite some time
-                    // of the output being off.
-                    let req = request
-                        .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
-                        .into();
-
-                    // Don't even look at the requests if there is an ongoing
-                    // overvoltage condition. Instead turn the output off and
-                    // go back to measuring.
-                    if volt > MAX_VOLTAGE {
-                        turn_off_with_reason(
-                            OutputState::OverVoltage,
-                            &pwr_line,
-                            &discharge_line,
-                            &state,
-                        );
-
-                        continue;
-                    }
-
-                    // Don't even look at the requests if there is an ongoin
-                    // polarity inversion. Turn off, go back to start, do not
-                    // collect $200.
-                    if volt < MIN_VOLTAGE {
-                        turn_off_with_reason(
-                            OutputState::InvertedPolarity,
-                            &pwr_line,
-                            &discharge_line,
-                            &state,
-                        );
-
-                        continue;
-                    }
-
-                    // Don't even look at the requests if there is an ongoin
-                    // overcurrent condition.
-                    if curr > MAX_CURRENT {
-                        turn_off_with_reason(
-                            OutputState::OverCurrent,
-                            &pwr_line,
-                            &discharge_line,
-                            &state,
-                        );
-
-                        continue;
-                    }
-
-                    // There is no ongoing fault condition, so we could e.g. turn
-                    // the output on if requested.
-                    match req {
-                        OutputRequest::Idle => {}
-                        OutputRequest::On => {
-                            discharge_line
-                                .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                                .unwrap();
-                            pwr_line.set_value(PWR_LINE_ASSERTED).unwrap();
-                            state.store(OutputState::On as u8, Ordering::Relaxed);
-                        }
-                        OutputRequest::Off => {
-                            discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
-                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-                            state.store(OutputState::Off as u8, Ordering::Relaxed);
-                        }
-                        OutputRequest::OffFloating => {
-                            discharge_line
-                                .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                                .unwrap();
-                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-                            state.store(OutputState::OffFloating as u8, Ordering::Relaxed);
-                        }
-                    }
+                    continue;
                 }
 
-                // Make sure to enter fail safe mode before leaving the thread
-                turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
-            };
+                // Don't even look at the requests if there is an ongoin
+                // polarity inversion. Turn off, go back to start, do not
+                // collect $200.
+                if volt < MIN_VOLTAGE {
+                    turn_off_with_reason(
+                        OutputState::InvertedPolarity,
+                        &pwr_line,
+                        &discharge_line,
+                        &state,
+                    );
+
+                    continue;
+                }
+
+                // Don't even look at the requests if there is an ongoin
+                // overcurrent condition.
+                if curr > MAX_CURRENT {
+                    turn_off_with_reason(
+                        OutputState::OverCurrent,
+                        &pwr_line,
+                        &discharge_line,
+                        &state,
+                    );
+
+                    continue;
+                }
+
+                // There is no ongoing fault condition, so we could e.g. turn
+                // the output on if requested.
+                match req {
+                    OutputRequest::Idle => {}
+                    OutputRequest::On => {
+                        discharge_line
+                            .set_value(1 - DISCHARGE_LINE_ASSERTED)
+                            .unwrap();
+                        pwr_line.set_value(PWR_LINE_ASSERTED).unwrap();
+                        state.store(OutputState::On as u8, Ordering::Relaxed);
+                    }
+                    OutputRequest::Off => {
+                        discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
+                        pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                        state.store(OutputState::Off as u8, Ordering::Relaxed);
+                    }
+                    OutputRequest::OffFloating => {
+                        discharge_line
+                            .set_value(1 - DISCHARGE_LINE_ASSERTED)
+                            .unwrap();
+                        pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                        state.store(OutputState::OffFloating as u8, Ordering::Relaxed);
+                    }
+                }
+            }
+
+            // Make sure to enter fail safe mode before leaving the thread
+            turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
 
             Ok(())
         })?;
