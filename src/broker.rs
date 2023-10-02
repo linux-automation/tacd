@@ -18,6 +18,8 @@
 use async_std::sync::Arc;
 use serde::{de::DeserializeOwned, Serialize};
 
+use crate::watched_tasks::WatchedTasksBuilder;
+
 mod mqtt_conn;
 mod persistence;
 mod rest;
@@ -113,10 +115,10 @@ impl BrokerBuilder {
     /// Finish building the broker
     ///
     /// This consumes the builder so that no new topics can be registered
-    pub fn build(self, server: &mut tide::Server<()>) {
+    pub fn build(self, wtb: &mut WatchedTasksBuilder, server: &mut tide::Server<()>) {
         let topics = Arc::new(self.topics);
 
-        persistence::register(topics.clone());
+        persistence::register(wtb, topics.clone());
         rest::register(server, topics.clone());
         mqtt_conn::register(server, topics);
     }

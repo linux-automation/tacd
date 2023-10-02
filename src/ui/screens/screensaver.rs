@@ -21,7 +21,6 @@ use std::time::{Duration, SystemTime};
 use async_std::future::timeout;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoFont, MonoTextStyle},
@@ -38,6 +37,7 @@ use super::{
     Screen, Ui,
 };
 use crate::broker::Topic;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const UI_TEXT_FONT: MonoFont = FONT_10X20;
 const SCREEN_TYPE: AlertScreen = AlertScreen::ScreenSaver;
@@ -91,12 +91,16 @@ impl BounceAnimation {
 pub struct ScreenSaverScreen;
 
 impl ScreenSaverScreen {
-    pub fn new(buttons: &Arc<Topic<ButtonEvent>>, alerts: &Arc<Topic<AlertList>>) -> Self {
+    pub fn new(
+        wtb: &mut WatchedTasksBuilder,
+        buttons: &Arc<Topic<ButtonEvent>>,
+        alerts: &Arc<Topic<AlertList>>,
+    ) -> Self {
         // Activate screensaver if no button is pressed for some time
         let (mut buttons_events, _) = buttons.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-screensaver-activator", async move {
             loop {
                 let ev = timeout(SCREENSAVER_TIMEOUT, buttons_events.next()).await;
                 let activate_screensaver = match ev {
@@ -109,6 +113,8 @@ impl ScreenSaverScreen {
                     alerts.assert(SCREEN_TYPE);
                 }
             }
+
+            Ok(())
         });
 
         Self

@@ -17,7 +17,6 @@
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
@@ -31,6 +30,7 @@ use super::{
 };
 use crate::broker::Topic;
 use crate::dbus::rauc::Channel;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UpdateAvailable;
 
@@ -139,13 +139,17 @@ struct Active {
 }
 
 impl UpdateAvailableScreen {
-    pub fn new(alerts: &Arc<Topic<AlertList>>, channels: &Arc<Topic<Vec<Channel>>>) -> Self {
+    pub fn new(
+        wtb: &mut WatchedTasksBuilder,
+        alerts: &Arc<Topic<AlertList>>,
+        channels: &Arc<Topic<Vec<Channel>>>,
+    ) -> Self {
         let (mut channels_events, _) = channels.clone().subscribe_unbounded();
         let alerts = alerts.clone();
         let selection = Topic::anonymous(Some(Selection::new()));
         let selection_task = selection.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-update-available-activator", async move {
             while let Some(channels) = channels_events.next().await {
                 selection_task.modify(|sel| sel.unwrap().update_channels(channels));
 
@@ -155,6 +159,8 @@ impl UpdateAvailableScreen {
                     alerts.deassert(SCREEN_TYPE);
                 }
             }
+
+            Ok(())
         });
 
         Self { selection }

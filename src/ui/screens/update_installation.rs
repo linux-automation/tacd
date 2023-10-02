@@ -17,7 +17,6 @@
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::prelude::*;
 
@@ -28,6 +27,7 @@ use super::{
 };
 use crate::broker::Topic;
 use crate::dbus::rauc::Progress;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UpdateInstallation;
 const REBOOT_MESSAGE: &str = "There is a newer
@@ -46,6 +46,7 @@ struct Active {
 
 impl UpdateInstallationScreen {
     pub fn new(
+        wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         operation: &Arc<Topic<String>>,
         reboot_message: &Arc<Topic<Option<String>>>,
@@ -54,24 +55,28 @@ impl UpdateInstallationScreen {
         let (mut operation_events, _) = operation.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-update-activator", async move {
             while let Some(ev) = operation_events.next().await {
                 match ev.as_str() {
                     "installing" => alerts.assert(SCREEN_TYPE),
                     _ => alerts.deassert(SCREEN_TYPE),
                 };
             }
+
+            Ok(())
         });
 
         let (mut should_reboot_events, _) = should_reboot.clone().subscribe_unbounded();
         let reboot_message = reboot_message.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-update-should-reboot", async move {
             while let Some(should_reboot) = should_reboot_events.next().await {
                 if should_reboot {
                     reboot_message.set(Some(REBOOT_MESSAGE.to_string()))
                 }
             }
+
+            Ok(())
         });
 
         Self

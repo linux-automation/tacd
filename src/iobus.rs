@@ -18,12 +18,13 @@
 use std::time::Duration;
 
 use async_std::sync::Arc;
-use async_std::task::{sleep, spawn};
+use async_std::task::sleep;
 
 use serde::{Deserialize, Serialize};
 
 use crate::adc::CalibratedChannel;
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const CURRENT_MAX: f32 = 0.2;
 const VOLTAGE_MIN: f32 = 10.0;
@@ -109,6 +110,7 @@ pub struct IoBus {
 impl IoBus {
     pub fn new(
         bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
         iobus_pwr_en: Arc<Topic<bool>>,
         iobus_curr: CalibratedChannel,
         iobus_volt: CalibratedChannel,
@@ -121,7 +123,7 @@ impl IoBus {
         let server_info_task = server_info.clone();
         let nodes_task = nodes.clone();
 
-        spawn(async move {
+        wtb.spawn_task("iobus-update", async move {
             loop {
                 if let Ok(si) = http::get("http://127.0.0.1:8080/server-info/")
                     .recv_json::<ServerInfo>()

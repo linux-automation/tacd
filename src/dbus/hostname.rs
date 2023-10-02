@@ -21,8 +21,10 @@ use async_std::stream::StreamExt;
 #[cfg(not(feature = "demo_mode"))]
 use zbus::Connection;
 
-use crate::broker::{BrokerBuilder, Topic};
 use async_std::sync::Arc;
+
+use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 mod hostnamed;
 
@@ -32,19 +34,24 @@ pub struct Hostname {
 
 impl Hostname {
     #[cfg(feature = "demo_mode")]
-    pub fn new<C>(bb: &mut BrokerBuilder, _conn: C) -> Self {
+    pub fn new<C>(bb: &mut BrokerBuilder, _wtb: &mut WatchedTasksBuilder, _conn: C) -> Self {
         Self {
             hostname: bb.topic_ro("/v1/tac/network/hostname", Some("lxatac".into())),
         }
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    pub fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
+    pub fn new(
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+        conn: &Arc<Connection>,
+    ) -> Self {
         let hostname = bb.topic_ro("/v1/tac/network/hostname", None);
 
         let conn = conn.clone();
         let hostname_topic = hostname.clone();
-        async_std::task::spawn(async move {
+
+        wtb.spawn_task("hostname-update", async move {
             let proxy = hostnamed::HostnameProxy::new(&conn).await.unwrap();
 
             let mut stream = proxy.receive_hostname_changed().await;
@@ -58,6 +65,8 @@ impl Hostname {
                     hostname_topic.set(h);
                 }
             }
+
+            Ok(())
         });
 
         Self { hostname }

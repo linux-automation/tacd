@@ -19,6 +19,7 @@ use async_std::sync::Arc;
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod zb {
@@ -78,6 +79,7 @@ pub struct DbusSession {
 impl DbusSession {
     pub async fn new(
         bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
         led_dut: Arc<Topic<BlinkPattern>>,
         led_uplink: Arc<Topic<BlinkPattern>>,
     ) -> Self {
@@ -91,10 +93,10 @@ impl DbusSession {
         let conn = Arc::new(tacd.serve(conn_builder).build().await.unwrap());
 
         Self {
-            hostname: Hostname::new(bb, &conn),
-            network: Network::new(bb, &conn, led_dut, led_uplink),
-            rauc: Rauc::new(bb, &conn),
-            systemd: Systemd::new(bb, &conn).await,
+            hostname: Hostname::new(bb, wtb, &conn),
+            network: Network::new(bb, wtb, &conn, led_dut, led_uplink),
+            rauc: Rauc::new(bb, wtb, &conn),
+            systemd: Systemd::new(bb, wtb, &conn).await,
         }
     }
 }

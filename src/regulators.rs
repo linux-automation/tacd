@@ -17,9 +17,9 @@
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod reg {
@@ -71,6 +71,7 @@ pub struct Regulators {
 
 fn handle_regulator(
     bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
     path: &str,
     regulator_name: &'static str,
     initial: bool,
@@ -78,20 +79,22 @@ fn handle_regulator(
     let topic = bb.topic_rw(path, Some(initial));
     let (mut src, _) = topic.clone().subscribe_unbounded();
 
-    spawn(async move {
+    wtb.spawn_task(format!("regulator-{regulator_name}-action"), async move {
         while let Some(ev) = src.next().await {
             regulator_set(regulator_name, ev).unwrap();
         }
+
+        Ok(())
     });
 
     topic
 }
 
 impl Regulators {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
+    pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Self {
         Self {
-            iobus_pwr_en: handle_regulator(bb, "/v1/iobus/powered", "output-iobus-12v", true),
-            uart_pwr_en: handle_regulator(bb, "/v1/uart/powered", "output-vuart", true),
+            iobus_pwr_en: handle_regulator(bb, wtb, "/v1/iobus/powered", "output-iobus-12v", true),
+            uart_pwr_en: handle_regulator(bb, wtb, "/v1/uart/powered", "output-vuart", true),
         }
     }
 }

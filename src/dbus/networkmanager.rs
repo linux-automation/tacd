@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 // Macro use makes these modules quite heavy, so we keep them commented
 // out until they are actually used
@@ -244,6 +245,7 @@ impl Network {
     #[cfg(feature = "demo_mode")]
     pub fn new<C>(
         bb: &mut BrokerBuilder,
+        _wtb: &mut WatchedTasksBuilder,
         _conn: C,
         _led_dut: Arc<Topic<BlinkPattern>>,
         _led_uplink: Arc<Topic<BlinkPattern>>,
@@ -266,6 +268,7 @@ impl Network {
     #[cfg(not(feature = "demo_mode"))]
     pub fn new(
         bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
         led_dut: Arc<Topic<BlinkPattern>>,
         led_uplink: Arc<Topic<BlinkPattern>>,
@@ -274,26 +277,20 @@ impl Network {
 
         let conn_task = conn.clone();
         let dut_interface = this.dut_interface.clone();
-        async_std::task::spawn(async move {
-            handle_link_updates(&conn_task, dut_interface, "dut", led_dut)
-                .await
-                .unwrap();
+        wtb.spawn_task("link-dut-update", async move {
+            handle_link_updates(&conn_task, dut_interface, "dut", led_dut).await
         });
 
         let conn_task = conn.clone();
         let uplink_interface = this.uplink_interface.clone();
-        async_std::task::spawn(async move {
-            handle_link_updates(&conn_task, uplink_interface, "uplink", led_uplink)
-                .await
-                .unwrap();
+        wtb.spawn_task("link-uplink-update", async move {
+            handle_link_updates(&conn_task, uplink_interface, "uplink", led_uplink).await
         });
 
         let conn_task = conn.clone();
         let bridge_interface = this.bridge_interface.clone();
-        async_std::task::spawn(async move {
-            handle_ipv4_updates(&conn_task, bridge_interface, "tac-bridge")
-                .await
-                .unwrap();
+        wtb.spawn_task("ip-tac-bridge-update", async move {
+            handle_ipv4_updates(&conn_task, bridge_interface, "tac-bridge").await
         });
 
         this

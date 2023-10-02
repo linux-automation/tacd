@@ -30,6 +30,7 @@ use crate::adc::AdcChannel;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::digital_io::{find_line, LineHandle, LineRequestFlags};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(any(test, feature = "demo_mode"))]
 mod prio {
@@ -249,6 +250,7 @@ fn turn_off_with_reason(
 /// main interface used by e.g. the web UI pretty.
 fn setup_labgrid_compat(
     bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
     request: Arc<Topic<OutputRequest>>,
     state: Arc<Topic<OutputState>>,
 ) {
@@ -258,7 +260,7 @@ fn setup_labgrid_compat(
     let (mut state_stream, _) = state.subscribe_unbounded();
     let (mut compat_request_stream, _) = compat_request.subscribe_unbounded();
 
-    task::spawn(async move {
+    wtb.spawn_task("power-compat-from-labgrid", async move {
         while let Some(req) = compat_request_stream.next().await {
             match req {
                 0 => request.set(OutputRequest::Off),
@@ -266,9 +268,11 @@ fn setup_labgrid_compat(
                 _ => {}
             }
         }
+
+        Ok(())
     });
 
-    task::spawn(async move {
+    wtb.spawn_task("power-compat-to-labgrid", async move {
         while let Some(state) = state_stream.next().await {
             match state {
                 OutputState::On => compat_response.set(1),
@@ -276,12 +280,15 @@ fn setup_labgrid_compat(
                 _ => compat_response.set(0),
             }
         }
+
+        Ok(())
     });
 }
 
 impl DutPwrThread {
     pub async fn new(
         bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
         pwr_volt: AdcChannel,
         pwr_curr: AdcChannel,
         pwr_led: Arc<Topic<BlinkPattern>>,
@@ -487,23 +494,25 @@ impl DutPwrThread {
         let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/powered", None);
         let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", None);
 
-        setup_labgrid_compat(bb, request_topic.clone(), state_topic.clone());
+        setup_labgrid_compat(bb, wtb, request_topic.clone(), state_topic.clone());
 
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
         let state_topic_task = state_topic.clone();
         let (mut request_stream, _) = request_topic.clone().subscribe_unbounded();
-        task::spawn(async move {
+        wtb.spawn_task("power-from-broker", async move {
             while let Some(req) = request_stream.next().await {
                 state_topic_task.set(OutputState::Changing);
                 request.store(req as u8, Ordering::Relaxed);
             }
+
+            Ok(())
         });
 
         // State information comes from the thread in the form of an atomic
         // variable and is forwarded to the broker framework.
         let state_topic_task = state_topic.clone();
-        task::spawn(async move {
+        wtb.spawn_task("power-to-broker", async move {
             loop {
                 task::sleep(TASK_INTERVAL).await;
 
@@ -514,7 +523,7 @@ impl DutPwrThread {
 
         // Forward the state information to the DUT Power LED
         let (mut state_stream, _) = state_topic.clone().subscribe_unbounded();
-        task::spawn(async move {
+        wtb.spawn_task("power-to-led", async move {
             let pattern_on = BlinkPattern::solid(1.0);
             let pattern_off = BlinkPattern::solid(0.0);
             let pattern_error = {
@@ -541,6 +550,8 @@ impl DutPwrThread {
                     _ => pwr_led.set(pattern_error.clone()),
                 }
             }
+
+            Ok(())
         });
 
         Ok(Self {
@@ -564,6 +575,7 @@ mod tests {
     use crate::adc::Adc;
     use crate::broker::{BrokerBuilder, Topic};
     use crate::digital_io::find_line;
+    use crate::watched_tasks::WatchedTasksBuilder;
 
     use super::{
         DutPwrThread, OutputRequest, OutputState, DISCHARGE_LINE_ASSERTED, MAX_CURRENT,
@@ -572,16 +584,18 @@ mod tests {
 
     #[test]
     fn failsafe() {
+        let mut wtb = WatchedTasksBuilder::new();
         let pwr_line = find_line("DUT_PWR_EN").unwrap();
         let discharge_line = find_line("DUT_PWR_DISCH").unwrap();
 
         let (adc, dut_pwr, led) = {
             let mut bb = BrokerBuilder::new();
-            let adc = block_on(Adc::new(&mut bb)).unwrap();
+            let adc = block_on(Adc::new(&mut bb, &mut wtb)).unwrap();
             let led = Topic::anonymous(None);
 
             let dut_pwr = block_on(DutPwrThread::new(
                 &mut bb,
+                &mut wtb,
                 adc.pwr_volt.clone(),
                 adc.pwr_curr.clone(),
                 led.clone(),

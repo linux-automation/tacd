@@ -17,14 +17,15 @@
 
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use futures::{select, FutureExt};
 use tide::{Response, Server};
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 mod alerts;
 mod buttons;
@@ -123,7 +124,11 @@ pub fn serve_display(server: &mut Server<()>, screenshooter: ScreenShooter) {
 }
 
 impl Ui {
-    pub fn new(bb: &mut BrokerBuilder, res: UiResources) -> Self {
+    pub fn new(
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+        res: UiResources,
+    ) -> Result<Self> {
         let screen = bb.topic_rw("/v1/tac/display/screen", Some(NormalScreen::first()));
         let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
         let buttons = bb.topic("/v1/tac/display/buttons", true, true, false, None, 0);
@@ -133,7 +138,7 @@ impl Ui {
         alerts.assert(AlertScreen::ScreenSaver);
 
         // Initialize all the screens now so they can be activated later
-        let screens = screens::init(&res, &alerts, &buttons, &reboot_message, &locator);
+        let screens = screens::init(wtb, &res, &alerts, &buttons, &reboot_message, &locator);
 
         handle_buttons(
             "/dev/input/by-path/platform-gpio-keys-event",
@@ -144,7 +149,7 @@ impl Ui {
         let led_status_pattern = res.led.status.clone();
         let led_status_color = res.led.status_color.clone();
         let (mut locator_stream, _) = locator.clone().subscribe_unbounded();
-        spawn(async move {
+        wtb.spawn_task("locator-led-updater", async move {
             let pattern_locator_on = BlinkPatternBuilder::new(0.0)
                 .fade_to(1.0, Duration::from_millis(100))
                 .stay_for(Duration::from_millis(300))
@@ -165,9 +170,11 @@ impl Ui {
                     led_status_pattern.set(pattern_locator_off.clone());
                 }
             }
+
+            Ok(())
         });
 
-        Self {
+        Ok(Self {
             screen,
             alerts,
             locator,
@@ -175,10 +182,10 @@ impl Ui {
             screens,
             reboot_message,
             res,
-        }
+        })
     }
 
-    pub async fn run(mut self, display: Display) -> Result<(), std::io::Error> {
+    pub async fn render_loop(mut self, display: Display) -> Result<(), std::io::Error> {
         let (mut screen_rx, _) = self.screen.clone().subscribe_unbounded();
         let (mut alerts_rx, _) = self.alerts.clone().subscribe_unbounded();
         let (mut button_events, _) = self.buttons.clone().subscribe_unbounded();
@@ -281,5 +288,13 @@ impl Ui {
         }
 
         Ok(())
+    }
+
+    pub fn run(self, wtb: &mut WatchedTasksBuilder, display: Display) {
+        wtb.spawn_task("screen-render-loop", async move {
+            self.render_loop(display).await?;
+
+            Ok(())
+        });
     }
 }

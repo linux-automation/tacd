@@ -18,7 +18,6 @@
 use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use log::warn;
 
 mod demo_mode;
@@ -30,13 +29,14 @@ use demo_mode::{Backlight as SysBacklight, Brightness, SysClass};
 use sysfs_class::{Backlight as SysBacklight, Brightness, SysClass};
 
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 pub struct Backlight {
     pub brightness: Arc<Topic<f32>>,
 }
 
 impl Backlight {
-    pub fn new(bb: &mut BrokerBuilder) -> Result<Self> {
+    pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
         let brightness = bb.topic_rw("/v1/tac/display/backlight/brightness", Some(1.0));
 
         let (mut rx, _) = brightness.clone().subscribe_unbounded();
@@ -44,7 +44,7 @@ impl Backlight {
         let backlight = SysBacklight::new("backlight")?;
         let max_brightness = backlight.max_brightness()?;
 
-        spawn(async move {
+        wtb.spawn_task("backlight-dimmer", async move {
             while let Some(fraction) = rx.next().await {
                 let brightness = (max_brightness as f32) * fraction;
                 let mut brightness = brightness.clamp(0.0, max_brightness as f32) as u64;
@@ -60,6 +60,8 @@ impl Backlight {
                     warn!("Failed to set LED pattern: {}", e);
                 }
             }
+
+            Ok(())
         });
 
         Ok(Self { brightness })

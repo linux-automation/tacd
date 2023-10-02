@@ -17,7 +17,6 @@
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::prelude::Point;
 
@@ -27,6 +26,7 @@ use super::{
     ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, InputEvent, Screen, Ui,
 };
 use crate::broker::Topic;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::Help;
 const PAGES: &[&str] = &[
@@ -65,11 +65,15 @@ struct Active {
 }
 
 impl HelpScreen {
-    pub fn new(alerts: &Arc<Topic<AlertList>>, show_help: &Arc<Topic<bool>>) -> Self {
+    pub fn new(
+        wtb: &mut WatchedTasksBuilder,
+        alerts: &Arc<Topic<AlertList>>,
+        show_help: &Arc<Topic<bool>>,
+    ) -> Self {
         let (mut show_help_events, _) = show_help.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-help-activator", async move {
             while let Some(show_help) = show_help_events.next().await {
                 if show_help {
                     alerts.assert(AlertScreen::Help);
@@ -77,6 +81,8 @@ impl HelpScreen {
                     alerts.deassert(AlertScreen::Help);
                 }
             }
+
+            Ok(())
         });
 
         Self

@@ -28,6 +28,7 @@ use super::{
     Ui,
 };
 use crate::broker::{Native, SubscriptionHandle, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::Setup;
 
@@ -48,11 +49,15 @@ struct Active {
 }
 
 impl SetupScreen {
-    pub fn new(alerts: &Arc<Topic<AlertList>>, setup_mode: &Arc<Topic<bool>>) -> Self {
+    pub fn new(
+        wtb: &mut WatchedTasksBuilder,
+        alerts: &Arc<Topic<AlertList>>,
+        setup_mode: &Arc<Topic<bool>>,
+    ) -> Self {
         let (mut setup_mode_events, _) = setup_mode.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-setup-avtivator", async move {
             while let Some(setup_mode) = setup_mode_events.next().await {
                 if setup_mode {
                     alerts.assert(AlertScreen::Setup);
@@ -60,6 +65,8 @@ impl SetupScreen {
                     alerts.deassert(AlertScreen::Setup);
                 }
             }
+
+            Ok(())
         });
 
         Self

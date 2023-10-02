@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle,
@@ -35,6 +34,7 @@ use super::{
     Ui,
 };
 use crate::broker::Topic;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::Locator;
 
@@ -46,11 +46,15 @@ struct Active {
 }
 
 impl LocatorScreen {
-    pub fn new(alerts: &Arc<Topic<AlertList>>, locator: &Arc<Topic<bool>>) -> Self {
+    pub fn new(
+        wtb: &mut WatchedTasksBuilder,
+        alerts: &Arc<Topic<AlertList>>,
+        locator: &Arc<Topic<bool>>,
+    ) -> Self {
         let (mut locator_events, _) = locator.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-locator-activator", async move {
             while let Some(locator) = locator_events.next().await {
                 if locator {
                     alerts.assert(SCREEN_TYPE);
@@ -58,6 +62,8 @@ impl LocatorScreen {
                     alerts.deassert(SCREEN_TYPE);
                 }
             }
+
+            Ok(())
         });
 
         Self

@@ -19,6 +19,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use anyhow::Result;
 use async_std::channel::Receiver;
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
@@ -28,6 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Connection;
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 mod update_channels;
 pub use update_channels::Channel;
@@ -65,7 +67,7 @@ mod imports {
 
 #[cfg(not(feature = "demo_mode"))]
 mod imports {
-    pub(super) use anyhow::{bail, Result};
+    pub(super) use anyhow::bail;
     pub(super) use log::error;
 
     pub(super) const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
@@ -233,7 +235,7 @@ async fn channel_list_update_task(
     enable_polling: Arc<Topic<bool>>,
     channels: Arc<Topic<Vec<Channel>>>,
     slot_status: Arc<Topic<Arc<SlotStatus>>>,
-) {
+) -> Result<()> {
     let mut previous: Option<Instant> = None;
     let mut polling_tasks: Vec<JoinHandle<_>> = Vec::new();
 
@@ -284,6 +286,8 @@ async fn channel_list_update_task(
 
         previous = Some(Instant::now());
     }
+
+    Ok(())
 }
 
 impl Rauc {
@@ -310,7 +314,11 @@ impl Rauc {
     }
 
     #[cfg(feature = "demo_mode")]
-    pub fn new(bb: &mut BrokerBuilder, _conn: &Arc<Connection>) -> Self {
+    pub fn new(
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+        _conn: &Arc<Connection>,
+    ) -> Self {
         let inst = Self::setup_topics(bb);
 
         inst.operation.set("idle".to_string());
@@ -319,19 +327,26 @@ impl Rauc {
 
         // Reload the channel list on request
         let (reload_stream, _) = inst.reload.clone().subscribe_unbounded();
-        spawn(channel_list_update_task(
-            Arc::new(Connection),
-            reload_stream,
-            inst.enable_polling.clone(),
-            inst.channels.clone(),
-            inst.slot_status.clone(),
-        ));
+        wtb.spawn_task(
+            "rauc-channel-list-update",
+            channel_list_update_task(
+                Arc::new(Connection),
+                reload_stream,
+                inst.enable_polling.clone(),
+                inst.channels.clone(),
+                inst.slot_status.clone(),
+            ),
+        );
 
         inst
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    pub fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
+    pub fn new(
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+        conn: &Arc<Connection>,
+    ) -> Self {
         let inst = Self::setup_topics(bb);
 
         let conn_task = conn.clone();
@@ -341,7 +356,7 @@ impl Rauc {
         let channels = inst.channels.clone();
         let should_reboot = inst.should_reboot.clone();
 
-        spawn(async move {
+        wtb.spawn_task("rauc-slot-status-update", async move {
             let proxy = InstallerProxy::new(&conn_task).await.unwrap();
 
             let mut stream = proxy.receive_operation_changed().await;
@@ -437,7 +452,7 @@ impl Rauc {
                         operation.set(v);
                     }
                 } else {
-                    break;
+                    break Ok(());
                 }
             }
         });
@@ -446,7 +461,7 @@ impl Rauc {
         let progress = inst.progress.clone();
 
         // Forward the "progress" property to the broker framework
-        spawn(async move {
+        wtb.spawn_task("rauc-progress-update", async move {
             let proxy = InstallerProxy::new(&conn_task).await.unwrap();
 
             let mut stream = proxy.receive_progress_changed().await;
@@ -460,13 +475,15 @@ impl Rauc {
                     progress.set(p.into());
                 }
             }
+
+            Ok(())
         });
 
         let conn_task = conn.clone();
         let last_error = inst.last_error.clone();
 
         // Forward the "last_error" property to the broker framework
-        spawn(async move {
+        wtb.spawn_task("rauc-forward-error", async move {
             let proxy = InstallerProxy::new(&conn_task).await.unwrap();
 
             let mut stream = proxy.receive_last_error_changed().await;
@@ -480,13 +497,15 @@ impl Rauc {
                     last_error.set(e);
                 }
             }
+
+            Ok(())
         });
 
         let conn_task = conn.clone();
         let (mut install_stream, _) = inst.install.clone().subscribe_unbounded();
 
         // Forward the "install" topic from the broker framework to RAUC
-        spawn(async move {
+        wtb.spawn_task("rauc-forward-install", async move {
             let proxy = InstallerProxy::new(&conn_task).await.unwrap();
 
             while let Some(url) = install_stream.next().await {
@@ -498,17 +517,22 @@ impl Rauc {
                     }
                 }
             }
+
+            Ok(())
         });
 
         // Reload the channel list on request
         let (reload_stream, _) = inst.reload.clone().subscribe_unbounded();
-        spawn(channel_list_update_task(
-            conn.clone(),
-            reload_stream,
-            inst.enable_polling.clone(),
-            inst.channels.clone(),
-            inst.slot_status.clone(),
-        ));
+        wtb.spawn_task(
+            "rauc-channel-list-update",
+            channel_list_update_task(
+                conn.clone(),
+                reload_stream,
+                inst.enable_polling.clone(),
+                inst.channels.clone(),
+                inst.slot_status.clone(),
+            ),
+        );
 
         inst
     }
