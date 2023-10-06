@@ -157,17 +157,16 @@ impl WatchedTasksBuilder {
     /// Future will return the Result of said task.
     /// The WatchedTasks Future should be .awaited at the end of main() so
     /// that the program ends if any of the watched tasks ends.
-    pub fn spawn_task<S, F>(&mut self, name: S, future: F)
+    pub fn spawn_task<S, F>(&mut self, name: S, future: F) -> Result<()>
     where
         S: Into<String>,
         F: Future<Output = TaskResult> + Send + 'static,
     {
-        let task = task::Builder::new()
-            .name(name.into())
-            .spawn(future)
-            .expect("cannot spawn task");
+        let task = task::Builder::new().name(name.into()).spawn(future)?;
 
         self.tasks.push(task);
+
+        Ok(())
     }
 
     /// Spawn a thread that runs until the end of the program
@@ -271,7 +270,8 @@ mod tests {
                     let res = rx.recv().await?;
                     println!("Bye from task {i}!");
                     res
-                });
+                })
+                .unwrap();
 
                 tx
             })

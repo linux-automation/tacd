@@ -62,7 +62,7 @@ impl Backlight {
             }
 
             Ok(())
-        });
+        })?;
 
         Ok(Self { brightness })
     }

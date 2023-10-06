@@ -18,6 +18,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use anyhow::{anyhow, Result};
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::sleep;
@@ -203,7 +204,7 @@ fn handle_port(
     wtb: &mut WatchedTasksBuilder,
     name: &'static str,
     base: &'static str,
-) -> UsbPort {
+) -> Result<UsbPort> {
     let port = UsbPort {
         request: bb.topic_wo(format!("/v1/usb/host/{name}/powered").as_str(), None),
         status: bb.topic_ro(format!("/v1/usb/host/{name}/powered").as_str(), None),
@@ -232,7 +233,7 @@ fn handle_port(
         }
 
         Ok(())
-    });
+    })?;
 
     let status = port.status.clone();
     let device = port.device.clone();
@@ -280,9 +281,9 @@ fn handle_port(
 
             sleep(POLL_INTERVAL).await;
         }
-    });
+    })?;
 
-    port
+    Ok(port)
 }
 
 fn handle_overloads(
@@ -292,7 +293,7 @@ fn handle_overloads(
     port1: CalibratedChannel,
     port2: CalibratedChannel,
     port3: CalibratedChannel,
-) -> Arc<Topic<Option<OverloadedPort>>> {
+) -> Result<Arc<Topic<Option<OverloadedPort>>>> {
     let overload = bb.topic_ro("/v1/usb/host/overload", None);
 
     let overload_task = overload.clone();
@@ -310,9 +311,9 @@ fn handle_overloads(
 
             sleep(POLL_INTERVAL).await;
         }
-    });
+    })?;
 
-    overload
+    Ok(overload)
 }
 
 impl UsbHub {
@@ -323,18 +324,24 @@ impl UsbHub {
         port1: CalibratedChannel,
         port2: CalibratedChannel,
         port3: CalibratedChannel,
-    ) -> Self {
-        let overload = handle_overloads(bb, wtb, total, port1, port2, port3);
+    ) -> Result<Self> {
+        let overload = handle_overloads(bb, wtb, total, port1, port2, port3)?;
 
         let mut ports = PORTS
             .iter()
             .map(|(name, base)| handle_port(bb, wtb, name, base));
 
-        Self {
+        Ok(Self {
             overload,
-            port1: ports.next().unwrap(),
-            port2: ports.next().unwrap(),
-            port3: ports.next().unwrap(),
-        }
+            port1: ports
+                .next()
+                .ok_or_else(|| anyhow!("Failed to find USB port 1"))??,
+            port2: ports
+                .next()
+                .ok_or_else(|| anyhow!("Failed to find USB port 2"))??,
+            port3: ports
+                .next()
+                .ok_or_else(|| anyhow!("Failed to find USB port 3"))??,
+        })
     }
 }

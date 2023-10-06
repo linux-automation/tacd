@@ -70,7 +70,7 @@ async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
 
     // Expose hardware on the TAC via the broker framework.
     let backlight = Backlight::new(&mut bb, &mut wtb)?;
-    let led = Led::new(&mut bb, &mut wtb);
+    let led = Led::new(&mut bb, &mut wtb)?;
     let adc = Adc::new(&mut bb, &mut wtb).await?;
     let dut_pwr = DutPwrThread::new(
         &mut bb,
@@ -80,8 +80,8 @@ async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
         led.dut_pwr.clone(),
     )
     .await?;
-    let dig_io = DigitalIo::new(&mut bb, &mut wtb, led.out_0.clone(), led.out_1.clone());
-    let regulators = Regulators::new(&mut bb, &mut wtb);
+    let dig_io = DigitalIo::new(&mut bb, &mut wtb, led.out_0.clone(), led.out_1.clone())?;
+    let regulators = Regulators::new(&mut bb, &mut wtb)?;
     let temperatures = Temperatures::new(&mut bb, &mut wtb)?;
     let usb_hub = UsbHub::new(
         &mut bb,
@@ -90,7 +90,7 @@ async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
         adc.usb_host1_curr.fast.clone(),
         adc.usb_host2_curr.fast.clone(),
         adc.usb_host3_curr.fast.clone(),
-    );
+    )?;
 
     // Expose other software on the TAC via the broker framework by connecting
     // to them via HTTP / DBus APIs.
@@ -100,10 +100,10 @@ async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
         regulators.iobus_pwr_en.clone(),
         adc.iobus_curr.fast.clone(),
         adc.iobus_volt.fast.clone(),
-    );
+    )?;
     let (hostname, network, rauc, systemd) = {
         let dbus =
-            DbusSession::new(&mut bb, &mut wtb, led.eth_dut.clone(), led.eth_lab.clone()).await;
+            DbusSession::new(&mut bb, &mut wtb, led.eth_dut.clone(), led.eth_lab.clone()).await?;
 
         (dbus.hostname, dbus.network, dbus.rauc, dbus.systemd)
     };
@@ -122,7 +122,7 @@ async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
     let mut http_server = HttpServer::new();
 
     // Allow editing some aspects of the TAC configuration when in "setup mode".
-    let setup_mode = SetupMode::new(&mut bb, &mut wtb, &mut http_server.server);
+    let setup_mode = SetupMode::new(&mut bb, &mut wtb, &mut http_server.server)?;
 
     // Expose a live log of the TAC's systemd journal so it can be viewed
     // in the web interface.
@@ -155,7 +155,7 @@ async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
 
     // Consume the BrokerBuilder (no further topics can be added or removed)
     // and expose the topics via HTTP and MQTT-over-websocket.
-    bb.build(&mut wtb, &mut http_server.server);
+    bb.build(&mut wtb, &mut http_server.server)?;
 
     // If a watchdog was requested by systemd we can now start feeding it
     if let Some(watchdog) = watchdog {
@@ -175,10 +175,10 @@ async fn run(
     ui::serve_display(&mut http_server.server, display.screenshooter());
 
     // Start serving files and the API
-    http_server.serve(&mut wtb);
+    http_server.serve(&mut wtb)?;
 
     // Start drawing the UI
-    ui.run(&mut wtb, display);
+    ui.run(&mut wtb, display)?;
 
     info!("Setup complete. Handling requests");
 

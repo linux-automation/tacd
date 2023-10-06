@@ -318,7 +318,7 @@ impl Rauc {
         bb: &mut BrokerBuilder,
         wtb: &mut WatchedTasksBuilder,
         _conn: &Arc<Connection>,
-    ) -> Self {
+    ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
         inst.operation.set("idle".to_string());
@@ -336,9 +336,9 @@ impl Rauc {
                 inst.channels.clone(),
                 inst.slot_status.clone(),
             ),
-        );
+        )?;
 
-        inst
+        Ok(inst)
     }
 
     #[cfg(not(feature = "demo_mode"))]
@@ -346,7 +346,7 @@ impl Rauc {
         bb: &mut BrokerBuilder,
         wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
-    ) -> Self {
+    ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
         let conn_task = conn.clone();
@@ -455,7 +455,7 @@ impl Rauc {
                     break Ok(());
                 }
             }
-        });
+        })?;
 
         let conn_task = conn.clone();
         let progress = inst.progress.clone();
@@ -477,7 +477,7 @@ impl Rauc {
             }
 
             Ok(())
-        });
+        })?;
 
         let conn_task = conn.clone();
         let last_error = inst.last_error.clone();
@@ -499,7 +499,7 @@ impl Rauc {
             }
 
             Ok(())
-        });
+        })?;
 
         let conn_task = conn.clone();
         let (mut install_stream, _) = inst.install.clone().subscribe_unbounded();
@@ -519,7 +519,7 @@ impl Rauc {
             }
 
             Ok(())
-        });
+        })?;
 
         // Reload the channel list on request
         let (reload_stream, _) = inst.reload.clone().subscribe_unbounded();
@@ -532,9 +532,9 @@ impl Rauc {
                 inst.channels.clone(),
                 inst.slot_status.clone(),
             ),
-        );
+        )?;
 
-        inst
+        Ok(inst)
     }
 }
 

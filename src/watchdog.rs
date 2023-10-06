@@ -89,7 +89,7 @@ impl Watchdog {
 
                 notify(false, [(STATE_WATCHDOG, "1")].iter())?;
             }
-        });
+        })?;
 
         Ok(())
     }

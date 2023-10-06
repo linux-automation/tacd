@@ -19,6 +19,7 @@ use std::fs::{create_dir_all, read, write};
 use std::io::ErrorKind;
 use std::path::Path;
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use tide::{http::mime, Request, Response, Server};
@@ -106,7 +107,11 @@ impl SetupMode {
         });
     }
 
-    fn handle_leave_requests(&self, bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) {
+    fn handle_leave_requests(
+        &self,
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+    ) -> Result<()> {
         // Use the "register a read-only and a write-only topic with the same name
         // to perform validation" trick that is also used with the DUT power endpoint.
         // We must make sure that a client from the web can only ever trigger _leaving_
@@ -125,14 +130,14 @@ impl SetupMode {
             }
 
             Ok(())
-        });
+        })
     }
 
     pub fn new(
         bb: &mut BrokerBuilder,
         wtb: &mut WatchedTasksBuilder,
         server: &mut Server<()>,
-    ) -> Self {
+    ) -> Result<Self> {
         let this = Self {
             setup_mode: bb.topic("/v1/tac/setup_mode", true, false, true, Some(true), 1),
             show_help: bb.topic(
@@ -145,9 +150,9 @@ impl SetupMode {
             ),
         };
 
-        this.handle_leave_requests(bb, wtb);
+        this.handle_leave_requests(bb, wtb)?;
         this.expose_file_conditionally(server, AUTHORIZED_KEYS_PATH, "/v1/tac/ssh/authorized_keys");
 
-        this
+        Ok(this)
     }
 }

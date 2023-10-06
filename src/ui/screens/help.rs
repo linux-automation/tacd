@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -69,7 +70,7 @@ impl HelpScreen {
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         show_help: &Arc<Topic<bool>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut show_help_events, _) = show_help.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
@@ -83,9 +84,9 @@ impl HelpScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self
+        Ok(Self)
     }
 }
 

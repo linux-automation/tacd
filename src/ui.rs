@@ -138,7 +138,7 @@ impl Ui {
         alerts.assert(AlertScreen::ScreenSaver);
 
         // Initialize all the screens now so they can be activated later
-        let screens = screens::init(wtb, &res, &alerts, &buttons, &reboot_message, &locator);
+        let screens = screens::init(wtb, &res, &alerts, &buttons, &reboot_message, &locator)?;
 
         handle_buttons(
             wtb,
@@ -173,7 +173,7 @@ impl Ui {
             }
 
             Ok(())
-        });
+        })?;
 
         Ok(Self {
             screen,
@@ -291,11 +291,11 @@ impl Ui {
         Ok(())
     }
 
-    pub fn run(self, wtb: &mut WatchedTasksBuilder, display: Display) {
+    pub fn run(self, wtb: &mut WatchedTasksBuilder, display: Display) -> Result<()> {
         wtb.spawn_task("screen-render-loop", async move {
             self.render_loop(display).await?;
 
             Ok(())
-        });
+        })
     }
 }

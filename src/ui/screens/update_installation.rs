@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -51,7 +52,7 @@ impl UpdateInstallationScreen {
         operation: &Arc<Topic<String>>,
         reboot_message: &Arc<Topic<Option<String>>>,
         should_reboot: &Arc<Topic<bool>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut operation_events, _) = operation.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
@@ -64,7 +65,7 @@ impl UpdateInstallationScreen {
             }
 
             Ok(())
-        });
+        })?;
 
         let (mut should_reboot_events, _) = should_reboot.clone().subscribe_unbounded();
         let reboot_message = reboot_message.clone();
@@ -77,9 +78,9 @@ impl UpdateInstallationScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self
+        Ok(Self)
     }
 }
 

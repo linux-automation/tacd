@@ -17,6 +17,7 @@
 
 use std::time::Instant;
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -50,7 +51,7 @@ impl LocatorScreen {
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         locator: &Arc<Topic<bool>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut locator_events, _) = locator.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
@@ -64,9 +65,9 @@ impl LocatorScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self
+        Ok(Self)
     }
 }
 

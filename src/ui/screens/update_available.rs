@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -143,7 +144,7 @@ impl UpdateAvailableScreen {
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         channels: &Arc<Topic<Vec<Channel>>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut channels_events, _) = channels.clone().subscribe_unbounded();
         let alerts = alerts.clone();
         let selection = Topic::anonymous(Some(Selection::new()));
@@ -161,9 +162,9 @@ impl UpdateAvailableScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self { selection }
+        Ok(Self { selection })
     }
 }
 

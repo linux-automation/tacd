@@ -227,7 +227,7 @@ impl Adc {
 
                 time.set(Timestamp::now());
             }
-        });
+        })?;
 
         Ok(adc)
     }

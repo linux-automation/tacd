@@ -23,7 +23,7 @@ use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod zb {
-    pub(super) type Result<T> = std::result::Result<T, ()>;
+    pub(super) use anyhow::Result;
 
     pub struct Connection;
     pub struct ConnectionBuilder;
@@ -82,21 +82,18 @@ impl DbusSession {
         wtb: &mut WatchedTasksBuilder,
         led_dut: Arc<Topic<BlinkPattern>>,
         led_uplink: Arc<Topic<BlinkPattern>>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let tacd = Tacd::new();
 
-        let conn_builder = ConnectionBuilder::system()
-            .unwrap()
-            .name("de.pengutronix.tacd")
-            .unwrap();
+        let conn_builder = ConnectionBuilder::system()?.name("de.pengutronix.tacd")?;
 
-        let conn = Arc::new(tacd.serve(conn_builder).build().await.unwrap());
+        let conn = Arc::new(tacd.serve(conn_builder).build().await?);
 
-        Self {
-            hostname: Hostname::new(bb, wtb, &conn),
-            network: Network::new(bb, wtb, &conn, led_dut, led_uplink),
-            rauc: Rauc::new(bb, wtb, &conn),
-            systemd: Systemd::new(bb, wtb, &conn).await,
-        }
+        Ok(Self {
+            hostname: Hostname::new(bb, wtb, &conn)?,
+            network: Network::new(bb, wtb, &conn, led_dut, led_uplink)?,
+            rauc: Rauc::new(bb, wtb, &conn)?,
+            systemd: Systemd::new(bb, wtb, &conn).await?,
+        })
     }
 }

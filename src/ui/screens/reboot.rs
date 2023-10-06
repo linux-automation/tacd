@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -44,7 +45,7 @@ impl RebootConfirmScreen {
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         reboot_message: &Arc<Topic<Option<String>>>,
-    ) -> Self {
+    ) -> Result<Self> {
         // Receive questions like Some("Do you want to reboot?") and activate this screen
         let (mut reboot_message_events, _) = reboot_message.clone().subscribe_unbounded();
         let reboot_message = reboot_message.clone();
@@ -60,9 +61,9 @@ impl RebootConfirmScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self { reboot_message }
+        Ok(Self { reboot_message })
     }
 }
 

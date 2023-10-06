@@ -253,7 +253,7 @@ fn setup_labgrid_compat(
     wtb: &mut WatchedTasksBuilder,
     request: Arc<Topic<OutputRequest>>,
     state: Arc<Topic<OutputState>>,
-) {
+) -> Result<()> {
     let compat_request = bb.topic_wo::<u8>("/v1/dut/powered/compat", None);
     let compat_response = bb.topic_ro::<u8>("/v1/dut/powered/compat", None);
 
@@ -270,7 +270,7 @@ fn setup_labgrid_compat(
         }
 
         Ok(())
-    });
+    })?;
 
     wtb.spawn_task("power-compat-to-labgrid", async move {
         while let Some(state) = state_stream.next().await {
@@ -282,7 +282,9 @@ fn setup_labgrid_compat(
         }
 
         Ok(())
-    });
+    })?;
+
+    Ok(())
 }
 
 impl DutPwrThread {
@@ -494,7 +496,7 @@ impl DutPwrThread {
         let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/powered", None);
         let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", None);
 
-        setup_labgrid_compat(bb, wtb, request_topic.clone(), state_topic.clone());
+        setup_labgrid_compat(bb, wtb, request_topic.clone(), state_topic.clone())?;
 
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
@@ -507,7 +509,7 @@ impl DutPwrThread {
             }
 
             Ok(())
-        });
+        })?;
 
         // State information comes from the thread in the form of an atomic
         // variable and is forwarded to the broker framework.
@@ -519,7 +521,7 @@ impl DutPwrThread {
                 let curr_state = state.load(Ordering::Relaxed).into();
                 state_topic_task.set_if_changed(curr_state);
             }
-        });
+        })?;
 
         // Forward the state information to the DUT Power LED
         let (mut state_stream, _) = state_topic.clone().subscribe_unbounded();
@@ -552,7 +554,7 @@ impl DutPwrThread {
             }
 
             Ok(())
-        });
+        })?;
 
         Ok(Self {
             request: request_topic,

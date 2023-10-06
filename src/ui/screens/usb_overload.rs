@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -49,7 +50,7 @@ impl UsbOverloadScreen {
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         overload: &Arc<Topic<Option<OverloadedPort>>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut overload_events, _) = overload.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
@@ -63,9 +64,9 @@ impl UsbOverloadScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self
+        Ok(Self)
     }
 }
 

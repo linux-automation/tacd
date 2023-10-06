@@ -17,6 +17,7 @@
 
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::sync::Arc;
 use async_std::task::sleep;
 
@@ -114,7 +115,7 @@ impl IoBus {
         iobus_pwr_en: Arc<Topic<bool>>,
         iobus_curr: CalibratedChannel,
         iobus_volt: CalibratedChannel,
-    ) -> Self {
+    ) -> Result<Self> {
         let supply_fault = bb.topic_ro("/v1/iobus/feedback/fault", None);
         let server_info = bb.topic_ro("/v1/iobus/server/info", None);
         let nodes = bb.topic_ro("/v1/iobus/server/nodes", None);
@@ -153,12 +154,12 @@ impl IoBus {
 
                 sleep(Duration::from_secs(1)).await;
             }
-        });
+        })?;
 
-        Self {
+        Ok(Self {
             supply_fault,
             server_info,
             nodes,
-        }
+        })
     }
 }

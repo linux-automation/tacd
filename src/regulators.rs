@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 
@@ -75,7 +76,7 @@ fn handle_regulator(
     path: &str,
     regulator_name: &'static str,
     initial: bool,
-) -> Arc<Topic<bool>> {
+) -> Result<Arc<Topic<bool>>> {
     let topic = bb.topic_rw(path, Some(initial));
     let (mut src, _) = topic.clone().subscribe_unbounded();
 
@@ -85,16 +86,16 @@ fn handle_regulator(
         }
 
         Ok(())
-    });
+    })?;
 
-    topic
+    Ok(topic)
 }
 
 impl Regulators {
-    pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Self {
-        Self {
-            iobus_pwr_en: handle_regulator(bb, wtb, "/v1/iobus/powered", "output-iobus-12v", true),
-            uart_pwr_en: handle_regulator(bb, wtb, "/v1/uart/powered", "output-vuart", true),
-        }
+    pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
+        Ok(Self {
+            iobus_pwr_en: handle_regulator(bb, wtb, "/v1/iobus/powered", "output-iobus-12v", true)?,
+            uart_pwr_en: handle_regulator(bb, wtb, "/v1/uart/powered", "output-vuart", true)?,
+        })
     }
 }

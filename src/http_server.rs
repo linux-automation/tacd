@@ -18,6 +18,7 @@
 use std::fs::write;
 use std::net::TcpListener;
 
+use anyhow::Result;
 use tide::{Body, Response, Server};
 
 use crate::watched_tasks::WatchedTasksBuilder;
@@ -128,10 +129,10 @@ impl HttpServer {
             });
     }
 
-    pub fn serve(self, wtb: &mut WatchedTasksBuilder) {
+    pub fn serve(self, wtb: &mut WatchedTasksBuilder) -> Result<()> {
         wtb.spawn_task("http-server", async move {
             self.server.listen(self.listeners).await?;
             Ok(())
-        });
+        })
     }
 }

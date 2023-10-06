@@ -15,13 +15,14 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
+use async_std::sync::Arc;
+
 #[cfg(not(feature = "demo_mode"))]
 use async_std::stream::StreamExt;
 
 #[cfg(not(feature = "demo_mode"))]
 use zbus::Connection;
-
-use async_std::sync::Arc;
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
@@ -34,10 +35,14 @@ pub struct Hostname {
 
 impl Hostname {
     #[cfg(feature = "demo_mode")]
-    pub fn new<C>(bb: &mut BrokerBuilder, _wtb: &mut WatchedTasksBuilder, _conn: C) -> Self {
-        Self {
+    pub fn new<C>(
+        bb: &mut BrokerBuilder,
+        _wtb: &mut WatchedTasksBuilder,
+        _conn: C,
+    ) -> Result<Self> {
+        Ok(Self {
             hostname: bb.topic_ro("/v1/tac/network/hostname", Some("lxatac".into())),
-        }
+        })
     }
 
     #[cfg(not(feature = "demo_mode"))]
@@ -45,7 +50,7 @@ impl Hostname {
         bb: &mut BrokerBuilder,
         wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
-    ) -> Self {
+    ) -> Result<Self> {
         let hostname = bb.topic_ro("/v1/tac/network/hostname", None);
 
         let conn = conn.clone();
@@ -67,8 +72,8 @@ impl Hostname {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self { hostname }
+        Ok(Self { hostname })
     }
 }

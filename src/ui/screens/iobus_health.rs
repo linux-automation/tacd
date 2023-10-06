@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -45,7 +46,7 @@ impl IoBusHealthScreen {
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         supply_fault: &Arc<Topic<bool>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut supply_fault_events, _) = supply_fault.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
@@ -59,9 +60,9 @@ impl IoBusHealthScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self
+        Ok(Self)
     }
 }
 

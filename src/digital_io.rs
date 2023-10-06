@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 
@@ -60,7 +61,7 @@ fn handle_line_wo(
     initial: bool,
     inverted: bool,
     led_topic: Option<Arc<Topic<BlinkPattern>>>,
-) -> Arc<Topic<bool>> {
+) -> Result<Arc<Topic<bool>>> {
     let topic = bb.topic_rw(path, Some(initial));
     let line = find_line(line_name).unwrap();
     let dst = line
@@ -80,9 +81,9 @@ fn handle_line_wo(
         }
 
         Ok(())
-    });
+    })?;
 
-    topic
+    Ok(topic)
 }
 
 impl DigitalIo {
@@ -91,7 +92,7 @@ impl DigitalIo {
         wtb: &mut WatchedTasksBuilder,
         led_0: Arc<Topic<BlinkPattern>>,
         led_1: Arc<Topic<BlinkPattern>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let out_0 = handle_line_wo(
             bb,
             wtb,
@@ -100,7 +101,7 @@ impl DigitalIo {
             false,
             false,
             Some(led_0),
-        );
+        )?;
 
         let out_1 = handle_line_wo(
             bb,
@@ -110,7 +111,7 @@ impl DigitalIo {
             false,
             false,
             Some(led_1),
-        );
+        )?;
 
         let uart_rx_en = handle_line_wo(
             bb,
@@ -120,7 +121,8 @@ impl DigitalIo {
             true,
             true,
             None,
-        );
+        )?;
+
         let uart_tx_en = handle_line_wo(
             bb,
             wtb,
@@ -129,13 +131,13 @@ impl DigitalIo {
             true,
             true,
             None,
-        );
+        )?;
 
-        Self {
+        Ok(Self {
             out_0,
             out_1,
             uart_rx_en,
             uart_tx_en,
-        }
+        })
     }
 }

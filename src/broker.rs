@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::sync::Arc;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -115,11 +116,13 @@ impl BrokerBuilder {
     /// Finish building the broker
     ///
     /// This consumes the builder so that no new topics can be registered
-    pub fn build(self, wtb: &mut WatchedTasksBuilder, server: &mut tide::Server<()>) {
+    pub fn build(self, wtb: &mut WatchedTasksBuilder, server: &mut tide::Server<()>) -> Result<()> {
         let topics = Arc::new(self.topics);
 
-        persistence::register(wtb, topics.clone());
+        persistence::register(wtb, topics.clone())?;
         rest::register(server, topics.clone());
         mqtt_conn::register(server, topics);
+
+        Ok(())
     }
 }

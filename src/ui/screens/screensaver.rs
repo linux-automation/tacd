@@ -18,6 +18,7 @@
 use std::convert::TryInto;
 use std::time::{Duration, SystemTime};
 
+use anyhow::Result;
 use async_std::future::timeout;
 use async_std::prelude::*;
 use async_std::sync::Arc;
@@ -95,7 +96,7 @@ impl ScreenSaverScreen {
         wtb: &mut WatchedTasksBuilder,
         buttons: &Arc<Topic<ButtonEvent>>,
         alerts: &Arc<Topic<AlertList>>,
-    ) -> Self {
+    ) -> Result<Self> {
         // Activate screensaver if no button is pressed for some time
         let (mut buttons_events, _) = buttons.clone().subscribe_unbounded();
         let alerts = alerts.clone();
@@ -115,9 +116,9 @@ impl ScreenSaverScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self
+        Ok(Self)
     }
 }
 

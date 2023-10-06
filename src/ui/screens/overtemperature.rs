@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -45,7 +46,7 @@ impl OverTemperatureScreen {
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         warning: &Arc<Topic<Warning>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut warning_events, _) = warning.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
@@ -58,9 +59,9 @@ impl OverTemperatureScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self
+        Ok(Self)
     }
 }
 

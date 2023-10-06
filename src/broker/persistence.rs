@@ -148,7 +148,7 @@ async fn save_on_change(
     Ok(())
 }
 
-pub fn register(wtb: &mut WatchedTasksBuilder, topics: Arc<Vec<Arc<dyn AnyTopic>>>) {
+pub fn register(wtb: &mut WatchedTasksBuilder, topics: Arc<Vec<Arc<dyn AnyTopic>>>) -> Result<()> {
     load(&topics).unwrap();
 
     let (tx, rx) = unbounded();
@@ -157,5 +157,5 @@ pub fn register(wtb: &mut WatchedTasksBuilder, topics: Arc<Vec<Arc<dyn AnyTopic>
         topic.subscribe_as_bytes(tx.clone(), false);
     }
 
-    wtb.spawn_task("persistence-save", save_on_change(topics, rx));
+    wtb.spawn_task("persistence-save", save_on_change(topics, rx))
 }

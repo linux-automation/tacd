@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
@@ -62,7 +63,7 @@ impl PowerFailScreen {
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         out_state: &Arc<Topic<OutputState>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut out_state_events, _) = out_state.clone().subscribe_unbounded();
 
         let alerts = alerts.clone();
@@ -82,9 +83,9 @@ impl PowerFailScreen {
             }
 
             Ok(())
-        });
+        })?;
 
-        Self
+        Ok(Self)
     }
 }
 
