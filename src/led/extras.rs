@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::fmt::Write;
 use std::io::Result;
 use std::time::Duration;
 
@@ -134,15 +135,19 @@ impl Pattern for Leds {
     fn set_pattern(&self, pattern: BlinkPattern) -> Result<()> {
         let max = self.max_brightness()? as f32;
         let repetitions = pattern.repetitions;
-        let pattern: String = pattern
-            .steps
-            .iter()
-            .map(|(brightness, duration)| {
-                let brightness = (brightness * max).round();
-                let duration = duration.as_millis();
-                format!("{} {} ", brightness, duration)
-            })
-            .collect();
+        let pattern =
+            pattern
+                .steps
+                .iter()
+                .fold(String::new(), |mut dst, (brightness, duration)| {
+                    let brightness = (brightness * max).round();
+                    let duration = duration.as_millis();
+
+                    write!(dst, "{} {} ", brightness, duration)
+                        .expect("Writing to a String should never fail");
+
+                    dst
+                });
 
         self.write_file("trigger", "pattern")?;
         self.write_file("pattern", pattern)?;
