@@ -23,6 +23,7 @@ use async_std::sync::Arc;
 use async_std::task::{sleep, spawn};
 use serde::{Deserialize, Serialize};
 
+use crate::adc::CalibratedChannel;
 use crate::broker::{BrokerBuilder, Topic};
 
 #[cfg(feature = "demo_mode")]
@@ -135,6 +136,45 @@ const PORTS: &[(&str, &str)] = &[
     ),
 ];
 
+// The total current for all ports is limited to 700mA, the per-port current is
+// limited to 500mA.
+pub const MAX_TOTAL_CURRENT: f32 = 0.7;
+pub const MAX_PORT_CURRENT: f32 = 0.5;
+
+// The measurement is not _that_ exact so start warning at 90% utilization.
+const CURRENT_MARGIN: f32 = 0.9;
+const WARN_TOTAL_CURRENT: f32 = MAX_TOTAL_CURRENT * CURRENT_MARGIN;
+const WARN_PORT_CURRENT: f32 = MAX_PORT_CURRENT * CURRENT_MARGIN;
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub enum OverloadedPort {
+    Total,
+    Port1,
+    Port2,
+    Port3,
+}
+
+impl OverloadedPort {
+    fn from_currents(total: f32, port1: f32, port2: f32, port3: f32) -> Option<Self> {
+        // Based on the maximum / per-port limits it should not be possible for two
+        // individual ports to be overloaded at the same time while the total is not
+        // overloaded, so reporting either "total" or one of the ports should be
+        // sufficient.
+
+        if total > WARN_TOTAL_CURRENT {
+            Some(Self::Total)
+        } else if port1 > WARN_PORT_CURRENT {
+            Some(Self::Port1)
+        } else if port2 > WARN_PORT_CURRENT {
+            Some(Self::Port2)
+        } else if port3 > WARN_PORT_CURRENT {
+            Some(Self::Port3)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub struct UsbDevice {
     id_product: String,
@@ -151,6 +191,7 @@ pub struct UsbPort {
 }
 
 pub struct UsbHub {
+    pub overload: Arc<Topic<Option<OverloadedPort>>>,
     pub port1: UsbPort,
     pub port2: UsbPort,
     pub port3: UsbPort,
@@ -236,11 +277,49 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     port
 }
 
+fn handle_overloads(
+    bb: &mut BrokerBuilder,
+    total: CalibratedChannel,
+    port1: CalibratedChannel,
+    port2: CalibratedChannel,
+    port3: CalibratedChannel,
+) -> Arc<Topic<Option<OverloadedPort>>> {
+    let overload = bb.topic_ro("/v1/usb/host/overload", None);
+
+    let overload_task = overload.clone();
+
+    spawn(async move {
+        loop {
+            let overloaded_port = OverloadedPort::from_currents(
+                total.get().map(|m| m.value).unwrap_or(0.0),
+                port1.get().map(|m| m.value).unwrap_or(0.0),
+                port2.get().map(|m| m.value).unwrap_or(0.0),
+                port3.get().map(|m| m.value).unwrap_or(0.0),
+            );
+
+            overload_task.set_if_changed(overloaded_port);
+
+            sleep(POLL_INTERVAL).await;
+        }
+    });
+
+    overload
+}
+
 impl UsbHub {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
+    pub fn new(
+        bb: &mut BrokerBuilder,
+        total: CalibratedChannel,
+        port1: CalibratedChannel,
+        port2: CalibratedChannel,
+        port3: CalibratedChannel,
+    ) -> Self {
+        let overload = handle_overloads(bb, total, port1, port2, port3);
+
         let mut ports = PORTS.iter().map(|(name, base)| handle_port(bb, name, base));
 
         Self {
+            overload,
             port1: ports.next().unwrap(),
             port2: ports.next().unwrap(),
             port3: ports.next().unwrap(),

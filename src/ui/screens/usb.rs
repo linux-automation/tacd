@@ -28,10 +28,9 @@ use super::{
 };
 use crate::broker::Topic;
 use crate::measurement::Measurement;
+use crate::usb_hub::{MAX_PORT_CURRENT, MAX_TOTAL_CURRENT};
 
 const SCREEN_TYPE: NormalScreen = NormalScreen::Usb;
-const CURRENT_LIMIT_PER_PORT: f32 = 0.5;
-const CURRENT_LIMIT_TOTAL: f32 = 0.7;
 const OFFSET_INDICATOR: Point = Point::new(92, -10);
 const OFFSET_BAR: Point = Point::new(122, -14);
 const WIDTH_BAR: u32 = 90;
@@ -103,7 +102,7 @@ impl ActivatableScreen for UsbScreen {
                 row_anchor(0) + OFFSET_BAR,
                 WIDTH_BAR,
                 HEIGHT_BAR,
-                Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_TOTAL),
+                Box::new(|meas: &Measurement| meas.value / MAX_TOTAL_CURRENT),
             )
         });
 
@@ -143,7 +142,7 @@ impl ActivatableScreen for UsbScreen {
                     anchor_bar,
                     WIDTH_BAR,
                     HEIGHT_BAR,
-                    Box::new(|meas: &Measurement| meas.value / CURRENT_LIMIT_PER_PORT),
+                    Box::new(|meas: &Measurement| meas.value / MAX_PORT_CURRENT),
                 )
             });
         }

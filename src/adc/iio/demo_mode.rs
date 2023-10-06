@@ -128,8 +128,14 @@ impl CalibratedChannel {
 
         let mut value = f32::from_bits(self.inner.value.load(Ordering::Relaxed));
 
+        let decay = if time_constant.abs() < 0.01 {
+            0.0
+        } else {
+            (-dt / time_constant).exp()
+        };
+
         value -= nominal;
-        value *= (-dt / time_constant).exp();
+        value *= decay;
         value += (2.0 * thread_rng().gen::<f32>() - 1.0) * self.inner.noise;
         value += self
             .inner

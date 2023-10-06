@@ -37,6 +37,7 @@ import {
   ProgressNotification,
   LocatorNotification,
   OverTemperatureNotification,
+  UsbOverloadNotification,
 } from "./TacComponents";
 
 function Navigation() {
@@ -159,6 +160,7 @@ function Notifications() {
       <RebootNotification />
       <OverTemperatureNotification />
       <ProgressNotification />
+      <UsbOverloadNotification />
       <UpdateNotification />
       <LocatorNotification />
       <IOBusFaultNotification />

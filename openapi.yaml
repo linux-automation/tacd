@@ -272,6 +272,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/UsbDevice'
 
+  /v1/usb/host/overload:
+    get:
+      summary: Get the name of the currently overloaded port (if any)
+      tags: [USB Host]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                enum:
+                  - Total
+                  - Port1
+                  - Port2
+                  - Port3
+
   /v1/tac/temperatures/soc:
     get:
       summary: Get the current temperature inside the SoC

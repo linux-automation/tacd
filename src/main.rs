@@ -80,7 +80,13 @@ async fn main() -> Result<()> {
     let dig_io = DigitalIo::new(&mut bb, led.out_0.clone(), led.out_1.clone());
     let regulators = Regulators::new(&mut bb);
     let temperatures = Temperatures::new(&mut bb);
-    let usb_hub = UsbHub::new(&mut bb);
+    let usb_hub = UsbHub::new(
+        &mut bb,
+        adc.usb_host_curr.fast.clone(),
+        adc.usb_host1_curr.fast.clone(),
+        adc.usb_host2_curr.fast.clone(),
+        adc.usb_host3_curr.fast.clone(),
+    );
 
     // Expose other software on the TAC via the broker framework by connecting
     // to them via HTTP / DBus APIs.
