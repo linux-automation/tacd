@@ -362,7 +362,9 @@ impl IioThread {
                 Err(e) => {
                     // Can not fail in practice as the queue is known to be empty
                     // at this point.
-                    thread_res_tx.try_send(Err(e)).unwrap();
+                    thread_res_tx
+                        .try_send(Err(e))
+                        .expect("Failed to signal ADC setup error due to full queue");
                     return Ok(());
                 }
             };
@@ -385,7 +387,8 @@ impl IioThread {
                     if let Some((_, tx)) = signal_ready.take() {
                         // Can not fail in practice as the queue is only .take()n
                         // once and thus known to be empty.
-                        tx.try_send(Err(Error::new(e))).unwrap();
+                        tx.try_send(Err(Error::new(e)))
+                            .expect("Failed to signal ADC setup error due to full queue");
                     }
 
                     break;
@@ -415,7 +418,8 @@ impl IioThread {
                 if let Some((content, tx)) = signal_ready.take() {
                     // Can not fail in practice as the queue is only .take()n
                     // once and thus known to be empty.
-                    tx.try_send(Ok(content)).unwrap();
+                    tx.try_send(Ok(content))
+                        .expect("Failed to signal ADC setup completion due to full queue");
                 }
             }
 
