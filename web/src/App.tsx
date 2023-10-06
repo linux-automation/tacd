@@ -34,6 +34,7 @@ import {
   IOBusFaultNotification,
   RebootNotification,
   UpdateNotification,
+  PowerFailNotification,
   ProgressNotification,
   LocatorNotification,
   OverTemperatureNotification,
@@ -161,6 +162,7 @@ function Notifications() {
       <OverTemperatureNotification />
       <ProgressNotification />
       <UsbOverloadNotification />
+      <PowerFailNotification />
       <UpdateNotification />
       <LocatorNotification />
       <IOBusFaultNotification />
