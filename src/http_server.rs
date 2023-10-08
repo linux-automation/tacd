@@ -18,6 +18,7 @@
 use std::fs::write;
 use std::net::TcpListener;
 
+use anyhow::{Context, Result};
 use tide::{Body, Response, Server};
 
 mod serve_dir;
@@ -60,30 +61,30 @@ pub struct HttpServer {
 }
 
 impl HttpServer {
-    pub fn new() -> Self {
-        let mut this = Self {
+    pub fn new() -> Result<Self> {
+        let mut server = Self {
             listeners: Vec::new(),
             server: tide::new(),
         };
 
         // Open [::]:80 / [::]:8080. This, somewhat confusingly also listens on
         // 0.0.0.0 and not only on IPv6.
-        this.listeners.push(
-            TcpListener::bind(FALLBACK_PORT).expect(
-                "Could not bind web API to port, is there already another service running?",
-            ),
-        );
+        server
+            .listeners
+            .push(TcpListener::bind(FALLBACK_PORT).with_context(|| {
+                "Could not bind web API to port, is there already another service running?"
+            })?);
 
-        this.expose_openapi_json();
-        this.expose_dir(WEBUI_DIR, "/", false);
-        this.expose_dir(EXTRA_DIR, "/srv", true);
+        server.expose_openapi_json();
+        server.expose_dir(WEBUI_DIR, "/", false);
+        server.expose_dir(EXTRA_DIR, "/srv", true);
 
         for (fs_path, web_path) in EXPOSED_FILES_RW {
             let fs_path = FS_PREFIX.to_owned() + *fs_path;
-            this.expose_file_rw(fs_path, web_path);
+            server.expose_file_rw(fs_path, web_path)?;
         }
 
-        this
+        Ok(server)
     }
 
     /// Serve a compiled-in openapi.json file
@@ -109,8 +110,8 @@ impl HttpServer {
     }
 
     /// Serve a file from disk for reading and writing
-    fn expose_file_rw(&mut self, fs_path: String, web_path: &str) {
-        self.server.at(web_path).serve_file(&fs_path).unwrap();
+    fn expose_file_rw(&mut self, fs_path: String, web_path: &str) -> Result<()> {
+        self.server.at(web_path).serve_file(&fs_path)?;
 
         self.server
             .at(web_path)
@@ -124,9 +125,11 @@ impl HttpServer {
                     Ok(Response::new(204))
                 }
             });
+        Ok(())
     }
 
-    pub async fn serve(self) -> Result<(), std::io::Error> {
-        self.server.listen(self.listeners).await
+    pub async fn serve(self) -> Result<()> {
+        self.server.listen(self.listeners).await?;
+        Ok(())
     }
 }

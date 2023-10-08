@@ -83,7 +83,7 @@ impl Adc {
 
         let adc = Self {
             usb_host_curr: AdcChannel {
-                fast: stm32_thread.clone().get_channel("usb-host-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("usb-host-curr")?,
                 topic: bb.topic(
                     "/v1/usb/host/total/feedback/current",
                     true,
@@ -94,7 +94,7 @@ impl Adc {
                 ),
             },
             usb_host1_curr: AdcChannel {
-                fast: stm32_thread.clone().get_channel("usb-host1-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("usb-host1-curr")?,
                 topic: bb.topic(
                     "/v1/usb/host/port1/feedback/current",
                     true,
@@ -105,7 +105,7 @@ impl Adc {
                 ),
             },
             usb_host2_curr: AdcChannel {
-                fast: stm32_thread.clone().get_channel("usb-host2-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("usb-host2-curr")?,
                 topic: bb.topic(
                     "/v1/usb/host/port2/feedback/current",
                     true,
@@ -116,7 +116,7 @@ impl Adc {
                 ),
             },
             usb_host3_curr: AdcChannel {
-                fast: stm32_thread.clone().get_channel("usb-host3-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("usb-host3-curr")?,
                 topic: bb.topic(
                     "/v1/usb/host/port3/feedback/current",
                     true,
@@ -127,7 +127,7 @@ impl Adc {
                 ),
             },
             out0_volt: AdcChannel {
-                fast: stm32_thread.clone().get_channel("out0-volt").unwrap(),
+                fast: stm32_thread.clone().get_channel("out0-volt")?,
                 topic: bb.topic(
                     "/v1/output/out_0/feedback/voltage",
                     true,
@@ -138,7 +138,7 @@ impl Adc {
                 ),
             },
             out1_volt: AdcChannel {
-                fast: stm32_thread.clone().get_channel("out1-volt").unwrap(),
+                fast: stm32_thread.clone().get_channel("out1-volt")?,
                 topic: bb.topic(
                     "/v1/output/out_1/feedback/voltage",
                     true,
@@ -149,7 +149,7 @@ impl Adc {
                 ),
             },
             iobus_curr: AdcChannel {
-                fast: stm32_thread.clone().get_channel("iobus-curr").unwrap(),
+                fast: stm32_thread.clone().get_channel("iobus-curr")?,
                 topic: bb.topic(
                     "/v1/iobus/feedback/current",
                     true,
@@ -160,7 +160,7 @@ impl Adc {
                 ),
             },
             iobus_volt: AdcChannel {
-                fast: stm32_thread.clone().get_channel("iobus-volt").unwrap(),
+                fast: stm32_thread.clone().get_channel("iobus-volt")?,
                 topic: bb.topic(
                     "/v1/iobus/feedback/voltage",
                     true,
@@ -171,7 +171,7 @@ impl Adc {
                 ),
             },
             pwr_volt: AdcChannel {
-                fast: powerboard_thread.clone().get_channel("pwr-volt").unwrap(),
+                fast: powerboard_thread.clone().get_channel("pwr-volt")?,
                 topic: bb.topic(
                     "/v1/dut/feedback/voltage",
                     true,
@@ -182,7 +182,7 @@ impl Adc {
                 ),
             },
             pwr_curr: AdcChannel {
-                fast: powerboard_thread.get_channel("pwr-curr").unwrap(),
+                fast: powerboard_thread.get_channel("pwr-curr")?,
                 topic: bb.topic(
                     "/v1/dut/feedback/current",
                     true,

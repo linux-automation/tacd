@@ -15,16 +15,17 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::io::{Error, ErrorKind, Result};
+use std::io::{Error, ErrorKind};
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::task::sleep;
 
 use crate::dut_power::TickReader;
 
 #[cfg(any(test, feature = "demo_mode"))]
 mod sd {
-    use std::io::Result;
+    use anyhow::Result;
 
     pub const STATE_READY: () = ();
     pub const STATE_WATCHDOG: () = ();
@@ -84,10 +85,9 @@ impl Watchdog {
 
                 notify(false, [(STATE_WATCHDOG, "trigger")].iter())?;
 
-                break Err(Error::new(
-                    ErrorKind::TimedOut,
-                    "Power Thread stalled for too long",
-                ));
+                break Err(
+                    Error::new(ErrorKind::TimedOut, "Power Thread stalled for too long").into(),
+                );
             }
 
             notify(false, [(STATE_WATCHDOG, "1")].iter())?;

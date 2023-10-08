@@ -17,6 +17,7 @@
 
 use std::io::ErrorKind;
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::spawn;
@@ -91,7 +92,7 @@ fn handle_color(
     bb: &mut BrokerBuilder,
     hardware_name: &'static str,
     topic_name: &'static str,
-) -> Arc<Topic<(f32, f32, f32)>> {
+) -> Result<Arc<Topic<(f32, f32, f32)>>> {
     let topic = bb.topic_ro(&format!("/v1/tac/led/{topic_name}/color"), None);
 
     if let Some(led) = get_led_checked(hardware_name) {
@@ -99,7 +100,7 @@ fn handle_color(
 
         spawn(async move {
             while let Some((r, g, b)) = rx.next().await {
-                let max = led.max_brightness().unwrap();
+                let max = led.max_brightness()?;
 
                 // I've encountered LEDs staying off when set to the max value,
                 // but setting them to (max - 1) turned them on.
@@ -109,22 +110,23 @@ fn handle_color(
                     warn!("Failed to set LED color: {}", e);
                 }
             }
+            anyhow::Ok(())
         });
     }
 
-    topic
+    Ok(topic)
 }
 
 impl Led {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
-        Self {
+    pub fn new(bb: &mut BrokerBuilder) -> Result<Self> {
+        Ok(Self {
             out_0: handle_pattern(bb, "tac:green:out0", "out_0"),
             out_1: handle_pattern(bb, "tac:green:out1", "out_1"),
             dut_pwr: handle_pattern(bb, "tac:green:dutpwr", "dut_pwr"),
             eth_dut: handle_pattern(bb, "tac:green:statusdut", "eth_dut"),
             eth_lab: handle_pattern(bb, "tac:green:statuslab", "eth_lab"),
             status: handle_pattern(bb, "rgb:status", "status"),
-            status_color: handle_color(bb, "rgb:status", "status"),
-        }
+            status_color: handle_color(bb, "rgb:status", "status")?,
+        })
     }
 }

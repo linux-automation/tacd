@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_std::channel::bounded;
 use async_std::prelude::*;
 use async_std::sync::{Arc, Weak};
@@ -44,13 +44,13 @@ mod prio {
 mod prio {
     use std::convert::TryFrom;
 
-    use anyhow::{anyhow, Result};
+    use anyhow::{anyhow, Error, Result};
     use thread_priority::*;
 
     pub fn realtime_priority() -> Result<()> {
         set_thread_priority_and_policy(
             thread_native_id(),
-            ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
+            ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).map_err(Error::msg)?),
             ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
         )
         .map_err(|e| anyhow!("Failed to set up realtime priority {e:?}"))
@@ -236,10 +236,11 @@ fn turn_off_with_reason(
     pwr_line: &LineHandle,
     discharge_line: &LineHandle,
     fail_state: &AtomicU8,
-) {
-    pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-    discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
+) -> Result<()> {
+    pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
+    discharge_line.set_value(DISCHARGE_LINE_ASSERTED)?;
     fail_state.store(reason as u8, Ordering::Relaxed);
+    Ok(())
 }
 
 /// Labgrid has a fixed assumption of how a REST based power port should work.
@@ -334,14 +335,12 @@ impl DutPwrThread {
                         let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
                         let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
 
-                        thread_res_tx
-                            .try_send(Ok((tick, request.clone(), state.clone())))
-                            .unwrap();
+                        thread_res_tx.try_send(Ok((tick, request.clone(), state.clone())))?;
 
                         (tick_weak, request, state)
                     }
                     Err(e) => {
-                        thread_res_tx.try_send(Err(e)).unwrap();
+                        thread_res_tx.try_send(Err(e))?;
                         panic!()
                     }
                 };
@@ -378,7 +377,7 @@ impl DutPwrThread {
                                 &pwr_line,
                                 &discharge_line,
                                 &state,
-                            );
+                            )?;
                         } else {
                             // We have a fresh ADC value. Signal "everything is well"
                             // to the watchdog task.
@@ -415,7 +414,7 @@ impl DutPwrThread {
                             &pwr_line,
                             &discharge_line,
                             &state,
-                        );
+                        )?;
 
                         continue;
                     }
@@ -429,7 +428,7 @@ impl DutPwrThread {
                             &pwr_line,
                             &discharge_line,
                             &state,
-                        );
+                        )?;
 
                         continue;
                     }
@@ -442,7 +441,7 @@ impl DutPwrThread {
                             &pwr_line,
                             &discharge_line,
                             &state,
-                        );
+                        )?;
 
                         continue;
                     }
@@ -452,32 +451,31 @@ impl DutPwrThread {
                     match req {
                         OutputRequest::Idle => {}
                         OutputRequest::On => {
-                            discharge_line
-                                .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                                .unwrap();
-                            pwr_line.set_value(PWR_LINE_ASSERTED).unwrap();
+                            discharge_line.set_value(1 - DISCHARGE_LINE_ASSERTED)?;
+                            pwr_line.set_value(PWR_LINE_ASSERTED)?;
                             state.store(OutputState::On as u8, Ordering::Relaxed);
                         }
                         OutputRequest::Off => {
-                            discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
-                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                            discharge_line.set_value(DISCHARGE_LINE_ASSERTED)?;
+                            pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
                             state.store(OutputState::Off as u8, Ordering::Relaxed);
                         }
                         OutputRequest::OffFloating => {
-                            discharge_line
-                                .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                                .unwrap();
-                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                            discharge_line.set_value(1 - DISCHARGE_LINE_ASSERTED)?;
+                            pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
                             state.store(OutputState::OffFloating as u8, Ordering::Relaxed);
                         }
                     }
                 }
 
                 // Make sure to enter fail safe mode before leaving the thread
-                turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
+                turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state)
             })?;
 
-        let (tick, request, state) = thread_res_rx.next().await.unwrap()?;
+        let (tick, request, state) = thread_res_rx
+            .next()
+            .await
+            .context("didn't receive thread result")??;
 
         // The request and state topic use the same external path, this way one
         // can e.g. publish "On" to the topic and be sure that the output is
@@ -572,12 +570,12 @@ mod tests {
 
     #[test]
     fn failsafe() {
-        let pwr_line = find_line("DUT_PWR_EN").unwrap();
-        let discharge_line = find_line("DUT_PWR_DISCH").unwrap();
+        let pwr_line = find_line("DUT_PWR_EN").expect("couldn't find DUT_PWR_EN");
+        let discharge_line = find_line("DUT_PWR_DISCH").expect("couldn't find DUT_PWR_DISCH");
 
         let (adc, dut_pwr, led) = {
             let mut bb = BrokerBuilder::new();
-            let adc = block_on(Adc::new(&mut bb)).unwrap();
+            let adc = block_on(Adc::new(&mut bb)).expect("couldn't create ADC");
             let led = Topic::anonymous(None);
 
             let dut_pwr = block_on(DutPwrThread::new(
@@ -586,7 +584,7 @@ mod tests {
                 adc.pwr_curr.clone(),
                 led.clone(),
             ))
-            .unwrap();
+            .expect("couldn't start DUT PWR thread");
 
             (adc, dut_pwr, led)
         };

@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
 
     // Expose hardware on the TAC via the broker framework.
     let backlight = Backlight::new(&mut bb)?;
-    let led = Led::new(&mut bb);
+    let led = Led::new(&mut bb)?;
     let adc = Adc::new(&mut bb).await?;
     let dut_pwr = DutPwrThread::new(
         &mut bb,
@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
         led.dut_pwr.clone(),
     )
     .await?;
-    let dig_io = DigitalIo::new(&mut bb, led.out_0.clone(), led.out_1.clone());
+    let dig_io = DigitalIo::new(&mut bb, led.out_0.clone(), led.out_1.clone())?;
     let regulators = Regulators::new(&mut bb);
     let temperatures = Temperatures::new(&mut bb);
     let usb_hub = UsbHub::new(
@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
         adc.iobus_volt.fast.clone(),
     );
     let (network, rauc, systemd) = {
-        let dbus = DbusSession::new(&mut bb, led.eth_dut.clone(), led.eth_lab.clone()).await;
+        let dbus = DbusSession::new(&mut bb, led.eth_dut.clone(), led.eth_lab.clone()).await?;
 
         (dbus.network, dbus.rauc, dbus.systemd)
     };
@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
 
     // Set up a http server and provide some static files like the web
     // interface and config files that may be edited inside the web ui.
-    let mut http_server = HttpServer::new();
+    let mut http_server = HttpServer::new()?;
 
     // Allow editing some aspects of the TAC configuration when in "setup mode".
     let setup_mode = SetupMode::new(&mut bb, &mut http_server.server);
