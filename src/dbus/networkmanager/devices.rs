@@ -414,5 +414,4 @@ pub mod ip4 {
     }
 }
 pub use device::DeviceProxy;
-pub use statistics::StatisticsProxy;
 pub use wired::WiredProxy;
