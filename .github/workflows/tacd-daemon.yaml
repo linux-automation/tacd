@@ -60,7 +60,6 @@ jobs:
       fail-fast: false # Run against all versions even if one fails
       matrix:
         version:
-          - "1.63" # Yocto langdale
           - "1.68" # Yocto mickledore
           - "1.70" # Yocto nanbield
           - "nightly"
