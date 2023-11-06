@@ -135,7 +135,7 @@ impl ActivatableScreen for ScreenSaverScreen {
 
         let mut widgets = WidgetContainer::new(display);
 
-        let hostname = ui.res.network.hostname.clone();
+        let hostname = ui.res.hostname.hostname.clone();
 
         widgets.push(|display| {
             DynamicWidget::new(

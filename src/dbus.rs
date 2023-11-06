@@ -54,12 +54,14 @@ mod zb {
 
 use zb::{Connection, ConnectionBuilder, Result};
 
+pub mod hostname;
 pub mod networkmanager;
 pub mod rauc;
 pub mod systemd;
 pub mod tacd;
 
 pub use self::systemd::Systemd;
+pub use hostname::Hostname;
 pub use networkmanager::Network;
 pub use rauc::Rauc;
 pub use tacd::Tacd;
@@ -67,6 +69,7 @@ pub use tacd::Tacd;
 /// Bunch together everything that uses a DBus system connection here, even
 /// though it is conceptionally independent
 pub struct DbusSession {
+    pub hostname: Hostname,
     pub network: Network,
     pub rauc: Rauc,
     pub systemd: Systemd,
@@ -88,6 +91,7 @@ impl DbusSession {
         let conn = Arc::new(tacd.serve(conn_builder).build().await.unwrap());
 
         Self {
+            hostname: Hostname::new(bb, &conn),
             network: Network::new(bb, &conn, led_dut, led_uplink),
             rauc: Rauc::new(bb, &conn),
             systemd: Systemd::new(bb, &conn).await,

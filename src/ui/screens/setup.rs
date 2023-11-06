@@ -90,7 +90,7 @@ impl ActivatableScreen for SetupScreen {
 
         let connectivity_topic_task = connectivity_topic.clone();
         let (mut hostname_stream, hostname_update_handle) =
-            ui.res.network.hostname.clone().subscribe_unbounded();
+            ui.res.hostname.hostname.clone().subscribe_unbounded();
 
         spawn(async move {
             while let Some(hostname) = hostname_stream.next().await {

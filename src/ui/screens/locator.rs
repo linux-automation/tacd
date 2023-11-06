@@ -97,7 +97,7 @@ impl ActivatableScreen for LocatorScreen {
 
         widgets.push(|display| {
             DynamicWidget::text_center(
-                ui.res.network.hostname.clone(),
+                ui.res.hostname.hostname.clone(),
                 display,
                 Point::new(120, 130),
                 Box::new(|hostname| hostname.clone()),

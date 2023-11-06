@@ -92,10 +92,10 @@ async fn init() -> Result<(Ui, HttpServer, Option<Watchdog>)> {
         adc.iobus_curr.fast.clone(),
         adc.iobus_volt.fast.clone(),
     );
-    let (network, rauc, systemd) = {
+    let (hostname, network, rauc, systemd) = {
         let dbus = DbusSession::new(&mut bb, led.eth_dut.clone(), led.eth_lab.clone()).await;
 
-        (dbus.network, dbus.rauc, dbus.systemd)
+        (dbus.hostname, dbus.network, dbus.rauc, dbus.systemd)
     };
 
     // Expose information about the system provided by the kernel via the
@@ -127,6 +127,7 @@ async fn init() -> Result<(Ui, HttpServer, Option<Watchdog>)> {
             backlight,
             dig_io,
             dut_pwr,
+            hostname,
             iobus,
             led,
             network,
