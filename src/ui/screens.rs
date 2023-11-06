@@ -170,7 +170,10 @@ pub fn message(target: &mut DisplayExclusive, text: &str) -> Rectangle {
     let ui_text_style: MonoTextStyle<BinaryColor> =
         MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-    let text = Text::with_alignment(text, Point::new(120, 120), ui_text_style, Alignment::Center);
+    let mut text = Text::with_alignment(text, Point::zero(), ui_text_style, Alignment::Center);
+
+    let offset = Point::new(120, 120) - text.bounding_box().center();
+    text.translate_mut(offset);
 
     text.draw(target).unwrap();
 
