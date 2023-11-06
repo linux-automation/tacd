@@ -28,14 +28,14 @@ use tide::{Request, Response, Server};
 #[cfg(any(test, feature = "demo_mode"))]
 mod sd {
     use std::collections::btree_map::BTreeMap;
-    pub use std::io::Result;
+    pub(super) use std::io::Result;
     use std::io::{Error, ErrorKind};
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
-    pub type JournalRecord = BTreeMap<String, String>;
-    pub struct Journal;
-    pub struct OpenOptions;
+    pub(super) type JournalRecord = BTreeMap<String, String>;
+    pub(super) struct Journal;
+    pub(super) struct OpenOptions;
 
     impl OpenOptions {
         pub fn default() -> Self {
@@ -88,8 +88,8 @@ mod sd {
 
 #[cfg(not(any(test, feature = "demo_mode")))]
 mod sd {
-    pub use systemd::journal::*;
-    pub use systemd::*;
+    pub(super) use systemd::journal::*;
+    pub(super) use systemd::*;
 }
 
 use sd::{Journal, JournalRecord, OpenOptions, Result};

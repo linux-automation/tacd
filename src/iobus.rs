@@ -32,9 +32,9 @@ const VOLTAGE_MIN: f32 = 10.0;
 mod http {
     use super::{LSSState, Nodes, ServerInfo};
 
-    pub struct RequestDecoy {}
+    pub(super) struct RequestDecoy {}
 
-    pub trait DemoModeDefault {
+    pub(super) trait DemoModeDefault {
         fn demo_get() -> Self;
     }
 
@@ -62,19 +62,19 @@ mod http {
     }
 
     impl RequestDecoy {
-        pub async fn recv_json<T: DemoModeDefault>(&self) -> Result<T, ()> {
+        pub(super) async fn recv_json<T: DemoModeDefault>(&self) -> Result<T, ()> {
             Ok(T::demo_get())
         }
     }
 
-    pub fn get(_: &str) -> RequestDecoy {
+    pub(super) fn get(_: &str) -> RequestDecoy {
         RequestDecoy {}
     }
 }
 
 #[cfg(not(feature = "demo_mode"))]
 mod http {
-    pub use surf::get;
+    pub(super) use surf::get;
 }
 
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]

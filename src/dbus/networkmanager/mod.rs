@@ -28,17 +28,17 @@ mod hostname;
 
 // All of the following includes are not used in demo_mode.
 // Put them inside a mod so we do not have to decorate each one with
-// a #[cfg(not(feature = "demo_mode"))].
+#[cfg(not(feature = "demo_mode"))]
 mod optional_includes {
-    pub use anyhow::{anyhow, Result};
-    pub use async_std::stream::StreamExt;
-    pub use async_std::task::sleep;
-    pub use futures::{future::FutureExt, pin_mut, select};
-    pub use log::trace;
-    pub use std::convert::TryInto;
-    pub use std::time::Duration;
-    pub use zbus::{Connection, PropertyStream};
-    pub use zvariant::{ObjectPath, OwnedObjectPath};
+    pub(super) use anyhow::{anyhow, Result};
+    pub(super) use async_std::stream::StreamExt;
+    pub(super) use async_std::task::sleep;
+    pub(super) use futures::{future::FutureExt, pin_mut, select};
+    pub(super) use log::trace;
+    pub(super) use std::convert::TryInto;
+    pub(super) use std::time::Duration;
+    pub(super) use zbus::{Connection, PropertyStream};
+    pub(super) use zvariant::{ObjectPath, OwnedObjectPath};
 }
 
 #[cfg(not(feature = "demo_mode"))]

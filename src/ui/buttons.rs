@@ -28,9 +28,9 @@ pub const LONG_PRESS: Duration = Duration::from_millis(500);
 #[cfg(feature = "demo_mode")]
 mod evd {
     use evdev::FetchEventsSynced;
-    pub use evdev::{EventType, InputEventKind, Key};
+    pub(super) use evdev::{EventType, InputEventKind, Key};
 
-    pub struct Device {}
+    pub(super) struct Device {}
 
     impl Device {
         pub fn open(_path: &'static str) -> Result<Self, ()> {
@@ -47,7 +47,7 @@ mod evd {
 
 #[cfg(not(feature = "demo_mode"))]
 mod evd {
-    pub use evdev::*;
+    pub(super) use evdev::*;
 }
 
 use evd::{Device, EventType, InputEventKind, Key};

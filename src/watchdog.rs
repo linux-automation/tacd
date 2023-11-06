@@ -26,21 +26,21 @@ use crate::dut_power::TickReader;
 mod sd {
     use std::io::Result;
 
-    pub const STATE_READY: () = ();
-    pub const STATE_WATCHDOG: () = ();
+    pub(super) const STATE_READY: () = ();
+    pub(super) const STATE_WATCHDOG: () = ();
 
-    pub fn notify<I>(_: bool, _: I) -> Result<bool> {
+    pub(super) fn notify<I>(_: bool, _: I) -> Result<bool> {
         Ok(true)
     }
 
-    pub fn watchdog_enabled(_: bool) -> Result<u64> {
+    pub(super) fn watchdog_enabled(_: bool) -> Result<u64> {
         Ok(5_000_000)
     }
 }
 
 #[cfg(not(any(test, feature = "demo_mode")))]
 mod sd {
-    pub use systemd::daemon::*;
+    pub(super) use systemd::daemon::*;
 }
 
 use sd::{notify, watchdog_enabled, STATE_READY, STATE_WATCHDOG};

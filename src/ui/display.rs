@@ -25,7 +25,7 @@ use png::{BitDepth, ColorType, Encoder};
 mod backend {
     use framebuffer::{FixScreeninfo, VarScreeninfo};
 
-    pub struct Framebuffer {
+    pub(super) struct Framebuffer {
         pub device: (),
         pub var_screen_info: VarScreeninfo,
         pub fix_screen_info: FixScreeninfo,
@@ -58,7 +58,7 @@ mod backend {
 
 #[cfg(not(feature = "demo_mode"))]
 mod backend {
-    pub use framebuffer::*;
+    pub(super) use framebuffer::*;
 }
 
 use backend::Framebuffer;

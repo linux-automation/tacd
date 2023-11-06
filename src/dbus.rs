@@ -22,25 +22,25 @@ use crate::led::BlinkPattern;
 
 #[cfg(feature = "demo_mode")]
 mod zb {
-    pub type Result<T> = std::result::Result<T, ()>;
+    pub(super) type Result<T> = std::result::Result<T, ()>;
 
     pub struct Connection;
     pub struct ConnectionBuilder;
 
     impl ConnectionBuilder {
-        pub fn system() -> Result<Self> {
+        pub(super) fn system() -> Result<Self> {
             Ok(Self)
         }
 
-        pub fn name(self, _: &'static str) -> Result<Self> {
+        pub(super) fn name(self, _: &'static str) -> Result<Self> {
             Ok(self)
         }
 
-        pub fn serve_at<T>(self, _: &'static str, _: T) -> Result<Self> {
+        pub(super) fn serve_at<T>(self, _: &'static str, _: T) -> Result<Self> {
             Ok(self)
         }
 
-        pub async fn build(self) -> Result<Connection> {
+        pub(super) async fn build(self) -> Result<Connection> {
             Ok(Connection)
         }
     }
@@ -48,7 +48,8 @@ mod zb {
 
 #[cfg(not(feature = "demo_mode"))]
 mod zb {
-    pub use zbus::*;
+    pub(super) use zbus::Result;
+    pub use zbus::{Connection, ConnectionBuilder};
 }
 
 use zb::{Connection, ConnectionBuilder, Result};
