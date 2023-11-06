@@ -166,20 +166,22 @@ const fn row_anchor(row_num: u8) -> Point {
     Point::new(8, 52 + (row_num as i32) * 20)
 }
 
-pub(super) fn splash(target: &mut DisplayExclusive) -> Rectangle {
+pub fn message(target: &mut DisplayExclusive, text: &str) -> Rectangle {
     let ui_text_style: MonoTextStyle<BinaryColor> =
         MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
-    let text = Text::with_alignment(
-        "Welcome",
-        Point::new(120, 120),
-        ui_text_style,
-        Alignment::Center,
-    );
+    let mut text = Text::with_alignment(text, Point::zero(), ui_text_style, Alignment::Center);
+
+    let offset = Point::new(120, 120) - text.bounding_box().center();
+    text.translate_mut(offset);
 
     text.draw(target).unwrap();
 
     text.bounding_box()
+}
+
+pub fn splash(target: &mut DisplayExclusive) -> Rectangle {
+    message(target, "Welcome")
 }
 
 pub(super) fn init(

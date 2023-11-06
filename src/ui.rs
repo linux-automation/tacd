@@ -35,6 +35,7 @@ mod widgets;
 use alerts::{AlertList, Alerter};
 use buttons::{handle_buttons, Button, ButtonEvent, Direction, PressDuration, Source};
 pub use display::{Display, ScreenShooter};
+pub use screens::message;
 use screens::{splash, ActivatableScreen, AlertScreen, NormalScreen, Screen};
 
 pub struct UiResources {
