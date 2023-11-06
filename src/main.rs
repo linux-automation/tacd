@@ -52,12 +52,12 @@ use regulators::Regulators;
 use setup_mode::SetupMode;
 use system::System;
 use temperatures::Temperatures;
-use ui::{message, setup_display, Display, Ui, UiResources};
+use ui::{message, setup_display, Display, ScreenShooter, Ui, UiResources};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
 use watched_tasks::WatchedTasksBuilder;
 
-async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
+async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)> {
     // The tacd spawns a couple of async tasks that should run as long as
     // the tacd runs and if any one fails the tacd should stop.
     // These tasks are spawned via the watched task builder.
@@ -157,26 +157,21 @@ async fn init() -> Result<(Ui, HttpServer, WatchedTasksBuilder)> {
     // and expose the topics via HTTP and MQTT-over-websocket.
     bb.build(&mut wtb, &mut http_server.server)?;
 
+    // Expose the display as a .png on the web server
+    ui::serve_display(&mut http_server.server, screenshooter);
+
+    // Start serving files and the API
+    http_server.serve(&mut wtb)?;
+
     // If a watchdog was requested by systemd we can now start feeding it
     if let Some(watchdog) = watchdog {
         watchdog.keep_fed(&mut wtb)?;
     }
 
-    Ok((ui, http_server, wtb))
+    Ok((ui, wtb))
 }
 
-async fn run(
-    ui: Ui,
-    mut http_server: HttpServer,
-    display: Display,
-    mut wtb: WatchedTasksBuilder,
-) -> Result<()> {
-    // Expose the display as a .png on the web server
-    ui::serve_display(&mut http_server.server, display.screenshooter());
-
-    // Start serving files and the API
-    http_server.serve(&mut wtb)?;
-
+async fn run(ui: Ui, display: Display, mut wtb: WatchedTasksBuilder) -> Result<()> {
     // Start drawing the UI
     ui.run(&mut wtb, display)?;
 
@@ -191,9 +186,10 @@ async fn main() -> Result<()> {
 
     // Show a splash screen very early on
     let display = setup_display();
+    let screenshooter = display.screenshooter();
 
-    match init().await {
-        Ok((ui, http_server, wtb)) => run(ui, http_server, display, wtb).await,
+    match init(screenshooter).await {
+        Ok((ui, wtb)) => run(ui, display, wtb).await,
         Err(e) => {
             // Display a detailed error message on stderr (and thus in the journal) ...
             error!("Failed to initialize tacd: {e}");
