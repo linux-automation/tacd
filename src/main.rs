@@ -52,7 +52,7 @@ use regulators::Regulators;
 use setup_mode::SetupMode;
 use system::System;
 use temperatures::Temperatures;
-use ui::{message, setup_display, Display, ScreenShooter, Ui, UiResources};
+use ui::{message, setup_display, ScreenShooter, Ui, UiResources};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
 use watched_tasks::WatchedTasksBuilder;
@@ -171,25 +171,25 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     Ok((ui, wtb))
 }
 
-async fn run(ui: Ui, display: Display, mut wtb: WatchedTasksBuilder) -> Result<()> {
-    // Start drawing the UI
-    ui.run(&mut wtb, display)?;
-
-    info!("Setup complete. Handling requests");
-
-    wtb.watch().await
-}
-
 #[async_std::main]
 async fn main() -> Result<()> {
     env_logger::init();
 
     // Show a splash screen very early on
     let display = setup_display();
+
+    // This allows us to expose screenshoots of the LCD screen via HTTP
     let screenshooter = display.screenshooter();
 
     match init(screenshooter).await {
-        Ok((ui, wtb)) => run(ui, display, wtb).await,
+        Ok((ui, mut wtb)) => {
+            // Start drawing the UI
+            ui.run(&mut wtb, display)?;
+
+            info!("Setup complete. Handling requests");
+
+            wtb.watch().await
+        }
         Err(e) => {
             // Display a detailed error message on stderr (and thus in the journal) ...
             error!("Failed to initialize tacd: {e}");
