@@ -66,8 +66,8 @@ mod imports {
 #[cfg(not(feature = "demo_mode"))]
 mod imports {
     pub use anyhow::{anyhow, bail, Result};
-    pub use futures::{select, FutureExt};
-    pub use log::{error, info};
+    pub use futures::FutureExt;
+    pub use log::error;
 
     pub const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
 }
