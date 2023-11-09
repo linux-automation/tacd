@@ -11,6 +11,9 @@
 
 use zbus::dbus_proxy;
 
+#[cfg(not(feature = "demo_mode"))]
+pub const NM_DEVICE_STATE_ACTIVATED: u32 = 100;
+
 #[dbus_proxy(
     interface = "org.freedesktop.NetworkManager.Device.Statistics",
     default_service = "org.freedesktop.NetworkManager"
