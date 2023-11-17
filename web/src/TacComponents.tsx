@@ -30,7 +30,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import Spinner from "@cloudscape-design/components/spinner";
 import Table from "@cloudscape-design/components/table";
 
-import { MqttButton } from "./MqttComponents";
+import { MqttButton, MqttToggle } from "./MqttComponents";
 import { useMqttSubscription } from "./mqtt";
 
 type RootfsSlot = {
@@ -219,6 +219,30 @@ export function SlotStatus() {
       </SpaceBetween>
     );
   }
+}
+
+export function UpdateConfig() {
+  return (
+    <Container
+      header={
+        <Header
+          variant="h3"
+          description="Decide how updates are handled on this TAC"
+        >
+          Update Configuration
+        </Header>
+      }
+    >
+      <ColumnLayout columns={3} variant="text-grid">
+        <Box>
+          <Box variant="awsui-key-label">Update Polling</Box>
+          <MqttToggle topic="/v1/tac/update/enable_polling">
+            Periodically check for updates
+          </MqttToggle>
+        </Box>
+      </ColumnLayout>
+    </Container>
+  );
 }
 
 export function UpdateChannels() {
@@ -450,6 +474,7 @@ export function UpdateContainer() {
       }
     >
       <SpaceBetween size="m">
+        <UpdateConfig />
         <UpdateChannels />
         <SlotStatus />
       </SpaceBetween>
