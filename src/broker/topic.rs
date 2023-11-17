@@ -338,7 +338,6 @@ impl<E: Serialize + DeserializeOwned + Clone + PartialEq> Topic<E> {
     }
 
     /// Wait until the topic is set to the specified value
-    #[allow(dead_code)]
     pub async fn wait_for(self: &Arc<Self>, val: E) {
         let (mut stream, sub) = self.clone().subscribe_unbounded();
 

@@ -743,6 +743,21 @@ paths:
               schema:
                 type: number
 
+  /v1/tac/update/enable_polling:
+    put:
+      summary: Enable periodic polling for operating system updates
+      tags: [Updating]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: Polling for OS updates was enabled/disabled
+        '400':
+          description: The value could not be parsed as boolean
+
   /v1/tac/update/operation:
     get:
       summary: Get the currently running system update operation
