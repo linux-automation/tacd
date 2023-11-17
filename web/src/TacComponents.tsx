@@ -265,6 +265,7 @@ export function UpdateChannels() {
         {
           id: "description",
           header: "Description",
+          maxWidth: "50em",
           cell: (e) => (
             <SpaceBetween size="xs">
               {e.description.split("\n").map((p) => (
