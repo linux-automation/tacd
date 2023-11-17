@@ -105,16 +105,19 @@ function Navigation() {
             items: [
               {
                 type: "link",
+                external: true,
                 text: "Files in /srv/www",
                 href: `/srv`,
               },
               {
                 type: "link",
+                external: true,
                 text: "LXA IOBus Server",
                 href: `http://${window.location.hostname}:8080/`,
               },
               {
                 type: "link",
+                external: true,
                 text: "LXA TAC Manual",
                 href: "https://www.linux-automation.com/lxatac-M02/index.html",
               },
