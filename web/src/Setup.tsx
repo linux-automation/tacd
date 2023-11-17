@@ -19,7 +19,10 @@ import { useState } from "react";
 
 import Box from "@cloudscape-design/components/box";
 import Container from "@cloudscape-design/components/container";
+import Icon from "@cloudscape-design/components/icon";
 import Header from "@cloudscape-design/components/header";
+import Link from "@cloudscape-design/components/link";
+import SpaceBetween from "@cloudscape-design/components/space-between";
 import Spinner from "@cloudscape-design/components/spinner";
 import Wizard from "@cloudscape-design/components/wizard";
 
@@ -60,8 +63,8 @@ export default function Setup() {
       <div id="setup_wizard_inner">
         <Container
           header={
-            <Header variant="h1" description="Setup via SSH keys">
-              SSH key based Wizard
+            <Header variant="h1" description="Get started with your TAC">
+              LXA TAC Setup Wizard
             </Header>
           }
         >
@@ -86,16 +89,80 @@ export default function Setup() {
             allowSkipTo
             steps={[
               {
-                title: "Add SSH keys",
-                description:
-                  "Deploy SSH keys on your LXA TAC so you can log into it",
+                title: "Welcome",
+                description: "Welcome to your TAC and its setup mode",
                 content: (
                   <Container>
-                    <ConfigEditor
-                      path="/v1/tac/ssh/authorized_keys"
-                      language="text"
-                      defaultContent={SSH_AUTH_KEYS_EXAMPLE}
-                    />
+                    <Box variant="p">Hey there,</Box>
+                    <Box variant="p">
+                      thank you for buying this TAC. We hope you'll like it!
+                    </Box>
+                    <Box variant="p">
+                      Before you can get started using your TAC we need to set
+                      up a few things so they match your preferences. Some of
+                      these preferences can only be set via the web interface in
+                      this special setup mode, because they affect the security
+                      and inner workings of your TAC. To configure them once the
+                      setup mode is done you either need ssh access to your TAC
+                      or physical access to re-enable the setup mode via the
+                      buttons on the TAC.
+                    </Box>
+                    <Box variant="p">
+                      Ready to get started? Then maybe have a quick look at the{" "}
+                      <Link
+                        external
+                        href="https://www.linux-automation.com/lxatac-M02/index.html"
+                      >
+                        online manual
+                      </Link>{" "}
+                      first and then click "Next" to continue the setup.
+                    </Box>
+                    <br />
+                    <SpaceBetween direction="horizontal" size="s">
+                      <Icon url="/logo.svg" size="large" />
+                      <Box variant="p">
+                        Greetings,
+                        <br />
+                        the Linux Automation GmbH team
+                      </Box>
+                    </SpaceBetween>
+                  </Container>
+                ),
+              },
+              {
+                title: "Add SSH keys",
+                description:
+                  "Deploy SSH keys onto your LXA TAC so you can log into it",
+                content: (
+                  <Container>
+                    <SpaceBetween size="s">
+                      <Box variant="p">
+                        For many actions on the LXA TAC you need access to it
+                        via ssh. Permissions to ssh into the TAC are managed via
+                        a list of ssh public keys, that allow logging in as the
+                        root user.
+                        <br />
+                        Paste a list of ssh public keys into the text box below,
+                        to allow them to access the TAC, and click "Save".
+                        Afterwards you should be able to log into your TAC like
+                        this:
+                        <Box
+                          variant="code"
+                          display="block"
+                          padding="s"
+                          fontSize="body-m"
+                        >
+                          $ ssh root@{window.location.hostname}
+                        </Box>
+                        Make sure to check if logging in works before leaving
+                        the setup mode.
+                      </Box>
+                      <ConfigEditor
+                        path="/v1/tac/ssh/authorized_keys"
+                        language="text"
+                        defaultContent={SSH_AUTH_KEYS_EXAMPLE}
+                      />
+                    </SpaceBetween>
                   </Container>
                 ),
               },
@@ -105,18 +172,45 @@ export default function Setup() {
                 isOptional: true,
                 content: (
                   <Container>
-                    <LabgridConfig />
+                    <SpaceBetween size="s">
+                      <Box variant="p">
+                        The LXA TAC comes with a mostly pre-configured labgrid
+                        exporter, that exports a lot of resources that are built
+                        into the TAC or can be connected to it via USB.
+                        <br />
+                        You may however want to configure the labgrid
+                        coordinator IP address/hostname on the "Environment" tab
+                        or export additional resources in the "User Config" tab.
+                        <br />
+                        Once you have made the required changes click "Save" and
+                        test your configuration by clicking "Next".
+                      </Box>
+                      <LabgridConfig />
+                    </SpaceBetween>
                   </Container>
                 ),
               },
               {
                 title: "Test Labgrid",
                 description:
-                  "Make sure your labgrid Exporter Service looks healty",
+                  "Make sure your labgrid Exporter Service looks healthy",
                 isOptional: true,
                 content: (
                   <Container>
-                    <LabgridService />
+                    <SpaceBetween size="m">
+                      <Box variant="p">
+                        In this step you can check if the labgrid exporter
+                        starts as expected and the correct resources are
+                        exported. Use the "Start", "Stop" and "Restart" buttons
+                        to control the labgrid exporter systemd service and
+                        observe the systemd journal output in the text window
+                        above them.
+                        <br />
+                        Go back to the exporter configuration step to make
+                        changes and click "Next" once you are satisfied.
+                      </Box>
+                      <LabgridService />
+                    </SpaceBetween>
                   </Container>
                 ),
               },
@@ -125,15 +219,24 @@ export default function Setup() {
                 description: "Make sure everything is working alright",
                 content: (
                   <Container>
-                    <Box>You are about to complete the setup wizard.</Box>
-                    <Box>
-                      You will not be able to re-enter the setup wizard to
-                      deploy new SSH keys via the web interface. You can however
-                      re-enable the setup wizard using the buttons and the
-                      screen on the device. If you do not have physical access
-                      the TAC you should make sure that you can log in to the
-                      device via the SSH keys you have deployed before pressing
-                      "Done".
+                    <Box variant="p">
+                      You are about to complete the setup wizard.
+                    </Box>
+                    <Box variant="p">
+                      You will not be able to re-enter the setup wizard via the
+                      web interface. You can however re-enable the setup wizard
+                      using the buttons and the screen on the device. If you do
+                      not have physical access to the TAC you should make sure
+                      that you can log in now using:
+                      <Box
+                        variant="code"
+                        display="block"
+                        padding="s"
+                        fontSize="body-m"
+                      >
+                        $ ssh root@{window.location.hostname}
+                      </Box>
+                      before pressing "Done".
                     </Box>
                   </Container>
                 ),
