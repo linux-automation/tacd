@@ -35,7 +35,8 @@ const SSH_AUTH_KEYS_EXAMPLE =
   "# Use 'cat ~/.ssh/id_*.pub' to get a list of your ssh public\n" +
   "# keys or ssh-keygen if you don't have any yet.\n" +
   "# They will look something like this:\n" +
-  "# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBlPtT5dnGcZn0Z6FyD6VGqt3Jx0s+BHhMahxR0KlJ8G tux@igloo\n";
+  "#\n" +
+  "# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBlPtT5dnGcZn0Z6FyD6VGqt3Jx0s+BHhMahxR0KlJ8G tux@igloo";
 
 export default function Setup() {
   const [setupModeSettled, setupMode, setSetupMode] =
