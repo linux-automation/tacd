@@ -161,7 +161,7 @@ impl Ui {
                     led_status_pattern.set(pattern_locator_on.clone());
                 } else {
                     // Green light when locator is off
-                    led_status_color.set((0.0, 1.0, 0.0));
+                    led_status_color.set((0.0, 0.23, 0.0));
                     led_status_pattern.set(pattern_locator_off.clone());
                 }
             }
