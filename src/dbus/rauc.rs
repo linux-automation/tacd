@@ -98,6 +98,7 @@ pub struct Rauc {
     pub operation: Arc<Topic<String>>,
     pub progress: Arc<Topic<Progress>>,
     pub slot_status: Arc<Topic<Arc<SlotStatus>>>,
+    pub primary: Arc<Topic<String>>,
     pub last_error: Arc<Topic<String>>,
     pub install: Arc<Topic<String>>,
     pub channels: Arc<Topic<Vec<Channel>>>,
@@ -265,6 +266,7 @@ impl Rauc {
             operation: bb.topic_ro("/v1/tac/update/operation", None),
             progress: bb.topic_ro("/v1/tac/update/progress", None),
             slot_status: bb.topic_ro("/v1/tac/update/slots", None),
+            primary: bb.topic_ro("/v1/tac/update/primary", None),
             last_error: bb.topic_ro("/v1/tac/update/last_error", None),
             install: bb.topic_wo("/v1/tac/update/install", Some("".to_string())),
             channels: bb.topic_ro("/v1/tac/update/channels", None),
@@ -300,6 +302,7 @@ impl Rauc {
         let conn_task = conn.clone();
         let operation = inst.operation.clone();
         let slot_status = inst.slot_status.clone();
+        let primary = inst.primary.clone();
         let channels = inst.channels.clone();
         let should_reboot = inst.should_reboot.clone();
 
@@ -313,6 +316,15 @@ impl Rauc {
             }
 
             loop {
+                // Update which slot is considered the primary whenever the current
+                // operation changes.
+                // (The one that should be booted next _if it is bootable_)
+                let new_primary = proxy.get_primary().await.ok().map(|p| p.replace('.', "_"));
+
+                if let Some(p) = new_primary {
+                    primary.set_if_changed(p);
+                }
+
                 // Referesh the slot status whenever the current operation changes
                 // This is mostly relevant for "installing" -> "idle" transitions
                 // but it can't hurt to do it on any transition.
