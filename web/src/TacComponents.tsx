@@ -570,7 +570,7 @@ export function OverTemperatureNotification() {
     <Alert
       statusIconAriaLabel="Warning"
       type="warning"
-      visible={warning !== null && warning !== "Okay"}
+      visible={warning !== undefined && warning !== "Okay"}
       header="Your LXA TAC is overheating"
     >
       The LXA TAC's temperature is{" "}
