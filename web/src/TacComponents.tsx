@@ -608,7 +608,7 @@ export function UsbOverloadNotification() {
     <Alert
       statusIconAriaLabel="Warning"
       type="warning"
-      visible={overload !== null}
+      visible={overload !== undefined && overload !== null}
       header={header}
     >
       Disconnect {detail} or use a powered hub to resolve this issue.
