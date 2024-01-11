@@ -117,7 +117,7 @@ impl ActivatableScreen for SystemScreen {
                 display,
                 row_anchor(3),
                 Box::new(|ips: &Vec<String>| {
-                    let ip = ips.get(0).map(|s| s.as_str()).unwrap_or("-");
+                    let ip = ips.first().map(|s| s.as_str()).unwrap_or("-");
                     format!("IP:     {}", ip)
                 }),
             )

@@ -116,7 +116,7 @@ impl ActivatableScreen for SetupScreen {
         spawn(async move {
             while let Some(ips) = ip_stream.next().await {
                 connectivity_topic_task.modify(|prev| {
-                    let ip = ips.get(0).cloned();
+                    let ip = ips.first().cloned();
 
                     match (prev.unwrap(), ip) {
                         (Connectivity::Nothing, Some(ip)) | (Connectivity::IpOnly(_), Some(ip)) => {
