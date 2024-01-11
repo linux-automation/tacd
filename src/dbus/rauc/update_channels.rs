@@ -194,12 +194,14 @@ impl UpstreamBundle {
     pub(super) fn update_install(&mut self, slot_status: &SlotStatus) {
         let slot_0_is_older = slot_status
             .get("rootfs_0")
+            .filter(|r| r.get("boot_status").map_or(false, |b| b == "good"))
             .and_then(|r| r.get("bundle_version"))
             .and_then(|v| compare_versions(&self.version, v).map(|c| c.is_gt()))
             .unwrap_or(true);
 
         let slot_1_is_older = slot_status
             .get("rootfs_1")
+            .filter(|r| r.get("boot_status").map_or(false, |b| b == "good"))
             .and_then(|r| r.get("bundle_version"))
             .and_then(|v| compare_versions(&self.version, v).map(|c| c.is_gt()))
             .unwrap_or(true);
