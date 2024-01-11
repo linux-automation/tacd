@@ -22,6 +22,7 @@ use async_std::task::spawn;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
 
+#[allow(clippy::items_after_test_module)]
 #[cfg(test)]
 mod gpio {
     mod test;
