@@ -30,7 +30,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import Spinner from "@cloudscape-design/components/spinner";
 import Table from "@cloudscape-design/components/table";
 
-import { MqttButton } from "./MqttComponents";
+import { MqttButton, MqttToggle } from "./MqttComponents";
 import { useMqttSubscription } from "./mqtt";
 
 type RootfsSlot = {
@@ -221,12 +221,41 @@ export function SlotStatus() {
   }
 }
 
+export function UpdateConfig() {
+  return (
+    <Container
+      header={
+        <Header
+          variant="h3"
+          description="Decide how updates are handled on this TAC"
+        >
+          Update Configuration
+        </Header>
+      }
+    >
+      <ColumnLayout columns={3} variant="text-grid">
+        <Box>
+          <Box variant="awsui-key-label">Update Polling</Box>
+          <MqttToggle topic="/v1/tac/update/enable_polling">
+            Periodically check for updates
+          </MqttToggle>
+        </Box>
+      </ColumnLayout>
+    </Container>
+  );
+}
+
 export function UpdateChannels() {
   const channels_topic = useMqttSubscription<Array<Channel>>(
     "/v1/tac/update/channels",
   );
+  const enable_polling_topic = useMqttSubscription<Array<Channel>>(
+    "/v1/tac/update/enable_polling",
+  );
 
   const channels = channels_topic !== undefined ? channels_topic : [];
+  const enable_polling =
+    enable_polling_topic !== undefined ? enable_polling_topic : false;
 
   return (
     <Table
@@ -260,7 +289,9 @@ export function UpdateChannels() {
         {
           id: "enabled",
           header: "Enabled",
-          cell: (e) => <Checkbox checked={e.enabled} />,
+          cell: (e) => (
+            <Checkbox checked={e.enabled} disabled={!enable_polling} />
+          ),
         },
         {
           id: "description",
@@ -276,8 +307,12 @@ export function UpdateChannels() {
         },
         {
           id: "interval",
-          header: "Update Interval",
+          header: "Polling Interval",
           cell: (e) => {
+            if (!enable_polling) {
+              return "Disabled";
+            }
+
             if (!e.polling_interval) {
               return "Never";
             }
@@ -313,7 +348,11 @@ export function UpdateChannels() {
             }
 
             if (!e.bundle) {
-              return <Spinner />;
+              if (enable_polling) {
+                return <Spinner />;
+              } else {
+                return "Polling disabled";
+              }
             }
 
             if (!e.bundle.newer_than_installed) {
@@ -435,6 +474,7 @@ export function UpdateContainer() {
       }
     >
       <SpaceBetween size="m">
+        <UpdateConfig />
         <UpdateChannels />
         <SlotStatus />
       </SpaceBetween>

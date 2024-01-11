@@ -104,6 +104,7 @@ pub struct Rauc {
     pub channels: Arc<Topic<Vec<Channel>>>,
     pub reload: Arc<Topic<bool>>,
     pub should_reboot: Arc<Topic<bool>>,
+    pub enable_polling: Arc<Topic<bool>>,
 }
 
 fn compare_versions(v1: &str, v2: &str) -> Option<Ordering> {
@@ -178,6 +179,7 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
 
 async fn channel_polling_task(
     conn: Arc<Connection>,
+    enable_polling: Arc<Topic<bool>>,
     channels: Arc<Topic<Vec<Channel>>>,
     slot_status: Arc<Topic<Arc<SlotStatus>>>,
     name: String,
@@ -188,6 +190,10 @@ async fn channel_polling_task(
         .try_get()
         .and_then(|chs| chs.into_iter().find(|ch| ch.name == name))
     {
+        // Make sure update polling is enabled before doing anything,
+        // as contacting the update server requires user consent.
+        enable_polling.wait_for(true).await;
+
         let polling_interval = channel.polling_interval;
         let slot_status = slot_status.try_get();
 
@@ -224,6 +230,7 @@ async fn channel_polling_task(
 async fn channel_list_update_task(
     conn: Arc<Connection>,
     mut reload_stream: Receiver<bool>,
+    enable_polling: Arc<Topic<bool>>,
     channels: Arc<Topic<Vec<Channel>>>,
     slot_status: Arc<Topic<Arc<SlotStatus>>>,
 ) {
@@ -266,6 +273,7 @@ async fn channel_list_update_task(
         for name in names.into_iter() {
             let polling_task = spawn(channel_polling_task(
                 conn.clone(),
+                enable_polling.clone(),
                 channels.clone(),
                 slot_status.clone(),
                 name,
@@ -290,6 +298,14 @@ impl Rauc {
             channels: bb.topic_ro("/v1/tac/update/channels", None),
             reload: bb.topic_wo("/v1/tac/update/channels/reload", Some(true)),
             should_reboot: bb.topic_ro("/v1/tac/update/should_reboot", Some(false)),
+            enable_polling: bb.topic(
+                "/v1/tac/update/enable_polling",
+                true,
+                true,
+                true,
+                Some(false),
+                1,
+            ),
         }
     }
 
@@ -306,6 +322,7 @@ impl Rauc {
         spawn(channel_list_update_task(
             Arc::new(Connection),
             reload_stream,
+            inst.enable_polling.clone(),
             inst.channels.clone(),
             inst.slot_status.clone(),
         ));
@@ -488,6 +505,7 @@ impl Rauc {
         spawn(channel_list_update_task(
             conn.clone(),
             reload_stream,
+            inst.enable_polling.clone(),
             inst.channels.clone(),
             inst.slot_status.clone(),
         ));

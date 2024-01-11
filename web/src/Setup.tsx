@@ -27,6 +27,7 @@ import Spinner from "@cloudscape-design/components/spinner";
 import Wizard from "@cloudscape-design/components/wizard";
 
 import { LabgridService, LabgridConfig } from "./SettingsLabgrid";
+import { MqttToggle } from "./MqttComponents";
 import { ConfigEditor } from "./ConfigEditor";
 import { useMqttState } from "./mqtt";
 
@@ -127,6 +128,38 @@ export default function Setup() {
                         the Linux Automation GmbH team
                       </Box>
                     </SpaceBetween>
+                  </Container>
+                ),
+              },
+              {
+                title: "Configure Software Updates",
+                description:
+                  "Choose when and how to check for new software releases",
+                content: (
+                  <Container>
+                    <Box variant="p">
+                      The LXA TAC uses <Link href="https://rauc.io/">RAUC</Link>{" "}
+                      to manage and install software updates. A RAUC software
+                      update updates all of the installed software components at
+                      once and falls back to the previous version if something
+                      went wrong.
+                    </Box>
+                    <Box variant="p">
+                      We continually improve the software experience on the TAC
+                      and ship new features, so make sure to stay up to date
+                      with new releases.
+                    </Box>
+                    <Box variant="p">
+                      Would you like the TAC to periodically connect to the
+                      update server and check for software updates? You will be
+                      notified about updates via the LXA TACs display and the
+                      web interface and can start the update process from there.
+                    </Box>
+                    <Box variant="p" padding="s">
+                      <MqttToggle topic="/v1/tac/update/enable_polling">
+                        Periodically check for updates
+                      </MqttToggle>
+                    </Box>
                   </Container>
                 ),
               },
