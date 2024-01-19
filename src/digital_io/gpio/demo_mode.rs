@@ -27,7 +27,7 @@ pub struct LineHandle {
 }
 
 impl LineHandle {
-    pub fn set_value(&self, val: u8) -> Result<(), ()> {
+    pub fn set_value(&self, val: u8) -> Result<()> {
         // This does not actually set up any IIO things.
         // It is just a hack to let adc/iio/demo_mode.rs
         // communicate with this function so that toggling an output

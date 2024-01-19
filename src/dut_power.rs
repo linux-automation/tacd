@@ -49,9 +49,12 @@ mod prio {
     use thread_priority::*;
 
     pub fn realtime_priority() -> Result<()> {
+        let prio = ThreadPriorityValue::try_from(10)
+            .map_err(|e| anyhow!("Failed to choose realtime priority level 10: {e:?}"))?;
+
         set_thread_priority_and_policy(
             thread_native_id(),
-            ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
+            ThreadPriority::Crossplatform(prio),
             ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
         )
         .map_err(|e| anyhow!("Failed to set up realtime priority {e:?}"))
@@ -237,10 +240,12 @@ fn turn_off_with_reason(
     pwr_line: &LineHandle,
     discharge_line: &LineHandle,
     fail_state: &AtomicU8,
-) {
-    pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-    discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
+) -> Result<()> {
+    pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
+    discharge_line.set_value(DISCHARGE_LINE_ASSERTED)?;
     fail_state.store(reason as u8, Ordering::Relaxed);
+
+    Ok(())
 }
 
 /// Labgrid has a fixed assumption of how a REST based power port should work.
@@ -318,7 +323,7 @@ impl DutPwrThread {
         // as well.
         // Use a queue to notify the calling thread if the priority setup
         // succeeded.
-        let (thread_res_tx, mut thread_res_rx) = bounded(1);
+        let (thread_tx, thread_rx) = bounded(1);
 
         // Spawn a high priority thread that handles the power status
         // in a realtimey fashion.
@@ -333,24 +338,20 @@ impl DutPwrThread {
             let mut volt_filter = MedianFilter::<4>::new();
             let mut curr_filter = MedianFilter::<4>::new();
 
-            let (tick_weak, request, state) = match realtime_priority() {
-                Ok(_) => {
-                    let tick = Arc::new(AtomicU32::new(0));
-                    let tick_weak = Arc::downgrade(&tick);
+            realtime_priority()?;
 
-                    let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
-                    let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
+            let (tick_weak, request, state) = {
+                let tick = Arc::new(AtomicU32::new(0));
+                let tick_weak = Arc::downgrade(&tick);
 
-                    thread_res_tx
-                        .try_send(Ok((tick, request.clone(), state.clone())))
-                        .unwrap();
+                let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
+                let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
 
-                    (tick_weak, request, state)
-                }
-                Err(e) => {
-                    thread_res_tx.try_send(Err(e)).unwrap();
-                    panic!()
-                }
+                thread_tx
+                    .try_send((tick, request.clone(), state.clone()))
+                    .expect("Queue that should be empty wasn't");
+
+                (tick_weak, request, state)
             };
 
             // Run as long as there is a strong reference to `tick`.
@@ -385,7 +386,7 @@ impl DutPwrThread {
                             &pwr_line,
                             &discharge_line,
                             &state,
-                        );
+                        )?;
                     } else {
                         // We have a fresh ADC value. Signal "everything is well"
                         // to the watchdog task.
@@ -422,7 +423,7 @@ impl DutPwrThread {
                         &pwr_line,
                         &discharge_line,
                         &state,
-                    );
+                    )?;
 
                     continue;
                 }
@@ -436,7 +437,7 @@ impl DutPwrThread {
                         &pwr_line,
                         &discharge_line,
                         &state,
-                    );
+                    )?;
 
                     continue;
                 }
@@ -449,7 +450,7 @@ impl DutPwrThread {
                         &pwr_line,
                         &discharge_line,
                         &state,
-                    );
+                    )?;
 
                     continue;
                 }
@@ -459,34 +460,30 @@ impl DutPwrThread {
                 match req {
                     OutputRequest::Idle => {}
                     OutputRequest::On => {
-                        discharge_line
-                            .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                            .unwrap();
-                        pwr_line.set_value(PWR_LINE_ASSERTED).unwrap();
+                        discharge_line.set_value(1 - DISCHARGE_LINE_ASSERTED)?;
+                        pwr_line.set_value(PWR_LINE_ASSERTED)?;
                         state.store(OutputState::On as u8, Ordering::Relaxed);
                     }
                     OutputRequest::Off => {
-                        discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
-                        pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                        discharge_line.set_value(DISCHARGE_LINE_ASSERTED)?;
+                        pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
                         state.store(OutputState::Off as u8, Ordering::Relaxed);
                     }
                     OutputRequest::OffFloating => {
-                        discharge_line
-                            .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                            .unwrap();
-                        pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                        discharge_line.set_value(1 - DISCHARGE_LINE_ASSERTED)?;
+                        pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
                         state.store(OutputState::OffFloating as u8, Ordering::Relaxed);
                     }
                 }
             }
 
             // Make sure to enter fail safe mode before leaving the thread
-            turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
+            turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state)?;
 
             Ok(())
         })?;
 
-        let (tick, request, state) = thread_res_rx.next().await.unwrap()?;
+        let (tick, request, state) = thread_rx.recv().await?;
 
         // The request and state topic use the same external path, this way one
         // can e.g. publish "On" to the topic and be sure that the output is
