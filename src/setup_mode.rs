@@ -19,12 +19,13 @@ use std::fs::{create_dir_all, read, write};
 use std::io::ErrorKind;
 use std::path::Path;
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use tide::{http::mime, Request, Response, Server};
 
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 const AUTHORIZED_KEYS_PATH: &str = "demo_files/home/root/ssh/authorized_keys";
@@ -106,7 +107,11 @@ impl SetupMode {
         });
     }
 
-    fn handle_leave_requests(&self, bb: &mut BrokerBuilder) {
+    fn handle_leave_requests(
+        &self,
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+    ) -> Result<()> {
         // Use the "register a read-only and a write-only topic with the same name
         // to perform validation" trick that is also used with the DUT power endpoint.
         // We must make sure that a client from the web can only ever trigger _leaving_
@@ -116,17 +121,23 @@ impl SetupMode {
             .subscribe_unbounded();
         let setup_mode = self.setup_mode.clone();
 
-        spawn(async move {
+        wtb.spawn_task("setup-mode-leave-request", async move {
             while let Some(lr) = leave_requests.next().await {
                 if !lr {
                     // Only ever set the setup mode to false in here
                     setup_mode.set(false)
                 }
             }
-        });
+
+            Ok(())
+        })
     }
 
-    pub fn new(bb: &mut BrokerBuilder, server: &mut Server<()>) -> Self {
+    pub fn new(
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+        server: &mut Server<()>,
+    ) -> Result<Self> {
         let this = Self {
             setup_mode: bb.topic("/v1/tac/setup_mode", true, false, true, Some(true), 1),
             show_help: bb.topic(
@@ -139,9 +150,9 @@ impl SetupMode {
             ),
         };
 
-        this.handle_leave_requests(bb);
+        this.handle_leave_requests(bb, wtb)?;
         this.expose_file_conditionally(server, AUTHORIZED_KEYS_PATH, "/v1/tac/ssh/authorized_keys");
 
-        this
+        Ok(this)
     }
 }

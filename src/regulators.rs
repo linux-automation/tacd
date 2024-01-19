@@ -15,11 +15,12 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod reg {
@@ -31,7 +32,7 @@ mod reg {
 
     pub fn regulator_set(name: &str, state: bool) -> Result<()> {
         if name == "output_iobus_12v" {
-            let iio_thread = block_on(IioThread::new_stm32()).unwrap();
+            let iio_thread = block_on(IioThread::new_stm32(&())).unwrap();
 
             iio_thread
                 .clone()
@@ -71,27 +72,30 @@ pub struct Regulators {
 
 fn handle_regulator(
     bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
     path: &str,
     regulator_name: &'static str,
     initial: bool,
-) -> Arc<Topic<bool>> {
+) -> Result<Arc<Topic<bool>>> {
     let topic = bb.topic_rw(path, Some(initial));
     let (mut src, _) = topic.clone().subscribe_unbounded();
 
-    spawn(async move {
+    wtb.spawn_task(format!("regulator-{regulator_name}-action"), async move {
         while let Some(ev) = src.next().await {
             regulator_set(regulator_name, ev).unwrap();
         }
-    });
 
-    topic
+        Ok(())
+    })?;
+
+    Ok(topic)
 }
 
 impl Regulators {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
-        Self {
-            iobus_pwr_en: handle_regulator(bb, "/v1/iobus/powered", "output-iobus-12v", true),
-            uart_pwr_en: handle_regulator(bb, "/v1/uart/powered", "output-vuart", true),
-        }
+    pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
+        Ok(Self {
+            iobus_pwr_en: handle_regulator(bb, wtb, "/v1/iobus/powered", "output-iobus-12v", true)?,
+            uart_pwr_en: handle_regulator(bb, wtb, "/v1/uart/powered", "output-vuart", true)?,
+        })
     }
 }

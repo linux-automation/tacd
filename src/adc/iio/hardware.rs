@@ -20,9 +20,6 @@ use std::fs::create_dir;
 use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
-use std::sync::Mutex;
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Error, Result};
@@ -35,6 +32,7 @@ use log::{debug, error, warn};
 use thread_priority::*;
 
 use crate::measurement::{Measurement, Timestamp};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 struct ChannelDesc {
     kernel_name: &'static str,
@@ -255,7 +253,6 @@ pub struct IioThread {
     ref_instant: Instant,
     timestamp: AtomicU64,
     values: Vec<AtomicU16>,
-    join: Mutex<Option<JoinHandle<()>>>,
     channel_descs: &'static [ChannelDesc],
 }
 
@@ -325,7 +322,8 @@ impl IioThread {
     }
 
     async fn new(
-        thread_name: &str,
+        wtb: &mut WatchedTasksBuilder,
+        thread_name: &'static str,
         adc_name: &'static str,
         trigger_name: &'static str,
         sample_rate: i64,
@@ -342,102 +340,101 @@ impl IioThread {
         let (thread_res_tx, thread_res_rx) = bounded(1);
 
         // Spawn a high priority thread that updates the atomic values in `thread`.
-        let join = thread::Builder::new()
-            .name(format!("tacd {thread_name} iio"))
-            .spawn(move || {
-                let adc_setup_res = Self::adc_setup(
-                    adc_name,
-                    trigger_name,
-                    sample_rate,
-                    channel_descs,
-                    buffer_len,
-                );
-                let (thread, channels, mut buf) = match adc_setup_res {
-                    Ok((channels, buf)) => {
-                        let thread = Arc::new(Self {
-                            ref_instant: Instant::now(),
-                            timestamp: AtomicU64::new(TIMESTAMP_ERROR),
-                            values: channels.iter().map(|_| AtomicU16::new(0)).collect(),
-                            join: Mutex::new(None),
-                            channel_descs,
-                        });
-
-                        (thread, channels, buf)
-                    }
-                    Err(e) => {
-                        // Can not fail in practice as the queue is known to be empty
-                        // at this point.
-                        thread_res_tx.try_send(Err(e)).unwrap();
-                        return;
-                    }
-                };
-
-                let thread_weak = Arc::downgrade(&thread);
-                let mut signal_ready = Some((thread, thread_res_tx));
-
-                // Stop running as soon as the last reference to this Arc<IioThread>
-                // is dropped (e.g. the weak reference can no longer be upgraded).
-                while let Some(thread) = thread_weak.upgrade() {
-                    if let Err(e) = buf.refill() {
-                        thread.timestamp.store(TIMESTAMP_ERROR, Ordering::Relaxed);
-
-                        error!("Failed to refill {} ADC buffer: {}", adc_name, e);
-
-                        // If the ADC has not yet produced any values we still have the
-                        // queue at hand that signals readiness to the main thread.
-                        // This gives us a chance to return an Err from new().
-                        // If the queue was already used just print an error instead.
-                        if let Some((_, tx)) = signal_ready.take() {
-                            // Can not fail in practice as the queue is only .take()n
-                            // once and thus known to be empty.
-                            tx.try_send(Err(Error::new(e))).unwrap();
-                        }
-
-                        break;
-                    }
-
-                    let values = channels.iter().map(|ch| {
-                        let buf_sum: u32 = buf.channel_iter::<u16>(ch).map(|v| v as u32).sum();
-                        (buf_sum / (buf.capacity() as u32)) as u16
+        wtb.spawn_thread(thread_name, move || {
+            let adc_setup_res = Self::adc_setup(
+                adc_name,
+                trigger_name,
+                sample_rate,
+                channel_descs,
+                buffer_len,
+            );
+            let (thread, channels, mut buf) = match adc_setup_res {
+                Ok((channels, buf)) => {
+                    let thread = Arc::new(Self {
+                        ref_instant: Instant::now(),
+                        timestamp: AtomicU64::new(TIMESTAMP_ERROR),
+                        values: channels.iter().map(|_| AtomicU16::new(0)).collect(),
+                        channel_descs,
                     });
 
-                    for (d, s) in thread.values.iter().zip(values) {
-                        d.store(s, Ordering::Relaxed)
-                    }
+                    (thread, channels, buf)
+                }
+                Err(e) => {
+                    // Can not fail in practice as the queue is known to be empty
+                    // at this point.
+                    thread_res_tx
+                        .try_send(Err(e))
+                        .expect("Failed to signal ADC setup error due to full queue");
+                    return Ok(());
+                }
+            };
 
-                    // These should only fail if
-                    // a) The monotonic time started running backward
-                    // b) The tacd has been running for more than 2**64ns (584 years).
-                    let ts: u64 = Instant::now()
-                        .checked_duration_since(thread.ref_instant)
-                        .and_then(|d| d.as_nanos().try_into().ok())
-                        .unwrap_or(TIMESTAMP_ERROR);
+            let thread_weak = Arc::downgrade(&thread);
+            let mut signal_ready = Some((thread, thread_res_tx));
 
-                    thread.timestamp.store(ts, Ordering::Release);
+            // Stop running as soon as the last reference to this Arc<IioThread>
+            // is dropped (e.g. the weak reference can no longer be upgraded).
+            while let Some(thread) = thread_weak.upgrade() {
+                if let Err(e) = buf.refill() {
+                    thread.timestamp.store(TIMESTAMP_ERROR, Ordering::Relaxed);
 
-                    // Now that we know that the ADC actually works and we have
-                    // initial values: return a handle to it.
-                    if let Some((content, tx)) = signal_ready.take() {
+                    error!("Failed to refill {} ADC buffer: {}", adc_name, e);
+
+                    // If the ADC has not yet produced any values we still have the
+                    // queue at hand that signals readiness to the main thread.
+                    // This gives us a chance to return an Err from new().
+                    // If the queue was already used just print an error instead.
+                    if let Some((_, tx)) = signal_ready.take() {
                         // Can not fail in practice as the queue is only .take()n
                         // once and thus known to be empty.
-                        tx.try_send(Ok(content)).unwrap();
+                        tx.try_send(Err(Error::new(e)))
+                            .expect("Failed to signal ADC setup error due to full queue");
                     }
+
+                    break;
                 }
-            })?;
+
+                let values = channels.iter().map(|ch| {
+                    let buf_sum: u32 = buf.channel_iter::<u16>(ch).map(|v| v as u32).sum();
+                    (buf_sum / (buf.capacity() as u32)) as u16
+                });
+
+                for (d, s) in thread.values.iter().zip(values) {
+                    d.store(s, Ordering::Relaxed)
+                }
+
+                // These should only fail if
+                // a) The monotonic time started running backward
+                // b) The tacd has been running for more than 2**64ns (584 years).
+                let ts: u64 = Instant::now()
+                    .checked_duration_since(thread.ref_instant)
+                    .and_then(|d| d.as_nanos().try_into().ok())
+                    .unwrap_or(TIMESTAMP_ERROR);
+
+                thread.timestamp.store(ts, Ordering::Release);
+
+                // Now that we know that the ADC actually works and we have
+                // initial values: return a handle to it.
+                if let Some((content, tx)) = signal_ready.take() {
+                    // Can not fail in practice as the queue is only .take()n
+                    // once and thus known to be empty.
+                    tx.try_send(Ok(content))
+                        .expect("Failed to signal ADC setup completion due to full queue");
+                }
+            }
+
+            Ok(())
+        })?;
 
         let thread = thread_res_rx.recv().await??;
-
-        // Locking the Mutex could only fail if the Mutex was poisoned by
-        // a thread that held the lock and panicked.
-        // At this point the Mutex has not yet been locked in another thread.
-        *thread.join.lock().unwrap() = Some(join);
 
         Ok(thread)
     }
 
-    pub async fn new_stm32() -> Result<Arc<Self>> {
+    pub async fn new_stm32(wtb: &mut WatchedTasksBuilder) -> Result<Arc<Self>> {
         Self::new(
-            "stm32",
+            wtb,
+            "adc-stm32",
             "48003000.adc:adc@0",
             "tim4_trgo",
             80,
@@ -447,14 +444,23 @@ impl IioThread {
         .await
     }
 
-    pub async fn new_powerboard() -> Result<Arc<Self>> {
+    pub async fn new_powerboard(wtb: &mut WatchedTasksBuilder) -> Result<Arc<Self>> {
         let hr_trigger_path = Path::new(TRIGGER_HR_PWR_DIR);
 
         if !hr_trigger_path.is_dir() {
             create_dir(hr_trigger_path)?;
         }
 
-        Self::new("powerboard", "lmp92064", "tacd-pwr", 20, CHANNELS_PWR, 1).await
+        Self::new(
+            wtb,
+            "adc-powerboard",
+            "lmp92064",
+            "tacd-pwr",
+            20,
+            CHANNELS_PWR,
+            1,
+        )
+        .await
     }
 
     /// Use the channel names defined at the top of the file to get a reference

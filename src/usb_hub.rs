@@ -18,13 +18,15 @@
 use std::path::Path;
 use std::time::Duration;
 
+use anyhow::{anyhow, Result};
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::{sleep, spawn};
+use async_std::task::sleep;
 use serde::{Deserialize, Serialize};
 
 use crate::adc::CalibratedChannel;
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod rw {
@@ -93,7 +95,7 @@ mod rw {
 
         for (path_tail, iio_channel) in DISABLE_CHANNELS {
             if path.ends_with(path_tail) {
-                let iio_thread = block_on(IioThread::new_stm32()).unwrap();
+                let iio_thread = block_on(IioThread::new_stm32(&())).unwrap();
 
                 iio_thread
                     .get_channel(iio_channel)
@@ -197,7 +199,12 @@ pub struct UsbHub {
     pub port3: UsbPort,
 }
 
-fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -> UsbPort {
+fn handle_port(
+    bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
+    name: &'static str,
+    base: &'static str,
+) -> Result<UsbPort> {
     let port = UsbPort {
         request: bb.topic_wo(format!("/v1/usb/host/{name}/powered").as_str(), None),
         status: bb.topic_ro(format!("/v1/usb/host/{name}/powered").as_str(), None),
@@ -212,11 +219,11 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
     // Spawn a task that turns USB port power on or off upon request.
     // Also clears the device info upon power off so it does not contain stale
     // information until the next poll.
-    spawn(async move {
+    wtb.spawn_task(format!("usb-hub-{name}-actions"), async move {
         let (mut src, _) = request.subscribe_unbounded();
 
         while let Some(ev) = src.next().await {
-            write(&disable_path, if ev { b"0" } else { b"1" }).unwrap();
+            write(&disable_path, if ev { b"0" } else { b"1" })?;
 
             if !ev {
                 device.set(None);
@@ -224,7 +231,9 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
 
             status.set(ev);
         }
-    });
+
+        Ok(())
+    })?;
 
     let status = port.status.clone();
     let device = port.device.clone();
@@ -241,7 +250,7 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
 
     // Spawn a task that periodically polls the USB device info and disable state
     // and updates the corresponding topic on changes.
-    spawn(async move {
+    wtb.spawn_task(format!("usb-hub-{name}-state"), async move {
         loop {
             if let Ok(disable) = read_to_string(&disable_path) {
                 let is_powered = match disable.trim() {
@@ -272,23 +281,24 @@ fn handle_port(bb: &mut BrokerBuilder, name: &'static str, base: &'static str) -
 
             sleep(POLL_INTERVAL).await;
         }
-    });
+    })?;
 
-    port
+    Ok(port)
 }
 
 fn handle_overloads(
     bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
     total: CalibratedChannel,
     port1: CalibratedChannel,
     port2: CalibratedChannel,
     port3: CalibratedChannel,
-) -> Arc<Topic<Option<OverloadedPort>>> {
+) -> Result<Arc<Topic<Option<OverloadedPort>>>> {
     let overload = bb.topic_ro("/v1/usb/host/overload", None);
 
     let overload_task = overload.clone();
 
-    spawn(async move {
+    wtb.spawn_task("usb-hub-overload-state", async move {
         loop {
             let overloaded_port = OverloadedPort::from_currents(
                 total.get().map(|m| m.value).unwrap_or(0.0),
@@ -301,28 +311,37 @@ fn handle_overloads(
 
             sleep(POLL_INTERVAL).await;
         }
-    });
+    })?;
 
-    overload
+    Ok(overload)
 }
 
 impl UsbHub {
     pub fn new(
         bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
         total: CalibratedChannel,
         port1: CalibratedChannel,
         port2: CalibratedChannel,
         port3: CalibratedChannel,
-    ) -> Self {
-        let overload = handle_overloads(bb, total, port1, port2, port3);
+    ) -> Result<Self> {
+        let overload = handle_overloads(bb, wtb, total, port1, port2, port3)?;
 
-        let mut ports = PORTS.iter().map(|(name, base)| handle_port(bb, name, base));
+        let mut ports = PORTS
+            .iter()
+            .map(|(name, base)| handle_port(bb, wtb, name, base));
 
-        Self {
+        Ok(Self {
             overload,
-            port1: ports.next().unwrap(),
-            port2: ports.next().unwrap(),
-            port3: ports.next().unwrap(),
-        }
+            port1: ports
+                .next()
+                .ok_or_else(|| anyhow!("Failed to find USB port 1"))??,
+            port2: ports
+                .next()
+                .ok_or_else(|| anyhow!("Failed to find USB port 2"))??,
+            port3: ports
+                .next()
+                .ok_or_else(|| anyhow!("Failed to find USB port 3"))??,
+        })
     }
 }

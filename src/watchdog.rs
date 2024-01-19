@@ -15,12 +15,13 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::io::{Error, ErrorKind, Result};
 use std::time::Duration;
 
+use anyhow::{bail, Result};
 use async_std::task::sleep;
 
 use crate::dut_power::TickReader;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(any(test, feature = "demo_mode"))]
 mod sd {
@@ -73,24 +74,23 @@ impl Watchdog {
     /// - dut_pwr thread - otherwise the tick would not be incremented
     /// - adc thread - if the adc values are too old dut_pwr_thread will
     ///   not increment the tick.
-    pub async fn keep_fed(mut self) -> Result<()> {
+    pub fn keep_fed(mut self, wtb: &mut WatchedTasksBuilder) -> Result<()> {
         notify(false, [(STATE_READY, "1")].iter())?;
 
-        loop {
-            sleep(self.interval).await;
+        wtb.spawn_task("watchdog-feeder", async move {
+            loop {
+                sleep(self.interval).await;
 
-            if self.dut_power_tick.is_stale() {
-                eprintln!("Power Thread has stalled. Will trigger watchdog.");
+                if self.dut_power_tick.is_stale() {
+                    notify(false, [(STATE_WATCHDOG, "trigger")].iter())?;
 
-                notify(false, [(STATE_WATCHDOG, "trigger")].iter())?;
+                    bail!("Power Thread stalled for too long");
+                }
 
-                break Err(Error::new(
-                    ErrorKind::TimedOut,
-                    "Power Thread stalled for too long",
-                ));
+                notify(false, [(STATE_WATCHDOG, "1")].iter())?;
             }
+        })?;
 
-            notify(false, [(STATE_WATCHDOG, "1")].iter())?;
-        }
+        Ok(())
     }
 }

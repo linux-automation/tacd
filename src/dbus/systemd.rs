@@ -17,8 +17,6 @@
 
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
-use futures::join;
 use serde::{Deserialize, Serialize};
 
 #[cfg(not(feature = "demo_mode"))]
@@ -29,6 +27,7 @@ pub use log::warn;
 
 use super::{Connection, Result};
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(not(feature = "demo_mode"))]
 mod manager;
@@ -96,12 +95,24 @@ impl Service {
     }
 
     #[cfg(feature = "demo_mode")]
-    async fn connect(&self, _conn: Arc<Connection>, _unit_name: &'static str) {
+    async fn connect(
+        &self,
+        _wtb: &mut WatchedTasksBuilder,
+        _conn: Arc<Connection>,
+        _unit_name: &str,
+    ) -> anyhow::Result<()> {
         self.status.set(ServiceStatus::get().await.unwrap());
+
+        Ok(())
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    async fn connect(&self, conn: Arc<Connection>, unit_name: &'static str) {
+    async fn connect(
+        &self,
+        wtb: &mut WatchedTasksBuilder,
+        conn: Arc<Connection>,
+        unit_name: &'static str,
+    ) -> anyhow::Result<()> {
         let unit_path = {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();
             manager.get_unit(unit_name).await.unwrap()
@@ -117,7 +128,7 @@ impl Service {
         let unit_task = unit.clone();
         let status_topic = self.status.clone();
 
-        spawn(async move {
+        wtb.spawn_task(format!("systemd-{unit_name}-state"), async move {
             let mut active_state_stream =
                 unit_task.receive_active_state_changed().await.map(|_| ());
             let mut sub_state_stream = unit_task.receive_sub_state_changed().await.map(|_| ());
@@ -141,11 +152,11 @@ impl Service {
                 .await
                 .unwrap();
             }
-        });
+        })?;
 
         let (mut action_reqs, _) = self.action.clone().subscribe_unbounded();
 
-        spawn(async move {
+        wtb.spawn_task(format!("systemd-{unit_name}-actions"), async move {
             while let Some(action) = action_reqs.next().await {
                 let res = match action {
                     ServiceAction::Start => unit.start("replace").await,
@@ -160,29 +171,43 @@ impl Service {
                     );
                 }
             }
-        });
+
+            Ok(())
+        })?;
+
+        Ok(())
     }
 }
 
 impl Systemd {
     #[cfg(feature = "demo_mode")]
-    pub fn handle_reboot(reboot: Arc<Topic<bool>>, _conn: Arc<Connection>) {
+    pub fn handle_reboot(
+        wtb: &mut WatchedTasksBuilder,
+        reboot: Arc<Topic<bool>>,
+        _conn: Arc<Connection>,
+    ) -> anyhow::Result<()> {
         let (mut reboot_reqs, _) = reboot.subscribe_unbounded();
 
-        spawn(async move {
+        wtb.spawn_task("systemd-reboot", async move {
             while let Some(req) = reboot_reqs.next().await {
                 if req {
                     println!("Asked to reboot but don't feel like it");
                 }
             }
-        });
+
+            Ok(())
+        })
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    pub fn handle_reboot(reboot: Arc<Topic<bool>>, conn: Arc<Connection>) {
+    pub fn handle_reboot(
+        wtb: &mut WatchedTasksBuilder,
+        reboot: Arc<Topic<bool>>,
+        conn: Arc<Connection>,
+    ) -> anyhow::Result<()> {
         let (mut reboot_reqs, _) = reboot.subscribe_unbounded();
 
-        spawn(async move {
+        wtb.spawn_task("systemd-reboot", async move {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();
 
             while let Some(req) = reboot_reqs.next().await {
@@ -192,29 +217,39 @@ impl Systemd {
                     }
                 }
             }
-        });
+
+            Ok(())
+        })
     }
 
-    pub async fn new(bb: &mut BrokerBuilder, conn: &Arc<Connection>) -> Self {
+    pub async fn new(
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+        conn: &Arc<Connection>,
+    ) -> anyhow::Result<Self> {
         let reboot = bb.topic_rw("/v1/tac/reboot", Some(false));
 
-        Self::handle_reboot(reboot.clone(), conn.clone());
+        Self::handle_reboot(wtb, reboot.clone(), conn.clone())?;
 
         let networkmanager = Service::new(bb, "network-manager");
         let labgrid = Service::new(bb, "labgrid-exporter");
         let iobus = Service::new(bb, "lxa-iobus");
 
-        join!(
-            networkmanager.connect(conn.clone(), "NetworkManager.service"),
-            labgrid.connect(conn.clone(), "labgrid-exporter.service"),
-            iobus.connect(conn.clone(), "lxa-iobus.service"),
-        );
+        networkmanager
+            .connect(wtb, conn.clone(), "NetworkManager.service")
+            .await?;
+        labgrid
+            .connect(wtb, conn.clone(), "labgrid-exporter.service")
+            .await?;
+        iobus
+            .connect(wtb, conn.clone(), "lxa-iobus.service")
+            .await?;
 
-        Self {
+        Ok(Self {
             reboot,
             networkmanager,
             labgrid,
             iobus,
-        }
+        })
     }
 }

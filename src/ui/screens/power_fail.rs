@@ -15,9 +15,9 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
@@ -31,6 +31,7 @@ use super::{
 };
 use crate::broker::Topic;
 use crate::dut_power::{OutputRequest, OutputState};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::PowerFail;
 
@@ -58,12 +59,16 @@ struct Active {
 }
 
 impl PowerFailScreen {
-    pub fn new(alerts: &Arc<Topic<AlertList>>, out_state: &Arc<Topic<OutputState>>) -> Self {
+    pub fn new(
+        wtb: &mut WatchedTasksBuilder,
+        alerts: &Arc<Topic<AlertList>>,
+        out_state: &Arc<Topic<OutputState>>,
+    ) -> Result<Self> {
         let (mut out_state_events, _) = out_state.clone().subscribe_unbounded();
 
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-power-fail-activator", async move {
             while let Some(state) = out_state_events.next().await {
                 match state {
                     OutputState::On | OutputState::Off | OutputState::OffFloating => {
@@ -76,9 +81,11 @@ impl PowerFailScreen {
                     OutputState::Changing => {}
                 }
             }
-        });
 
-        Self
+            Ok(())
+        })?;
+
+        Ok(Self)
     }
 }
 

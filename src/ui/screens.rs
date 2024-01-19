@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::sync::Arc;
 use async_trait::async_trait;
 use embedded_graphics::{
@@ -65,8 +66,8 @@ use usb_overload::UsbOverloadScreen;
 use super::buttons;
 use super::widgets;
 use super::{AlertList, Alerter, InputEvent, Ui, UiResources};
-use crate::broker::Topic;
 use crate::ui::display::{Display, DisplayExclusive};
+use crate::{broker::Topic, watched_tasks::WatchedTasksBuilder};
 use buttons::ButtonEvent;
 use widgets::UI_TEXT_FONT;
 
@@ -120,7 +121,7 @@ impl NormalScreen {
 }
 
 #[async_trait]
-pub(super) trait ActiveScreen {
+pub(super) trait ActiveScreen: Send {
     fn my_type(&self) -> Screen;
     async fn deactivate(self: Box<Self>) -> Display;
     fn input(&mut self, ev: InputEvent);
@@ -185,37 +186,44 @@ pub fn splash(target: &mut DisplayExclusive) -> Rectangle {
 }
 
 pub(super) fn init(
+    wtb: &mut WatchedTasksBuilder,
     res: &UiResources,
     alerts: &Arc<Topic<AlertList>>,
     buttons: &Arc<Topic<ButtonEvent>>,
     reboot_message: &Arc<Topic<Option<String>>>,
     locator: &Arc<Topic<bool>>,
-) -> Vec<Box<dyn ActivatableScreen>> {
-    vec![
+) -> Result<Vec<Box<dyn ActivatableScreen>>> {
+    Ok(vec![
         Box::new(DigOutScreen::new()),
         Box::new(IoBusScreen::new()),
         Box::new(PowerScreen::new()),
         Box::new(SystemScreen::new()),
         Box::new(UartScreen::new()),
         Box::new(UsbScreen::new()),
-        Box::new(HelpScreen::new(alerts, &res.setup_mode.show_help)),
-        Box::new(IoBusHealthScreen::new(alerts, &res.iobus.supply_fault)),
+        Box::new(HelpScreen::new(wtb, alerts, &res.setup_mode.show_help)?),
+        Box::new(IoBusHealthScreen::new(
+            wtb,
+            alerts,
+            &res.iobus.supply_fault,
+        )?),
         Box::new(UpdateInstallationScreen::new(
+            wtb,
             alerts,
             &res.rauc.operation,
             reboot_message,
             &res.rauc.should_reboot,
-        )),
-        Box::new(UpdateAvailableScreen::new(alerts, &res.rauc.channels)),
-        Box::new(RebootConfirmScreen::new(alerts, reboot_message)),
-        Box::new(ScreenSaverScreen::new(buttons, alerts)),
-        Box::new(SetupScreen::new(alerts, &res.setup_mode.setup_mode)),
+        )?),
+        Box::new(UpdateAvailableScreen::new(wtb, alerts, &res.rauc.channels)?),
+        Box::new(RebootConfirmScreen::new(wtb, alerts, reboot_message)?),
+        Box::new(ScreenSaverScreen::new(wtb, buttons, alerts)?),
+        Box::new(SetupScreen::new(wtb, alerts, &res.setup_mode.setup_mode)?),
         Box::new(OverTemperatureScreen::new(
+            wtb,
             alerts,
             &res.temperatures.warning,
-        )),
-        Box::new(LocatorScreen::new(alerts, locator)),
-        Box::new(UsbOverloadScreen::new(alerts, &res.usb_hub.overload)),
-        Box::new(PowerFailScreen::new(alerts, &res.dut_pwr.state)),
-    ]
+        )?),
+        Box::new(LocatorScreen::new(wtb, alerts, locator)?),
+        Box::new(UsbOverloadScreen::new(wtb, alerts, &res.usb_hub.overload)?),
+        Box::new(PowerFailScreen::new(wtb, alerts, &res.dut_pwr.state)?),
+    ])
 }

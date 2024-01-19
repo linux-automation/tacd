@@ -15,12 +15,13 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[allow(clippy::items_after_test_module)]
 #[cfg(test)]
@@ -54,12 +55,13 @@ pub struct DigitalIo {
 /// writing to it. (e.g. whatever it is set to _is_ the line status).
 fn handle_line_wo(
     bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
     path: &str,
     line_name: &str,
     initial: bool,
     inverted: bool,
     led_topic: Option<Arc<Topic<BlinkPattern>>>,
-) -> Arc<Topic<bool>> {
+) -> Result<Arc<Topic<bool>>> {
     let topic = bb.topic_rw(path, Some(initial));
     let line = find_line(line_name).unwrap();
     let dst = line
@@ -68,7 +70,7 @@ fn handle_line_wo(
 
     let (mut src, _) = topic.clone().subscribe_unbounded();
 
-    spawn(async move {
+    wtb.spawn_task(format!("digital-io-{line_name}-set"), async move {
         while let Some(ev) = src.next().await {
             dst.set_value((ev ^ inverted) as _).unwrap();
 
@@ -77,43 +79,65 @@ fn handle_line_wo(
                 led.set(pattern);
             }
         }
-    });
 
-    topic
+        Ok(())
+    })?;
+
+    Ok(topic)
 }
 
 impl DigitalIo {
     pub fn new(
         bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
         led_0: Arc<Topic<BlinkPattern>>,
         led_1: Arc<Topic<BlinkPattern>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let out_0 = handle_line_wo(
             bb,
+            wtb,
             "/v1/output/out_0/asserted",
             "OUT_0",
             false,
             false,
             Some(led_0),
-        );
+        )?;
 
         let out_1 = handle_line_wo(
             bb,
+            wtb,
             "/v1/output/out_1/asserted",
             "OUT_1",
             false,
             false,
             Some(led_1),
-        );
+        )?;
 
-        let uart_rx_en = handle_line_wo(bb, "/v1/uart/rx/enabled", "UART_RX_EN", true, true, None);
-        let uart_tx_en = handle_line_wo(bb, "/v1/uart/tx/enabled", "UART_TX_EN", true, true, None);
+        let uart_rx_en = handle_line_wo(
+            bb,
+            wtb,
+            "/v1/uart/rx/enabled",
+            "UART_RX_EN",
+            true,
+            true,
+            None,
+        )?;
 
-        Self {
+        let uart_tx_en = handle_line_wo(
+            bb,
+            wtb,
+            "/v1/uart/tx/enabled",
+            "UART_TX_EN",
+            true,
+            true,
+            None,
+        )?;
+
+        Ok(Self {
             out_0,
             out_1,
             uart_rx_en,
             uart_tx_en,
-        }
+        })
     }
 }

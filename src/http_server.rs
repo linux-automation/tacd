@@ -18,7 +18,10 @@
 use std::fs::write;
 use std::net::TcpListener;
 
+use anyhow::Result;
 use tide::{Body, Response, Server};
+
+use crate::watched_tasks::WatchedTasksBuilder;
 
 mod serve_dir;
 use serve_dir::serve_dir;
@@ -126,7 +129,10 @@ impl HttpServer {
             });
     }
 
-    pub async fn serve(self) -> Result<(), std::io::Error> {
-        self.server.listen(self.listeners).await
+    pub fn serve(self, wtb: &mut WatchedTasksBuilder) -> Result<()> {
+        wtb.spawn_task("http-server", async move {
+            self.server.listen(self.listeners).await?;
+            Ok(())
+        })
     }
 }

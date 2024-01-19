@@ -15,9 +15,9 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
@@ -31,6 +31,7 @@ use super::{
 use crate::broker::Topic;
 use crate::measurement::Measurement;
 use crate::usb_hub::{OverloadedPort, MAX_PORT_CURRENT, MAX_TOTAL_CURRENT};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UsbOverload;
 const OFFSET_BAR: Point = Point::new(75, -14);
@@ -46,13 +47,14 @@ struct Active {
 
 impl UsbOverloadScreen {
     pub fn new(
+        wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         overload: &Arc<Topic<Option<OverloadedPort>>>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (mut overload_events, _) = overload.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-usb-overload-activator", async move {
             while let Some(overload) = overload_events.next().await {
                 if overload.is_some() {
                     alerts.assert(SCREEN_TYPE)
@@ -60,9 +62,11 @@ impl UsbOverloadScreen {
                     alerts.deassert(SCREEN_TYPE)
                 }
             }
-        });
 
-        Self
+            Ok(())
+        })?;
+
+        Ok(Self)
     }
 }
 

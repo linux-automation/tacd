@@ -15,9 +15,9 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle,
@@ -32,6 +32,7 @@ use super::{
     Ui,
 };
 use crate::broker::Topic;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::RebootConfirm;
 
@@ -41,15 +42,16 @@ pub struct RebootConfirmScreen {
 
 impl RebootConfirmScreen {
     pub fn new(
+        wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
         reboot_message: &Arc<Topic<Option<String>>>,
-    ) -> Self {
+    ) -> Result<Self> {
         // Receive questions like Some("Do you want to reboot?") and activate this screen
         let (mut reboot_message_events, _) = reboot_message.clone().subscribe_unbounded();
         let reboot_message = reboot_message.clone();
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-reboot-activator", async move {
             while let Some(reboot_message) = reboot_message_events.next().await {
                 if reboot_message.is_some() {
                     alerts.assert(SCREEN_TYPE);
@@ -57,9 +59,11 @@ impl RebootConfirmScreen {
                     alerts.deassert(SCREEN_TYPE);
                 }
             }
-        });
 
-        Self { reboot_message }
+            Ok(())
+        })?;
+
+        Ok(Self { reboot_message })
     }
 }
 

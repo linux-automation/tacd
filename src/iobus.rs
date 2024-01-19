@@ -17,13 +17,15 @@
 
 use std::time::Duration;
 
+use anyhow::Result;
 use async_std::sync::Arc;
-use async_std::task::{sleep, spawn};
+use async_std::task::sleep;
 
 use serde::{Deserialize, Serialize};
 
 use crate::adc::CalibratedChannel;
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const CURRENT_MAX: f32 = 0.2;
 const VOLTAGE_MIN: f32 = 10.0;
@@ -109,10 +111,11 @@ pub struct IoBus {
 impl IoBus {
     pub fn new(
         bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
         iobus_pwr_en: Arc<Topic<bool>>,
         iobus_curr: CalibratedChannel,
         iobus_volt: CalibratedChannel,
-    ) -> Self {
+    ) -> Result<Self> {
         let supply_fault = bb.topic_ro("/v1/iobus/feedback/fault", None);
         let server_info = bb.topic_ro("/v1/iobus/server/info", None);
         let nodes = bb.topic_ro("/v1/iobus/server/nodes", None);
@@ -121,7 +124,7 @@ impl IoBus {
         let server_info_task = server_info.clone();
         let nodes_task = nodes.clone();
 
-        spawn(async move {
+        wtb.spawn_task("iobus-update", async move {
             loop {
                 if let Ok(si) = http::get("http://127.0.0.1:8080/server-info/")
                     .recv_json::<ServerInfo>()
@@ -151,12 +154,12 @@ impl IoBus {
 
                 sleep(Duration::from_secs(1)).await;
             }
-        });
+        })?;
 
-        Self {
+        Ok(Self {
             supply_fault,
             server_info,
             nodes,
-        }
+        })
     }
 }

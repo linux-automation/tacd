@@ -15,9 +15,9 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
@@ -30,6 +30,7 @@ use super::{
 };
 use crate::broker::Topic;
 use crate::measurement::Measurement;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::IoBusHealth;
 
@@ -41,11 +42,15 @@ struct Active {
 }
 
 impl IoBusHealthScreen {
-    pub fn new(alerts: &Arc<Topic<AlertList>>, supply_fault: &Arc<Topic<bool>>) -> Self {
+    pub fn new(
+        wtb: &mut WatchedTasksBuilder,
+        alerts: &Arc<Topic<AlertList>>,
+        supply_fault: &Arc<Topic<bool>>,
+    ) -> Result<Self> {
         let (mut supply_fault_events, _) = supply_fault.clone().subscribe_unbounded();
         let alerts = alerts.clone();
 
-        spawn(async move {
+        wtb.spawn_task("screen-iobus-health-activator", async move {
             while let Some(fault) = supply_fault_events.next().await {
                 if fault {
                     alerts.assert(SCREEN_TYPE);
@@ -53,9 +58,11 @@ impl IoBusHealthScreen {
                     alerts.deassert(SCREEN_TYPE);
                 }
             }
-        });
 
-        Self
+            Ok(())
+        })?;
+
+        Ok(Self)
     }
 }
 

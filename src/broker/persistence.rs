@@ -22,12 +22,13 @@ use anyhow::{bail, Result};
 use async_std::channel::{unbounded, Receiver};
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_reader, to_writer_pretty, Map, Value};
 
 use super::{AnyTopic, TopicName};
+
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 const PERSISTENCE_PATH: &str = "demo_files/srv/tacd/state.json";
@@ -147,7 +148,7 @@ async fn save_on_change(
     Ok(())
 }
 
-pub fn register(topics: Arc<Vec<Arc<dyn AnyTopic>>>) {
+pub fn register(wtb: &mut WatchedTasksBuilder, topics: Arc<Vec<Arc<dyn AnyTopic>>>) -> Result<()> {
     load(&topics).unwrap();
 
     let (tx, rx) = unbounded();
@@ -156,5 +157,5 @@ pub fn register(topics: Arc<Vec<Arc<dyn AnyTopic>>>) {
         topic.subscribe_as_bytes(tx.clone(), false);
     }
 
-    spawn(async move { save_on_change(topics, rx).await.unwrap() });
+    wtb.spawn_task("persistence-save", save_on_change(topics, rx))
 }

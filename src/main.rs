@@ -17,7 +17,6 @@
 
 use anyhow::Result;
 use async_std::future::pending;
-use futures::{select, FutureExt};
 use log::{error, info};
 
 mod adc;
@@ -38,6 +37,7 @@ mod temperatures;
 mod ui;
 mod usb_hub;
 mod watchdog;
+mod watched_tasks;
 
 use adc::Adc;
 use backlight::Backlight;
@@ -52,48 +52,58 @@ use regulators::Regulators;
 use setup_mode::SetupMode;
 use system::System;
 use temperatures::Temperatures;
-use ui::{message, setup_display, Display, Ui, UiResources};
+use ui::{message, setup_display, ScreenShooter, Ui, UiResources};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
+use watched_tasks::WatchedTasksBuilder;
 
-async fn init() -> Result<(Ui, HttpServer, Option<Watchdog>)> {
+async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)> {
+    // The tacd spawns a couple of async tasks that should run as long as
+    // the tacd runs and if any one fails the tacd should stop.
+    // These tasks are spawned via the watched task builder.
+    let mut wtb = WatchedTasksBuilder::new();
+
     // The BrokerBuilder collects topics that should be exported via the
     // MQTT/REST APIs.
     // The topics are also used to pass around data inside the tacd.
     let mut bb = BrokerBuilder::new();
 
     // Expose hardware on the TAC via the broker framework.
-    let backlight = Backlight::new(&mut bb)?;
-    let led = Led::new(&mut bb);
-    let adc = Adc::new(&mut bb).await?;
+    let backlight = Backlight::new(&mut bb, &mut wtb)?;
+    let led = Led::new(&mut bb, &mut wtb)?;
+    let adc = Adc::new(&mut bb, &mut wtb).await?;
     let dut_pwr = DutPwrThread::new(
         &mut bb,
+        &mut wtb,
         adc.pwr_volt.clone(),
         adc.pwr_curr.clone(),
         led.dut_pwr.clone(),
     )
     .await?;
-    let dig_io = DigitalIo::new(&mut bb, led.out_0.clone(), led.out_1.clone());
-    let regulators = Regulators::new(&mut bb);
-    let temperatures = Temperatures::new(&mut bb);
+    let dig_io = DigitalIo::new(&mut bb, &mut wtb, led.out_0.clone(), led.out_1.clone())?;
+    let regulators = Regulators::new(&mut bb, &mut wtb)?;
+    let temperatures = Temperatures::new(&mut bb, &mut wtb)?;
     let usb_hub = UsbHub::new(
         &mut bb,
+        &mut wtb,
         adc.usb_host_curr.fast.clone(),
         adc.usb_host1_curr.fast.clone(),
         adc.usb_host2_curr.fast.clone(),
         adc.usb_host3_curr.fast.clone(),
-    );
+    )?;
 
     // Expose other software on the TAC via the broker framework by connecting
     // to them via HTTP / DBus APIs.
     let iobus = IoBus::new(
         &mut bb,
+        &mut wtb,
         regulators.iobus_pwr_en.clone(),
         adc.iobus_curr.fast.clone(),
         adc.iobus_volt.fast.clone(),
-    );
+    )?;
     let (hostname, network, rauc, systemd) = {
-        let dbus = DbusSession::new(&mut bb, led.eth_dut.clone(), led.eth_lab.clone()).await;
+        let dbus =
+            DbusSession::new(&mut bb, &mut wtb, led.eth_dut.clone(), led.eth_lab.clone()).await?;
 
         (dbus.hostname, dbus.network, dbus.rauc, dbus.systemd)
     };
@@ -112,7 +122,7 @@ async fn init() -> Result<(Ui, HttpServer, Option<Watchdog>)> {
     let mut http_server = HttpServer::new();
 
     // Allow editing some aspects of the TAC configuration when in "setup mode".
-    let setup_mode = SetupMode::new(&mut bb, &mut http_server.server);
+    let setup_mode = SetupMode::new(&mut bb, &mut wtb, &mut http_server.server)?;
 
     // Expose a live log of the TAC's systemd journal so it can be viewed
     // in the web interface.
@@ -140,43 +150,25 @@ async fn init() -> Result<(Ui, HttpServer, Option<Watchdog>)> {
             usb_hub,
         };
 
-        Ui::new(&mut bb, resources)
+        Ui::new(&mut bb, &mut wtb, resources)?
     };
 
     // Consume the BrokerBuilder (no further topics can be added or removed)
     // and expose the topics via HTTP and MQTT-over-websocket.
-    bb.build(&mut http_server.server);
+    bb.build(&mut wtb, &mut http_server.server)?;
 
-    Ok((ui, http_server, watchdog))
-}
-
-async fn run(
-    ui: Ui,
-    mut http_server: HttpServer,
-    watchdog: Option<Watchdog>,
-    display: Display,
-) -> Result<()> {
     // Expose the display as a .png on the web server
-    ui::serve_display(&mut http_server.server, display.screenshooter());
+    ui::serve_display(&mut http_server.server, screenshooter);
 
-    info!("Setup complete. Handling requests");
+    // Start serving files and the API
+    http_server.serve(&mut wtb)?;
 
-    // Run until the user interface, http server or (if selected) the watchdog
-    // exits (with an error).
+    // If a watchdog was requested by systemd we can now start feeding it
     if let Some(watchdog) = watchdog {
-        select! {
-            ui_err = ui.run(display).fuse() => ui_err,
-            wi_err = http_server.serve().fuse() => wi_err,
-            wd_err = watchdog.keep_fed().fuse() => wd_err,
-        }?
-    } else {
-        select! {
-            ui_err = ui.run(display).fuse() => ui_err,
-            wi_err = http_server.serve().fuse() => wi_err,
-        }?
+        watchdog.keep_fed(&mut wtb)?;
     }
 
-    Ok(())
+    Ok((ui, wtb))
 }
 
 #[async_std::main]
@@ -186,8 +178,18 @@ async fn main() -> Result<()> {
     // Show a splash screen very early on
     let display = setup_display();
 
-    match init().await {
-        Ok((ui, http_server, watchdog)) => run(ui, http_server, watchdog, display).await,
+    // This allows us to expose screenshoots of the LCD screen via HTTP
+    let screenshooter = display.screenshooter();
+
+    match init(screenshooter).await {
+        Ok((ui, mut wtb)) => {
+            // Start drawing the UI
+            ui.run(&mut wtb, display)?;
+
+            info!("Setup complete. Handling requests");
+
+            wtb.watch().await
+        }
         Err(e) => {
             // Display a detailed error message on stderr (and thus in the journal) ...
             error!("Failed to initialize tacd: {e}");

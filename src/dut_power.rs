@@ -30,6 +30,7 @@ use crate::adc::AdcChannel;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::digital_io::{find_line, LineHandle, LineRequestFlags};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(any(test, feature = "demo_mode"))]
 mod prio {
@@ -249,16 +250,17 @@ fn turn_off_with_reason(
 /// main interface used by e.g. the web UI pretty.
 fn setup_labgrid_compat(
     bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
     request: Arc<Topic<OutputRequest>>,
     state: Arc<Topic<OutputState>>,
-) {
+) -> Result<()> {
     let compat_request = bb.topic_wo::<u8>("/v1/dut/powered/compat", None);
     let compat_response = bb.topic_ro::<u8>("/v1/dut/powered/compat", None);
 
     let (mut state_stream, _) = state.subscribe_unbounded();
     let (mut compat_request_stream, _) = compat_request.subscribe_unbounded();
 
-    task::spawn(async move {
+    wtb.spawn_task("power-compat-from-labgrid", async move {
         while let Some(req) = compat_request_stream.next().await {
             match req {
                 0 => request.set(OutputRequest::Off),
@@ -266,9 +268,11 @@ fn setup_labgrid_compat(
                 _ => {}
             }
         }
-    });
 
-    task::spawn(async move {
+        Ok(())
+    })?;
+
+    wtb.spawn_task("power-compat-to-labgrid", async move {
         while let Some(state) = state_stream.next().await {
             match state {
                 OutputState::On => compat_response.set(1),
@@ -276,12 +280,17 @@ fn setup_labgrid_compat(
                 _ => compat_response.set(0),
             }
         }
-    });
+
+        Ok(())
+    })?;
+
+    Ok(())
 }
 
 impl DutPwrThread {
     pub async fn new(
         bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
         pwr_volt: AdcChannel,
         pwr_curr: AdcChannel,
         pwr_led: Arc<Topic<BlinkPattern>>,
@@ -313,169 +322,169 @@ impl DutPwrThread {
 
         // Spawn a high priority thread that handles the power status
         // in a realtimey fashion.
-        thread::Builder::new()
-            .name("tacd power".into())
-            .spawn(move || {
-                let mut last_ts: Option<Instant> = None;
+        wtb.spawn_thread("power-thread", move || {
+            let mut last_ts: Option<Instant> = None;
 
-                // There may be transients in the measured voltage/current, e.g. due to EMI or
-                // inrush currents.
-                // Nothing will break if they are sufficiently short, so the DUT can stay powered.
-                // Filter out transients by taking the last four values, throwing away the largest
-                // and smallest and averaging the two remaining ones.
-                let mut volt_filter = MedianFilter::<4>::new();
-                let mut curr_filter = MedianFilter::<4>::new();
+            // There may be transients in the measured voltage/current, e.g. due to EMI or
+            // inrush currents.
+            // Nothing will break if they are sufficiently short, so the DUT can stay powered.
+            // Filter out transients by taking the last four values, throwing away the largest
+            // and smallest and averaging the two remaining ones.
+            let mut volt_filter = MedianFilter::<4>::new();
+            let mut curr_filter = MedianFilter::<4>::new();
 
-                let (tick_weak, request, state) = match realtime_priority() {
-                    Ok(_) => {
-                        let tick = Arc::new(AtomicU32::new(0));
-                        let tick_weak = Arc::downgrade(&tick);
+            let (tick_weak, request, state) = match realtime_priority() {
+                Ok(_) => {
+                    let tick = Arc::new(AtomicU32::new(0));
+                    let tick_weak = Arc::downgrade(&tick);
 
-                        let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
-                        let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
+                    let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
+                    let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
 
-                        thread_res_tx
-                            .try_send(Ok((tick, request.clone(), state.clone())))
-                            .unwrap();
+                    thread_res_tx
+                        .try_send(Ok((tick, request.clone(), state.clone())))
+                        .unwrap();
 
-                        (tick_weak, request, state)
+                    (tick_weak, request, state)
+                }
+                Err(e) => {
+                    thread_res_tx.try_send(Err(e)).unwrap();
+                    panic!()
+                }
+            };
+
+            // Run as long as there is a strong reference to `tick`.
+            // As tick is a private member of the struct this is equivalent
+            // to running as long as the DutPwrThread was not dropped.
+            while let Some(tick) = tick_weak.upgrade() {
+                thread::sleep(THREAD_INTERVAL);
+
+                // Get new voltage and current readings while making sure
+                // that they are not stale
+                let (volt, curr) = loop {
+                    let feedback = pwr_volt
+                        .fast
+                        .try_get_multiple([&pwr_volt.fast, &pwr_curr.fast]);
+
+                    // We do not care too much about _why_ we could not get
+                    // a new value from the ADC.
+                    // If we get a new valid value before the timeout we
+                    // are fine.
+                    // If not we are not.
+                    if let Ok(m) = feedback {
+                        last_ts = Some(m[0].ts.as_instant());
                     }
-                    Err(e) => {
-                        thread_res_tx.try_send(Err(e)).unwrap();
-                        panic!()
+
+                    let too_old = last_ts
+                        .map(|ts| Instant::now().duration_since(ts) > MAX_AGE)
+                        .unwrap_or(false);
+
+                    if too_old {
+                        turn_off_with_reason(
+                            OutputState::RealtimeViolation,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
+                    } else {
+                        // We have a fresh ADC value. Signal "everything is well"
+                        // to the watchdog task.
+                        tick.fetch_add(1, Ordering::Relaxed);
+                    }
+
+                    if let Ok(m) = feedback {
+                        break (m[0].value, m[1].value);
                     }
                 };
 
-                // Run as long as there is a strong reference to `tick`.
-                // As tick is a private member of the struct this is equivalent
-                // to running as long as the DutPwrThread was not dropped.
-                while let Some(tick) = tick_weak.upgrade() {
-                    thread::sleep(THREAD_INTERVAL);
+                // The median filter needs some values in it's backlog before it
+                // starts outputting values.
+                let (volt, curr) = match (volt_filter.step(volt), curr_filter.step(curr)) {
+                    (Some(volt), Some(curr)) => (volt, curr),
+                    _ => continue,
+                };
 
-                    // Get new voltage and current readings while making sure
-                    // that they are not stale
-                    let (volt, curr) = loop {
-                        let feedback = pwr_volt
-                            .fast
-                            .try_get_multiple([&pwr_volt.fast, &pwr_curr.fast]);
+                // Take the next pending OutputRequest (if any) even if it
+                // may not be used due to a pending error condition, as it
+                // could be quite surprising for the output to turn on
+                // immediately when a fault is cleared after quite some time
+                // of the output being off.
+                let req = request
+                    .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
+                    .into();
 
-                        // We do not care too much about _why_ we could not get
-                        // a new value from the ADC.
-                        // If we get a new valid value before the timeout we
-                        // are fine.
-                        // If not we are not.
-                        if let Ok(m) = feedback {
-                            last_ts = Some(m[0].ts.as_instant());
-                        }
+                // Don't even look at the requests if there is an ongoing
+                // overvoltage condition. Instead turn the output off and
+                // go back to measuring.
+                if volt > MAX_VOLTAGE {
+                    turn_off_with_reason(
+                        OutputState::OverVoltage,
+                        &pwr_line,
+                        &discharge_line,
+                        &state,
+                    );
 
-                        let too_old = last_ts
-                            .map(|ts| Instant::now().duration_since(ts) > MAX_AGE)
-                            .unwrap_or(false);
-
-                        if too_old {
-                            turn_off_with_reason(
-                                OutputState::RealtimeViolation,
-                                &pwr_line,
-                                &discharge_line,
-                                &state,
-                            );
-                        } else {
-                            // We have a fresh ADC value. Signal "everything is well"
-                            // to the watchdog task.
-                            tick.fetch_add(1, Ordering::Relaxed);
-                        }
-
-                        if let Ok(m) = feedback {
-                            break (m[0].value, m[1].value);
-                        }
-                    };
-
-                    // The median filter needs some values in it's backlog before it
-                    // starts outputting values.
-                    let (volt, curr) = match (volt_filter.step(volt), curr_filter.step(curr)) {
-                        (Some(volt), Some(curr)) => (volt, curr),
-                        _ => continue,
-                    };
-
-                    // Take the next pending OutputRequest (if any) even if it
-                    // may not be used due to a pending error condition, as it
-                    // could be quite surprising for the output to turn on
-                    // immediately when a fault is cleared after quite some time
-                    // of the output being off.
-                    let req = request
-                        .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
-                        .into();
-
-                    // Don't even look at the requests if there is an ongoing
-                    // overvoltage condition. Instead turn the output off and
-                    // go back to measuring.
-                    if volt > MAX_VOLTAGE {
-                        turn_off_with_reason(
-                            OutputState::OverVoltage,
-                            &pwr_line,
-                            &discharge_line,
-                            &state,
-                        );
-
-                        continue;
-                    }
-
-                    // Don't even look at the requests if there is an ongoin
-                    // polarity inversion. Turn off, go back to start, do not
-                    // collect $200.
-                    if volt < MIN_VOLTAGE {
-                        turn_off_with_reason(
-                            OutputState::InvertedPolarity,
-                            &pwr_line,
-                            &discharge_line,
-                            &state,
-                        );
-
-                        continue;
-                    }
-
-                    // Don't even look at the requests if there is an ongoin
-                    // overcurrent condition.
-                    if curr > MAX_CURRENT {
-                        turn_off_with_reason(
-                            OutputState::OverCurrent,
-                            &pwr_line,
-                            &discharge_line,
-                            &state,
-                        );
-
-                        continue;
-                    }
-
-                    // There is no ongoing fault condition, so we could e.g. turn
-                    // the output on if requested.
-                    match req {
-                        OutputRequest::Idle => {}
-                        OutputRequest::On => {
-                            discharge_line
-                                .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                                .unwrap();
-                            pwr_line.set_value(PWR_LINE_ASSERTED).unwrap();
-                            state.store(OutputState::On as u8, Ordering::Relaxed);
-                        }
-                        OutputRequest::Off => {
-                            discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
-                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-                            state.store(OutputState::Off as u8, Ordering::Relaxed);
-                        }
-                        OutputRequest::OffFloating => {
-                            discharge_line
-                                .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                                .unwrap();
-                            pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-                            state.store(OutputState::OffFloating as u8, Ordering::Relaxed);
-                        }
-                    }
+                    continue;
                 }
 
-                // Make sure to enter fail safe mode before leaving the thread
-                turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
-            })?;
+                // Don't even look at the requests if there is an ongoin
+                // polarity inversion. Turn off, go back to start, do not
+                // collect $200.
+                if volt < MIN_VOLTAGE {
+                    turn_off_with_reason(
+                        OutputState::InvertedPolarity,
+                        &pwr_line,
+                        &discharge_line,
+                        &state,
+                    );
+
+                    continue;
+                }
+
+                // Don't even look at the requests if there is an ongoin
+                // overcurrent condition.
+                if curr > MAX_CURRENT {
+                    turn_off_with_reason(
+                        OutputState::OverCurrent,
+                        &pwr_line,
+                        &discharge_line,
+                        &state,
+                    );
+
+                    continue;
+                }
+
+                // There is no ongoing fault condition, so we could e.g. turn
+                // the output on if requested.
+                match req {
+                    OutputRequest::Idle => {}
+                    OutputRequest::On => {
+                        discharge_line
+                            .set_value(1 - DISCHARGE_LINE_ASSERTED)
+                            .unwrap();
+                        pwr_line.set_value(PWR_LINE_ASSERTED).unwrap();
+                        state.store(OutputState::On as u8, Ordering::Relaxed);
+                    }
+                    OutputRequest::Off => {
+                        discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
+                        pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                        state.store(OutputState::Off as u8, Ordering::Relaxed);
+                    }
+                    OutputRequest::OffFloating => {
+                        discharge_line
+                            .set_value(1 - DISCHARGE_LINE_ASSERTED)
+                            .unwrap();
+                        pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                        state.store(OutputState::OffFloating as u8, Ordering::Relaxed);
+                    }
+                }
+            }
+
+            // Make sure to enter fail safe mode before leaving the thread
+            turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
+
+            Ok(())
+        })?;
 
         let (tick, request, state) = thread_res_rx.next().await.unwrap()?;
 
@@ -487,34 +496,36 @@ impl DutPwrThread {
         let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/powered", None);
         let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", None);
 
-        setup_labgrid_compat(bb, request_topic.clone(), state_topic.clone());
+        setup_labgrid_compat(bb, wtb, request_topic.clone(), state_topic.clone())?;
 
         // Requests come from the broker framework and are placed into an atomic
         // request variable read by the thread.
         let state_topic_task = state_topic.clone();
         let (mut request_stream, _) = request_topic.clone().subscribe_unbounded();
-        task::spawn(async move {
+        wtb.spawn_task("power-from-broker", async move {
             while let Some(req) = request_stream.next().await {
                 state_topic_task.set(OutputState::Changing);
                 request.store(req as u8, Ordering::Relaxed);
             }
-        });
+
+            Ok(())
+        })?;
 
         // State information comes from the thread in the form of an atomic
         // variable and is forwarded to the broker framework.
         let state_topic_task = state_topic.clone();
-        task::spawn(async move {
+        wtb.spawn_task("power-to-broker", async move {
             loop {
                 task::sleep(TASK_INTERVAL).await;
 
                 let curr_state = state.load(Ordering::Relaxed).into();
                 state_topic_task.set_if_changed(curr_state);
             }
-        });
+        })?;
 
         // Forward the state information to the DUT Power LED
         let (mut state_stream, _) = state_topic.clone().subscribe_unbounded();
-        task::spawn(async move {
+        wtb.spawn_task("power-to-led", async move {
             let pattern_on = BlinkPattern::solid(1.0);
             let pattern_off = BlinkPattern::solid(0.0);
             let pattern_error = {
@@ -541,7 +552,9 @@ impl DutPwrThread {
                     _ => pwr_led.set(pattern_error.clone()),
                 }
             }
-        });
+
+            Ok(())
+        })?;
 
         Ok(Self {
             request: request_topic,
@@ -564,6 +577,7 @@ mod tests {
     use crate::adc::Adc;
     use crate::broker::{BrokerBuilder, Topic};
     use crate::digital_io::find_line;
+    use crate::watched_tasks::WatchedTasksBuilder;
 
     use super::{
         DutPwrThread, OutputRequest, OutputState, DISCHARGE_LINE_ASSERTED, MAX_CURRENT,
@@ -572,16 +586,18 @@ mod tests {
 
     #[test]
     fn failsafe() {
+        let mut wtb = WatchedTasksBuilder::new();
         let pwr_line = find_line("DUT_PWR_EN").unwrap();
         let discharge_line = find_line("DUT_PWR_DISCH").unwrap();
 
         let (adc, dut_pwr, led) = {
             let mut bb = BrokerBuilder::new();
-            let adc = block_on(Adc::new(&mut bb)).unwrap();
+            let adc = block_on(Adc::new(&mut bb, &mut wtb)).unwrap();
             let led = Topic::anonymous(None);
 
             let dut_pwr = block_on(DutPwrThread::new(
                 &mut bb,
+                &mut wtb,
                 adc.pwr_volt.clone(),
                 adc.pwr_curr.clone(),
                 led.clone(),

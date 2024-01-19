@@ -17,12 +17,13 @@
 
 use std::io::ErrorKind;
 
+use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::spawn;
 use log::{error, info, warn};
 
 use crate::broker::{BrokerBuilder, Topic};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 mod demo_mode;
 mod extras;
@@ -67,39 +68,43 @@ fn get_led_checked(hardware_name: &'static str) -> Option<Leds> {
 
 fn handle_pattern(
     bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
     hardware_name: &'static str,
     topic_name: &'static str,
-) -> Arc<Topic<BlinkPattern>> {
+) -> Result<Arc<Topic<BlinkPattern>>> {
     let topic = bb.topic_ro(&format!("/v1/tac/led/{topic_name}/pattern"), None);
 
     if let Some(led) = get_led_checked(hardware_name) {
         let (mut rx, _) = topic.clone().subscribe_unbounded();
 
-        spawn(async move {
+        wtb.spawn_task("led-pattern-update", async move {
             while let Some(pattern) = rx.next().await {
                 if let Err(e) = led.set_pattern(pattern) {
                     warn!("Failed to set LED pattern: {}", e);
                 }
             }
-        });
+
+            Ok(())
+        })?;
     }
 
-    topic
+    Ok(topic)
 }
 
 fn handle_color(
     bb: &mut BrokerBuilder,
+    wtb: &mut WatchedTasksBuilder,
     hardware_name: &'static str,
     topic_name: &'static str,
-) -> Arc<Topic<(f32, f32, f32)>> {
+) -> Result<Arc<Topic<(f32, f32, f32)>>> {
     let topic = bb.topic_ro(&format!("/v1/tac/led/{topic_name}/color"), None);
 
     if let Some(led) = get_led_checked(hardware_name) {
         let (mut rx, _) = topic.clone().subscribe_unbounded();
 
-        spawn(async move {
+        wtb.spawn_task("led-color-update", async move {
             while let Some((r, g, b)) = rx.next().await {
-                let max = led.max_brightness().unwrap();
+                let max = led.max_brightness()?;
 
                 // I've encountered LEDs staying off when set to the max value,
                 // but setting them to (max - 1) turned them on.
@@ -109,22 +114,24 @@ fn handle_color(
                     warn!("Failed to set LED color: {}", e);
                 }
             }
-        });
+
+            Ok(())
+        })?;
     }
 
-    topic
+    Ok(topic)
 }
 
 impl Led {
-    pub fn new(bb: &mut BrokerBuilder) -> Self {
-        Self {
-            out_0: handle_pattern(bb, "tac:green:out0", "out_0"),
-            out_1: handle_pattern(bb, "tac:green:out1", "out_1"),
-            dut_pwr: handle_pattern(bb, "tac:green:dutpwr", "dut_pwr"),
-            eth_dut: handle_pattern(bb, "tac:green:statusdut", "eth_dut"),
-            eth_lab: handle_pattern(bb, "tac:green:statuslab", "eth_lab"),
-            status: handle_pattern(bb, "rgb:status", "status"),
-            status_color: handle_color(bb, "rgb:status", "status"),
-        }
+    pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
+        Ok(Self {
+            out_0: handle_pattern(bb, wtb, "tac:green:out0", "out_0")?,
+            out_1: handle_pattern(bb, wtb, "tac:green:out1", "out_1")?,
+            dut_pwr: handle_pattern(bb, wtb, "tac:green:dutpwr", "dut_pwr")?,
+            eth_dut: handle_pattern(bb, wtb, "tac:green:statusdut", "eth_dut")?,
+            eth_lab: handle_pattern(bb, wtb, "tac:green:statuslab", "eth_lab")?,
+            status: handle_pattern(bb, wtb, "rgb:status", "status")?,
+            status_color: handle_color(bb, wtb, "rgb:status", "status")?,
+        })
     }
 }

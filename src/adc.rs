@@ -19,10 +19,11 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_std::sync::Arc;
-use async_std::task::{sleep, spawn};
+use async_std::task::sleep;
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::{Measurement, Timestamp};
+use crate::watched_tasks::WatchedTasksBuilder;
 
 const HISTORY_LENGTH: usize = 200;
 const SLOW_INTERVAL: Duration = Duration::from_millis(100);
@@ -77,9 +78,9 @@ pub struct Adc {
 }
 
 impl Adc {
-    pub async fn new(bb: &mut BrokerBuilder) -> Result<Self> {
-        let stm32_thread = IioThread::new_stm32().await?;
-        let powerboard_thread = IioThread::new_powerboard().await?;
+    pub async fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
+        let stm32_thread = IioThread::new_stm32(wtb).await?;
+        let powerboard_thread = IioThread::new_powerboard(wtb).await?;
 
         let adc = Self {
             usb_host_curr: AdcChannel {
@@ -212,7 +213,7 @@ impl Adc {
 
         // Spawn an async task to transfer values from the Atomic value based
         // "fast" interface to the broker based "slow" interface.
-        spawn(async move {
+        wtb.spawn_task("adc-update", async move {
             loop {
                 sleep(SLOW_INTERVAL).await;
 
@@ -226,7 +227,7 @@ impl Adc {
 
                 time.set(Timestamp::now());
             }
-        });
+        })?;
 
         Ok(adc)
     }
