@@ -74,6 +74,8 @@ mod imports {
 }
 
 const RELOAD_RATE_LIMIT: Duration = Duration::from_secs(10 * 60);
+const RETRY_INTERVAL_MIN: Duration = Duration::from_secs(60);
+const RETRY_INTERVAL_MAX: Duration = Duration::from_secs(60 * 60);
 
 use imports::*;
 
@@ -188,6 +190,8 @@ async fn channel_polling_task(
 ) {
     let proxy = InstallerProxy::new(&conn).await.unwrap();
 
+    let mut retry_interval = RETRY_INTERVAL_MIN;
+
     while let Some(mut channel) = channels
         .try_get()
         .and_then(|chs| chs.into_iter().find(|ch| ch.name == name))
@@ -201,10 +205,25 @@ async fn channel_polling_task(
 
         if let Err(e) = channel.poll(&proxy, slot_status.as_deref()).await {
             warn!(
-                "Failed to fetch update for update channel \"{}\": {}",
-                channel.name, e
+                "Failed to fetch update for update channel \"{}\": {}. Retrying in {}s.",
+                channel.name,
+                e,
+                retry_interval.as_secs()
             );
+
+            if retry_interval < RETRY_INTERVAL_MAX {
+                sleep(retry_interval).await;
+
+                // Perform a (limited) exponential backoff on the retry interval to recover
+                // fast from short-term issues while also preventing the update server from
+                // being DDOSed by excessive retries.
+                retry_interval *= 2;
+
+                continue;
+            }
         }
+
+        retry_interval = RETRY_INTERVAL_MIN;
 
         channels.modify(|chs| {
             let mut chs = chs?;
