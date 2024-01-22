@@ -56,10 +56,7 @@ impl ActivatableScreen for PowerScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        display.with_lock(|target| {
-            draw_border(target, "DUT Power", SCREEN_TYPE);
-            draw_button_legend(target, "Toggle", "Screen");
-        });
+        display.with_lock(|target| draw_border(target, "DUT Power", SCREEN_TYPE));
 
         let mut widgets = WidgetContainer::new(display);
 
@@ -132,6 +129,21 @@ impl ActivatableScreen for PowerScreen {
                     OutputState::Changing => IndicatorState::Unkown,
                     _ => IndicatorState::Error,
                 }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::button_legend(
+                ui.res.dut_pwr.state.clone(),
+                display,
+                |state: &OutputState| {
+                    let lower = match state {
+                        OutputState::On => "Turn Off",
+                        _ => "Turn On",
+                    };
+
+                    (lower.into(), "Screen".into())
+                },
             )
         });
 

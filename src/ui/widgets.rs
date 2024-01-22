@@ -318,6 +318,27 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
         )
     }
 
+    /// Draw a dynamic button legend
+    ///
+    /// Sometimes you want to draw different button legend text based on
+    /// external input. For example change from "Turn On" to "Turn Off" when
+    /// the status of the controlled value changes.
+    pub fn button_legend(
+        topic: Arc<Topic<T>>,
+        display: Arc<Display>,
+        format_fn: fn(&T) -> (String, String),
+    ) -> Self {
+        Self::new(
+            topic,
+            display,
+            Box::new(move |msg, target| {
+                let (lower, upper) = format_fn(msg);
+
+                Some(draw_button_legend(target, &lower, &upper))
+            }),
+        )
+    }
+
     /// Draw self-updating text with configurable alignment
     pub fn text_aligned(
         topic: Arc<Topic<T>>,
