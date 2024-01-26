@@ -56,7 +56,7 @@ impl ActivatableScreen for PowerScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        draw_border("DUT Power", SCREEN_TYPE, &display);
+        display.with_lock(|target| draw_border(target, "DUT Power", SCREEN_TYPE));
 
         let mut widgets = WidgetContainer::new(display);
 

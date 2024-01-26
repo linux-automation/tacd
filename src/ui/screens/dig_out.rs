@@ -60,8 +60,6 @@ impl ActivatableScreen for DigOutScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        draw_border("Digital Out", SCREEN_TYPE, &display);
-
         let ports = [
             (
                 0,
@@ -81,6 +79,8 @@ impl ActivatableScreen for DigOutScreen {
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            draw_border(target, "Digital Out", SCREEN_TYPE);
+
             for (idx, name, _, _) in ports {
                 let anchor_name = row_anchor(idx * 4);
 

@@ -61,12 +61,12 @@ impl ActivatableScreen for UsbScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        draw_border("USB Host", SCREEN_TYPE, &display);
-
         let ui_text_style: MonoTextStyle<BinaryColor> =
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            draw_border(target, "USB Host", SCREEN_TYPE);
+
             Text::new("Total", row_anchor(0), ui_text_style)
                 .draw(target)
                 .unwrap();
