@@ -73,7 +73,10 @@ impl ActivatableScreen for SystemScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        display.with_lock(|target| draw_border(target, "System Status", SCREEN_TYPE));
+        display.with_lock(|target| {
+            draw_border(target, "System Status", SCREEN_TYPE);
+            draw_button_legend(target, "Action", "Screen")
+        });
 
         let mut widgets = WidgetContainer::new(display);
         let highlighted = Topic::anonymous(Some(Action::Reboot));

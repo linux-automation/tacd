@@ -76,6 +76,8 @@ impl ActivatableScreen for IoBusHealthScreen {
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            draw_button_legend(target, "Dismiss", "-");
+
             Text::new(
                 "IOBus supply overload",
                 row_anchor(0) - (row_anchor(1) - row_anchor(0)),

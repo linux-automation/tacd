@@ -21,10 +21,10 @@ use async_std::sync::Arc;
 use async_std::task::{spawn, JoinHandle};
 use async_trait::async_trait;
 use embedded_graphics::{
-    mono_font::{ascii::FONT_10X20, MonoFont, MonoTextStyle},
+    mono_font::{ascii::FONT_10X20, ascii::FONT_8X13, MonoFont, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Circle, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
+    primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
     text::{Alignment, Text},
 };
 use serde::de::DeserializeOwned;
@@ -34,6 +34,7 @@ use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::ui::display::{Display, DisplayExclusive};
 
 pub const UI_TEXT_FONT: MonoFont = FONT_10X20;
+pub const SMALL_TEXT_FONT: MonoFont = FONT_8X13;
 
 pub enum IndicatorState {
     On,
@@ -96,6 +97,75 @@ impl<T, U> FractionFormatFn<T> for U where U: Fn(&T) -> f32 {}
 pub struct DynamicWidget<T: Sync + Send + 'static> {
     subscription_handle: SubscriptionHandle<T, Native>,
     join_handle: JoinHandle<Arc<Display>>,
+}
+
+/// Draw a legend that tells the user which button does what
+pub fn draw_button_legend(target: &mut DisplayExclusive, lower: &str, upper: &str) -> Rectangle {
+    // All draw calls operate on this rotated version of the screen.
+    // This means pixels drawn in the bottom row of `target` will appear
+    // at the right of the actual screen.
+    let mut target = target.rotate();
+
+    // This draws a couple of UI elements. Here is a legend:
+    //
+    // +------------------------+
+    // |                 ---4---|
+    // |                |       |
+    // |                | upper |
+    // |    actual      |       |
+    // |                1---2---|
+    // |    content     |       |
+    // |                | lower |
+    // |                |       |
+    // |                 ---3---|
+    // +------------------------+
+
+    let ui_text_style: MonoTextStyle<BinaryColor> =
+        MonoTextStyle::new(&SMALL_TEXT_FONT, BinaryColor::On);
+
+    // lower - Text that describes what the lower of the two buttons does
+    Text::with_alignment(lower, Point::new(73, 236), ui_text_style, Alignment::Center)
+        .draw(&mut target)
+        .unwrap();
+
+    // upper - Text that describes what the upper of the two buttons does
+    Text::with_alignment(
+        upper,
+        Point::new(168, 236),
+        ui_text_style,
+        Alignment::Center,
+    )
+    .draw(&mut target)
+    .unwrap();
+
+    // 1 - Long one going bottom to top
+    Line::new(Point::new(27, 224), Point::new(213, 224))
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 1))
+        .draw(&mut target)
+        .unwrap();
+
+    // 2 - Separator in the middle
+    Line::new(Point::new(120, 224), Point::new(120, 240))
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 1))
+        .draw(&mut target)
+        .unwrap();
+
+    // 3 - Lower border. Does not quite connect to 1 to give a rounded corner
+    Line::new(Point::new(26, 225), Point::new(26, 240))
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 1))
+        .draw(&mut target)
+        .unwrap();
+
+    // 4 - Upper border. Does not quite connect to 1 to give a rounded corner
+    Line::new(Point::new(214, 225), Point::new(214, 240))
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 1))
+        .draw(&mut target)
+        .unwrap();
+
+    // All previous coordinates were relative to the rotated screen,
+    // but the bounding box is returned in terms of the actual screen.
+    // (E.g. a box at the right of the screen.
+    Rectangle::with_corners(Point::new(224, 26), Point::new(240, 214))
 }
 
 impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWidget<T> {

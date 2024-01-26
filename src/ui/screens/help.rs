@@ -96,6 +96,8 @@ impl ActivatableScreen for HelpScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        display.with_lock(|target| draw_button_legend(target, "Action", "Leave"));
+
         let mut widgets = WidgetContainer::new(display);
 
         let up = Topic::anonymous(Some(false));

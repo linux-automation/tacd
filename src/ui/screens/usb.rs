@@ -33,7 +33,7 @@ use crate::usb_hub::{MAX_PORT_CURRENT, MAX_TOTAL_CURRENT};
 const SCREEN_TYPE: NormalScreen = NormalScreen::Usb;
 const OFFSET_INDICATOR: Point = Point::new(92, -10);
 const OFFSET_BAR: Point = Point::new(122, -14);
-const WIDTH_BAR: u32 = 90;
+const WIDTH_BAR: u32 = 80;
 const HEIGHT_BAR: u32 = 18;
 
 pub struct UsbScreen {
@@ -66,6 +66,7 @@ impl ActivatableScreen for UsbScreen {
 
         display.with_lock(|target| {
             draw_border(target, "USB Host", SCREEN_TYPE);
+            draw_button_legend(target, "Action", "Screen");
 
             Text::new("Total", row_anchor(0), ui_text_style)
                 .draw(target)

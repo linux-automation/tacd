@@ -71,7 +71,9 @@ fn rly(text: &str, display: &Display) {
     let text_style: MonoTextStyle<BinaryColor> = MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
     display.with_lock(|target| {
-        Text::with_alignment(text, Point::new(120, 80), text_style, Alignment::Center)
+        draw_button_legend(target, "Reboot", "Dismiss");
+
+        Text::with_alignment(text, Point::new(115, 80), text_style, Alignment::Center)
             .draw(target)
             .unwrap()
     });
@@ -135,7 +137,8 @@ impl ActiveScreen for Active {
 
     fn input(&mut self, ev: InputEvent) {
         match ev {
-            InputEvent::NextScreen | InputEvent::ToggleAction(_) => self.reboot_message.set(None),
+            InputEvent::NextScreen => self.reboot_message.set(None),
+            InputEvent::ToggleAction(_) => {}
             InputEvent::PerformAction(_) => {
                 brb(&self.display);
                 self.reboot.set(true);

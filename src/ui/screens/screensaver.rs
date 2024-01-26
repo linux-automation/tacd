@@ -135,9 +135,11 @@ impl ActivatableScreen for ScreenSaverScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        display.with_lock(|target| draw_button_legend(target, "Locator", "Wake Up"));
+
         let bounce = BounceAnimation::new(Rectangle::with_corners(
             Point::new(0, 8),
-            Point::new(240, 240),
+            Point::new(223, 240),
         ));
 
         let mut widgets = WidgetContainer::new(display);

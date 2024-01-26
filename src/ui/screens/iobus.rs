@@ -56,6 +56,7 @@ impl ActivatableScreen for IoBusScreen {
 
         display.with_lock(|target| {
             draw_border(target, "IOBus", SCREEN_TYPE);
+            draw_button_legend(target, "Toggle", "Screen");
 
             Text::new("CAN Status:", row_anchor(0), ui_text_style)
                 .draw(target)
