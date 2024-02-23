@@ -63,6 +63,7 @@ use prio::realtime_priority;
 const MAX_AGE: Duration = Duration::from_millis(300);
 const THREAD_INTERVAL: Duration = Duration::from_millis(100);
 const TASK_INTERVAL: Duration = Duration::from_millis(200);
+const TURN_ON_ERROR_GRACE_PERIOD: Duration = Duration::from_millis(600);
 const MAX_CURRENT: f32 = 5.0;
 const MAX_VOLTAGE: f32 = 48.0;
 const MIN_VOLTAGE: f32 = -1.0;
@@ -353,6 +354,12 @@ impl DutPwrThread {
                 }
             };
 
+            // The grace period contains the number of loop iterations until
+            // we start handling over/under voltage and overcurrent events.
+            // This counts down to zero after turning on the output.
+            // And is kept at TURN_ON_ERROR_GRACE_PERIOD while the output is off.
+            let mut grace_period = TURN_ON_ERROR_GRACE_PERIOD;
+
             // Run as long as there is a strong reference to `tick`.
             // As tick is a private member of the struct this is equivalent
             // to running as long as the DutPwrThread was not dropped.
@@ -413,10 +420,29 @@ impl DutPwrThread {
                     .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
                     .into();
 
-                {
-                    // Don't even look at the requests if there is an ongoing
-                    // overvoltage condition. Instead turn the output off and
-                    // go back to measuring.
+                // Checking for MAX_VOLTAGE, MIN_VOLTAGE, MAX_CURRENT error conditions while
+                // the DUT power switch is off does not make a lot of sense,
+                // considering the way we measure these values right now (behind the DUT power switch).
+                // And what would we even do in this case? Turn the output even more off?
+                // If we see one of these error conditions while the output is off it is
+                // likely due to our high-impedance measurements and not due to a real error.
+                // Ignore these kinds of errors while the output is off and for a few
+                // THREAD_INTERVALs after turning it on.
+                grace_period = match state.load(Ordering::Relaxed).into() {
+                    OutputState::On => grace_period.saturating_sub(THREAD_INTERVAL),
+                    OutputState::Off
+                    | OutputState::OffFloating
+                    | OutputState::Changing
+                    | OutputState::InvertedPolarity
+                    | OutputState::OverCurrent
+                    | OutputState::OverVoltage
+                    | OutputState::RealtimeViolation => TURN_ON_ERROR_GRACE_PERIOD,
+                };
+
+                if grace_period == Duration::ZERO {
+                    // At this point the output is on and has been on for
+                    // TURN_ON_ERROR_GRACE_PERIOD, so we start checking for error conditions.
+
                     if volt > MAX_VOLTAGE {
                         turn_off_with_reason(
                             OutputState::OverVoltage,
@@ -428,9 +454,6 @@ impl DutPwrThread {
                         continue;
                     }
 
-                    // Don't even look at the requests if there is an ongoin
-                    // polarity inversion. Turn off, go back to start, do not
-                    // collect $200.
                     if volt < MIN_VOLTAGE {
                         turn_off_with_reason(
                             OutputState::InvertedPolarity,
@@ -442,8 +465,6 @@ impl DutPwrThread {
                         continue;
                     }
 
-                    // Don't even look at the requests if there is an ongoin
-                    // overcurrent condition.
                     if curr > MAX_CURRENT {
                         turn_off_with_reason(
                             OutputState::OverCurrent,
@@ -743,5 +764,62 @@ mod tests {
         block_on(sleep(Duration::from_millis(500)));
         assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
         assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
+    }
+
+    #[test]
+    fn grace_period() {
+        let mut wtb = WatchedTasksBuilder::new();
+        let pwr_line = find_line("DUT_PWR_EN").unwrap();
+        let discharge_line = find_line("DUT_PWR_DISCH").unwrap();
+
+        let (adc, dut_pwr) = {
+            let mut bb = BrokerBuilder::new();
+            let adc = block_on(Adc::new(&mut bb, &mut wtb)).unwrap();
+            let led = Topic::anonymous(None);
+
+            let dut_pwr = block_on(DutPwrThread::new(
+                &mut bb,
+                &mut wtb,
+                adc.pwr_volt.clone(),
+                adc.pwr_curr.clone(),
+                led,
+            ))
+            .unwrap();
+
+            (adc, dut_pwr)
+        };
+
+        // Set acceptable voltage / current
+        adc.pwr_volt.fast.set(MAX_VOLTAGE * 0.99);
+        adc.pwr_curr.fast.set(MAX_CURRENT * 0.99);
+
+        println!("Turn Off");
+        dut_pwr.request.set(OutputRequest::Off);
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::Off);
+
+        println!("Set overvoltage");
+        adc.pwr_volt.fast.set(MAX_VOLTAGE * 1.01);
+        block_on(sleep(Duration::from_millis(500)));
+
+        println!("Check if output stays off and does not go into error state");
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::Off);
+
+        println!("Turn On (with overvoltage applied)");
+        dut_pwr.request.set(OutputRequest::On);
+        block_on(sleep(Duration::from_millis(400)));
+        assert_eq!(pwr_line.stub_get(), PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), 1 - DISCHARGE_LINE_ASSERTED);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::On);
+
+        println!("Go into overvoltage error");
+        block_on(sleep(Duration::from_millis(500)));
+        assert_eq!(pwr_line.stub_get(), 1 - PWR_LINE_ASSERTED);
+        assert_eq!(discharge_line.stub_get(), DISCHARGE_LINE_ASSERTED);
+        assert_eq!(block_on(dut_pwr.state.get()), OutputState::OverVoltage);
     }
 }
