@@ -40,7 +40,6 @@ use futures_util::future::Either;
 use futures_util::{FutureExt, SinkExt, StreamExt};
 
 use mqtt::control::variable_header::{ConnectReturnCode, ProtocolLevel};
-use mqtt::packet::publish::QoSWithPacketIdentifier;
 use mqtt::packet::suback::SubscribeReturnCode;
 use mqtt::TopicFilter;
 use mqtt::{packet::*, Decodable, Encodable};
