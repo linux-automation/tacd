@@ -413,45 +413,47 @@ impl DutPwrThread {
                     .swap(OutputRequest::Idle as u8, Ordering::Relaxed)
                     .into();
 
-                // Don't even look at the requests if there is an ongoing
-                // overvoltage condition. Instead turn the output off and
-                // go back to measuring.
-                if volt > MAX_VOLTAGE {
-                    turn_off_with_reason(
-                        OutputState::OverVoltage,
-                        &pwr_line,
-                        &discharge_line,
-                        &state,
-                    );
+                {
+                    // Don't even look at the requests if there is an ongoing
+                    // overvoltage condition. Instead turn the output off and
+                    // go back to measuring.
+                    if volt > MAX_VOLTAGE {
+                        turn_off_with_reason(
+                            OutputState::OverVoltage,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
 
-                    continue;
-                }
+                        continue;
+                    }
 
-                // Don't even look at the requests if there is an ongoin
-                // polarity inversion. Turn off, go back to start, do not
-                // collect $200.
-                if volt < MIN_VOLTAGE {
-                    turn_off_with_reason(
-                        OutputState::InvertedPolarity,
-                        &pwr_line,
-                        &discharge_line,
-                        &state,
-                    );
+                    // Don't even look at the requests if there is an ongoin
+                    // polarity inversion. Turn off, go back to start, do not
+                    // collect $200.
+                    if volt < MIN_VOLTAGE {
+                        turn_off_with_reason(
+                            OutputState::InvertedPolarity,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
 
-                    continue;
-                }
+                        continue;
+                    }
 
-                // Don't even look at the requests if there is an ongoin
-                // overcurrent condition.
-                if curr > MAX_CURRENT {
-                    turn_off_with_reason(
-                        OutputState::OverCurrent,
-                        &pwr_line,
-                        &discharge_line,
-                        &state,
-                    );
+                    // Don't even look at the requests if there is an ongoin
+                    // overcurrent condition.
+                    if curr > MAX_CURRENT {
+                        turn_off_with_reason(
+                            OutputState::OverCurrent,
+                            &pwr_line,
+                            &discharge_line,
+                            &state,
+                        );
 
-                    continue;
+                        continue;
+                    }
                 }
 
                 // There is no ongoing fault condition, so we could e.g. turn
