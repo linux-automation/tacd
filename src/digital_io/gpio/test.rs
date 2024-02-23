@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::cell::RefCell;
 use std::iter::Iterator;
 use std::ops::BitOr;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -22,10 +23,11 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use anyhow::Result;
-use async_std::sync::{Arc, Mutex};
-use async_std::task::block_on;
+use async_std::sync::Arc;
 
-static LINES: Mutex<Vec<(String, Arc<AtomicU8>)>> = Mutex::new(Vec::new());
+std::thread_local! {
+    static LINES: RefCell<Vec<(String, Arc<AtomicU8>)>> = RefCell::new(Vec::new());
+}
 
 pub struct LineHandle {
     name: String,
@@ -115,9 +117,7 @@ impl FindDecoy {
 }
 
 pub fn find_line(name: &str) -> Option<FindDecoy> {
-    let val = {
-        let mut lines = block_on(LINES.lock());
-
+    let val = LINES.with_borrow_mut(|lines| {
         if let Some((_, v)) = lines.iter().find(|(n, _)| n == name) {
             v.clone()
         } else {
@@ -125,7 +125,7 @@ pub fn find_line(name: &str) -> Option<FindDecoy> {
             lines.push((name.to_string(), v.clone()));
             v
         }
-    };
+    });
 
     Some(FindDecoy {
         name: name.to_string(),
