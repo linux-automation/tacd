@@ -155,6 +155,12 @@ export default function Setup() {
                       notified about updates via the LXA TACs display and the
                       web interface and can start the update process from there.
                     </Box>
+                    <Box variant="p">
+                      When polling for updates the LXA TAC will transmit the
+                      following information to our server: The IP address the
+                      request is coming from, the serial number of the device
+                      and information on the currently installed software.
+                    </Box>
                     <Box variant="p" padding="s">
                       <MqttToggle topic="/v1/tac/update/enable_polling">
                         Periodically check for updates
