@@ -48,7 +48,7 @@ export function LabgridConfig() {
           label: "User Config",
           id: "user",
           content: (
-            <ConfigEditor path="/v1/labgrid/userconfig" language="yaml" />
+            <ConfigEditor path="/v1/labgrid/userconfig" language="text" />
           ),
         },
         {
@@ -62,7 +62,7 @@ export function LabgridConfig() {
           label: "System Config",
           id: "system",
           content: (
-            <ConfigEditor path="v1/labgrid/configuration" language="yaml" />
+            <ConfigEditor path="v1/labgrid/configuration" language="text" />
           ),
         },
       ]}
