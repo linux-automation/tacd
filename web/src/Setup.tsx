@@ -243,6 +243,10 @@ export default function Setup() {
                         Go back to the exporter configuration step to make
                         changes and click "Next" once you are satisfied.
                       </Box>
+                      <Box variant="p">
+                        If your labgrid configuration does not work right away
+                        you can always come back and change it later.
+                      </Box>
                       <LabgridService />
                     </SpaceBetween>
                   </Container>
