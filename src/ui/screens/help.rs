@@ -32,18 +32,25 @@ use crate::watched_tasks::WatchedTasksBuilder;
 const SCREEN_TYPE: AlertScreen = AlertScreen::Help;
 const PAGES: &[&str] = &[
     "Hey there!
-
 A short guide on how
 this interface works:
+
+Please long press the
+lower button to
+continue.
+...",
+    "...
+
 Long presses on the
 lower button perform
 actions.
+
 ...",
     "...
 
 Short presses on the
 lower button toggle
-between actions.
+between options.
 
 ...",
     "...
@@ -171,7 +178,7 @@ impl ActiveScreen for Active {
                 self.page.modify(|page| match (page.unwrap_or(0), up) {
                     (0, true) => Some(0),
                     (p, true) => Some(p - 1),
-                    (2, false) => Some(2),
+                    (3, false) => Some(3),
                     (p, false) => Some(p + 1),
                 });
             }
