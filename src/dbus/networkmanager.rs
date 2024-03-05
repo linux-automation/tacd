@@ -16,7 +16,6 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use anyhow::Result;
-use async_std;
 use async_std::sync::Arc;
 use serde::{Deserialize, Serialize};
 

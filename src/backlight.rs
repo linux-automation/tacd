@@ -20,6 +20,7 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use log::warn;
 
+#[cfg(feature = "demo_mode")]
 mod demo_mode;
 
 #[cfg(feature = "demo_mode")]

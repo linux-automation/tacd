@@ -25,7 +25,9 @@ use log::{error, info, warn};
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
+#[cfg(feature = "demo_mode")]
 mod demo_mode;
+
 mod extras;
 
 #[cfg(feature = "demo_mode")]
