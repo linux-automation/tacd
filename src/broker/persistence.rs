@@ -22,7 +22,7 @@ use anyhow::{bail, Result};
 use async_std::channel::{unbounded, Receiver};
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use log::{error, info};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_reader, to_writer_pretty, Map, Value};
 
@@ -70,12 +70,10 @@ fn load(topics: &[Arc<dyn AnyTopic>]) -> Result<()> {
     }
 
     if !content.is_empty() {
-        error!("State file contained extra keys:");
+        warn!("State file contained extra keys:");
         for topic_name in content.keys() {
-            error!(" - {topic_name}");
+            warn!(" - {topic_name}");
         }
-
-        bail!("Left over topics in state file");
     }
 
     Ok(())
