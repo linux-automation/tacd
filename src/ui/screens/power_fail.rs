@@ -99,6 +99,8 @@ impl ActivatableScreen for PowerFailScreen {
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            draw_button_legend(target, "Select", "-");
+
             Text::new(
                 "DUT Power error",
                 row_anchor(0) - (row_anchor(1) - row_anchor(0)),
@@ -121,12 +123,16 @@ impl ActivatableScreen for PowerFailScreen {
                             "The error was resolved"
                         }
                         OutputState::InvertedPolarity => {
-                            "Output disabled due to\ninverted polarity."
+                            "Output disabled due\nto inverted polarity."
                         }
-                        OutputState::OverCurrent => "DUT powered off due to\nan overcurrent event.",
-                        OutputState::OverVoltage => "DUT powered off due to\nan overvoltage event.",
+                        OutputState::OverCurrent => {
+                            "DUT powered off due\nto an overcurrent\nevent."
+                        }
+                        OutputState::OverVoltage => {
+                            "DUT powered off due\nto an overvoltage\nevent."
+                        }
                         OutputState::RealtimeViolation => {
-                            "Output disabled due to\na realtime violation."
+                            "Output disabled due\n to a realtime\nviolation."
                         }
                         OutputState::Changing => "",
                     };
@@ -145,8 +151,8 @@ impl ActivatableScreen for PowerFailScreen {
                 row_anchor(6),
                 Box::new(|highlight: &Highlight| {
                     let msg = match highlight {
-                        Highlight::TurnOn => "> Turn output back on\n  Keep output off",
-                        Highlight::KeepOff => "  Turn output back on\n> Keep output off",
+                        Highlight::TurnOn => "> Turn back on\n  Keep output off",
+                        Highlight::KeepOff => "  Turn back on\n> Keep output off",
                     };
 
                     msg.to_string()

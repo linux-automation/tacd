@@ -51,12 +51,12 @@ impl ActivatableScreen for IoBusScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        draw_border("IOBus", SCREEN_TYPE, &display);
-
         let ui_text_style: MonoTextStyle<BinaryColor> =
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            draw_border(target, "IOBus", SCREEN_TYPE);
+
             Text::new("CAN Status:", row_anchor(0), ui_text_style)
                 .draw(target)
                 .unwrap();
@@ -130,6 +130,21 @@ impl ActivatableScreen for IoBusScreen {
                     true => IndicatorState::On,
                     false => IndicatorState::Off,
                 }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::button_legend(
+                ui.res.regulators.iobus_pwr_en.clone(),
+                display,
+                |state: &bool| {
+                    let lower = match *state {
+                        false => "Turn On",
+                        true => "Turn Off",
+                    };
+
+                    (lower.into(), "Screen".into())
+                },
             )
         });
 

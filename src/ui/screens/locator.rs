@@ -81,6 +81,8 @@ impl ActivatableScreen for LocatorScreen {
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            draw_button_legend(target, "Found it!", "-");
+
             Text::with_alignment(
                 "Locating this TAC",
                 Point::new(120, 80),

@@ -33,7 +33,7 @@ const CURRENT_LIMIT: f32 = 5.0;
 const VOLTAGE_LIMIT: f32 = 48.0;
 const OFFSET_INDICATOR: Point = Point::new(155, -10);
 const OFFSET_BAR: Point = Point::new(112, -14);
-const WIDTH_BAR: u32 = 100;
+const WIDTH_BAR: u32 = 90;
 const HEIGHT_BAR: u32 = 18;
 
 pub struct PowerScreen;
@@ -56,7 +56,7 @@ impl ActivatableScreen for PowerScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        draw_border("DUT Power", SCREEN_TYPE, &display);
+        display.with_lock(|target| draw_border(target, "DUT Power", SCREEN_TYPE));
 
         let mut widgets = WidgetContainer::new(display);
 
@@ -129,6 +129,21 @@ impl ActivatableScreen for PowerScreen {
                     OutputState::Changing => IndicatorState::Unkown,
                     _ => IndicatorState::Error,
                 }),
+            )
+        });
+
+        widgets.push(|display| {
+            DynamicWidget::button_legend(
+                ui.res.dut_pwr.state.clone(),
+                display,
+                |state: &OutputState| {
+                    let lower = match state {
+                        OutputState::On => "Turn Off",
+                        _ => "Turn On",
+                    };
+
+                    (lower.into(), "Screen".into())
+                },
             )
         });
 

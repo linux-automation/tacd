@@ -75,6 +75,9 @@ impl ActivatableScreen for OverTemperatureScreen {
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            // This screen can only be left by resolving the underlying issue
+            draw_button_legend(target, "-", "-");
+
             Text::new("Temperature alert!", row_anchor(0), ui_text_style)
                 .draw(target)
                 .unwrap();

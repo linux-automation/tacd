@@ -33,7 +33,7 @@ const SCREEN_TYPE: NormalScreen = NormalScreen::DigOut;
 const VOLTAGE_MAX: f32 = 5.0;
 const OFFSET_INDICATOR: Point = Point::new(170, -10);
 const OFFSET_BAR: Point = Point::new(140, -14);
-const WIDTH_BAR: u32 = 72;
+const WIDTH_BAR: u32 = 62;
 const HEIGHT_BAR: u32 = 18;
 
 pub struct DigOutScreen {
@@ -60,8 +60,6 @@ impl ActivatableScreen for DigOutScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        draw_border("Digital Out", SCREEN_TYPE, &display);
-
         let ports = [
             (
                 0,
@@ -81,6 +79,9 @@ impl ActivatableScreen for DigOutScreen {
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            draw_border(target, "Digital Out", SCREEN_TYPE);
+            draw_button_legend(target, "Action", "Screen");
+
             for (idx, name, _, _) in ports {
                 let anchor_name = row_anchor(idx * 4);
 

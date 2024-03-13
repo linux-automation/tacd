@@ -134,31 +134,29 @@ pub(super) trait ActivatableScreen: Sync + Send {
 
 /// Draw static screen border containing a title and an indicator for the
 /// position of the screen in the list of screens.
-fn draw_border(text: &str, screen: NormalScreen, display: &Display) {
-    display.with_lock(|target| {
-        Text::new(
-            text,
-            Point::new(8, 17),
-            MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On),
-        )
+fn draw_border(target: &mut DisplayExclusive, text: &str, screen: NormalScreen) {
+    Text::new(
+        text,
+        Point::new(8, 17),
+        MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On),
+    )
+    .draw(target)
+    .unwrap();
+
+    Line::new(Point::new(0, 23), Point::new(240, 23))
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
         .draw(target)
         .unwrap();
 
-        Line::new(Point::new(0, 24), Point::new(240, 24))
-            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 2))
-            .draw(target)
-            .unwrap();
+    let screen_idx = screen as i32;
+    let num_screens = (NormalScreen::Uart as i32) + 1;
+    let x_start = screen_idx * 240 / num_screens;
+    let x_end = (screen_idx + 1) * 240 / num_screens;
 
-        let screen_idx = screen as i32;
-        let num_screens = (NormalScreen::Uart as i32) + 1;
-        let x_start = screen_idx * 240 / num_screens;
-        let x_end = (screen_idx + 1) * 240 / num_screens;
-
-        Line::new(Point::new(x_start, 240), Point::new(x_end, 240))
-            .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
-            .draw(target)
-            .unwrap();
-    });
+    Line::new(Point::new(x_start, 240), Point::new(x_end, 240))
+        .into_styled(PrimitiveStyle::with_stroke(BinaryColor::On, 4))
+        .draw(target)
+        .unwrap();
 }
 
 const fn row_anchor(row_num: u8) -> Point {

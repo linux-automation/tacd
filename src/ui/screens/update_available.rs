@@ -181,6 +181,8 @@ impl ActivatableScreen for UpdateAvailableScreen {
                 self.selection.clone(),
                 display,
                 Box::new(move |sel, target| {
+                    draw_button_legend(target, "Select", "-");
+
                     let ui_text_style: MonoTextStyle<BinaryColor> =
                         MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 

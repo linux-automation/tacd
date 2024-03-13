@@ -35,8 +35,8 @@ use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UsbOverload;
 const OFFSET_BAR: Point = Point::new(75, -14);
-const OFFSET_VAL: Point = Point::new(160, 0);
-const WIDTH_BAR: u32 = 80;
+const OFFSET_VAL: Point = Point::new(145, 0);
+const WIDTH_BAR: u32 = 65;
 const HEIGHT_BAR: u32 = 18;
 
 pub struct UsbOverloadScreen;
@@ -80,6 +80,9 @@ impl ActivatableScreen for UsbOverloadScreen {
             MonoTextStyle::new(&UI_TEXT_FONT, BinaryColor::On);
 
         display.with_lock(|target| {
+            // This screen can only be left by resolving the underlying issue
+            draw_button_legend(target, "-", "-");
+
             Text::new(
                 "USB Power Overload",
                 row_anchor(0) - (row_anchor(1) - row_anchor(0)),

@@ -73,6 +73,10 @@ pub struct ScreenShooter {
     inner: Arc<Mutex<DisplayExclusive>>,
 }
 
+pub struct DisplayRotated<'a> {
+    inner: &'a mut DisplayExclusive,
+}
+
 impl Display {
     pub fn new() -> Self {
         let mut fb = Framebuffer::new("/dev/fb0").unwrap();
@@ -136,6 +140,20 @@ impl ScreenShooter {
     }
 }
 
+impl DisplayExclusive {
+    /// Return an DrawTarget that draws everything rotated by 90deg
+    ///
+    /// Drawing a pixel to the bottom of DisplayRotated results in the pixel
+    /// appearing on the right of the actual screen.
+    pub fn rotate(&mut self) -> DisplayRotated {
+        // This could easily be made more generic, by accepting a direction
+        // parameter, but that would result in dead code because we only
+        // draw the button legend rotated.
+
+        DisplayRotated { inner: self }
+    }
+}
+
 impl DrawTarget for DisplayExclusive {
     type Color = BinaryColor;
     type Error = core::convert::Infallible;
@@ -174,5 +192,32 @@ impl DrawTarget for DisplayExclusive {
 impl OriginDimensions for DisplayExclusive {
     fn size(&self) -> Size {
         Size::new(self.0.var_screen_info.xres, self.0.var_screen_info.yres)
+    }
+}
+
+impl<'a> DrawTarget for DisplayRotated<'a> {
+    type Color = BinaryColor;
+    type Error = core::convert::Infallible;
+
+    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
+    where
+        I: IntoIterator<Item = Pixel<Self::Color>>,
+    {
+        let res = self.size();
+        let res_y = res.height as i32;
+
+        let rotated_pixels = pixels
+            .into_iter()
+            .map(|Pixel(coord, color)| Pixel(Point::new(coord.y, res_y - coord.x), color));
+
+        self.inner.draw_iter(rotated_pixels)
+    }
+}
+
+impl<'a> OriginDimensions for DisplayRotated<'a> {
+    fn size(&self) -> Size {
+        let orig = self.inner.size();
+
+        Size::new(orig.height, orig.width)
     }
 }

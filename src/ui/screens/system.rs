@@ -73,7 +73,10 @@ impl ActivatableScreen for SystemScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        draw_border("System Status", SCREEN_TYPE, &display);
+        display.with_lock(|target| {
+            draw_border(target, "System Status", SCREEN_TYPE);
+            draw_button_legend(target, "Action", "Screen")
+        });
 
         let mut widgets = WidgetContainer::new(display);
         let highlighted = Topic::anonymous(Some(Action::Reboot));
@@ -83,7 +86,7 @@ impl ActivatableScreen for SystemScreen {
                 ui.res.temperatures.soc_temperature.clone(),
                 display,
                 row_anchor(0),
-                Box::new(|meas: &Measurement| format!("SoC:    {:.0}C", meas.value)),
+                Box::new(|meas: &Measurement| format!("SoC: {:.0}C", meas.value)),
             )
         });
 
@@ -93,8 +96,8 @@ impl ActivatableScreen for SystemScreen {
                 display,
                 row_anchor(1),
                 Box::new(|info: &LinkInfo| match info.carrier {
-                    true => format!("Uplink: {}MBit/s", info.speed),
-                    false => "Uplink: Down".to_string(),
+                    true => format!("UL:  {}MBit/s", info.speed),
+                    false => "UL:  Down".to_string(),
                 }),
             )
         });
@@ -105,8 +108,8 @@ impl ActivatableScreen for SystemScreen {
                 display,
                 row_anchor(2),
                 Box::new(|info: &LinkInfo| match info.carrier {
-                    true => format!("DUT:    {}MBit/s", info.speed),
-                    false => "DUT:    Down".to_string(),
+                    true => format!("DUT: {}MBit/s", info.speed),
+                    false => "DUT: Down".to_string(),
                 }),
             )
         });
@@ -118,7 +121,7 @@ impl ActivatableScreen for SystemScreen {
                 row_anchor(3),
                 Box::new(|ips: &Vec<String>| {
                     let ip = ips.first().map(|s| s.as_str()).unwrap_or("-");
-                    format!("IP:     {}", ip)
+                    format!("IP:  {}", ip)
                 }),
             )
         });

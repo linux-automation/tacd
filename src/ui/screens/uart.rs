@@ -51,7 +51,10 @@ impl ActivatableScreen for UartScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
-        draw_border("DUT UART", SCREEN_TYPE, &display);
+        display.with_lock(|target| {
+            draw_border(target, "DUT UART", SCREEN_TYPE);
+            draw_button_legend(target, "Action", "Screen")
+        });
 
         let mut widgets = WidgetContainer::new(display);
 

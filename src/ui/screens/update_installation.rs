@@ -90,6 +90,10 @@ impl ActivatableScreen for UpdateInstallationScreen {
     }
 
     fn activate(&mut self, ui: &Ui, display: Display) -> Box<dyn ActiveScreen> {
+        // This screen is left automatically once the update is complete.
+        // No way to exit it prior to that.
+        display.with_lock(|target| draw_button_legend(target, "-", "-"));
+
         let mut widgets = WidgetContainer::new(display);
 
         widgets.push(|display| {
