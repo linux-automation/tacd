@@ -30,6 +30,7 @@ mod iobus;
 mod journal;
 mod led;
 mod measurement;
+mod motd;
 mod regulators;
 mod setup_mode;
 mod system;
@@ -127,6 +128,17 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     // Expose a live log of the TAC's systemd journal so it can be viewed
     // in the web interface.
     journal::serve(&mut http_server.server);
+
+    // Maintain a /etc/motd with useful information about the TAC
+    motd::keep_updated(
+        &mut wtb,
+        &dut_pwr,
+        &iobus,
+        &rauc,
+        &setup_mode,
+        &temperatures,
+        &usb_hub,
+    )?;
 
     // Set up the user interface for the hardware display on the TAC.
     // The different screens receive updates via the topics provided in
