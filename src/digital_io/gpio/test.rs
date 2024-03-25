@@ -16,11 +16,8 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use std::cell::RefCell;
-use std::iter::Iterator;
 use std::ops::BitOr;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::thread::sleep;
-use std::time::Duration;
 
 use anyhow::Result;
 use async_std::sync::Arc;
@@ -39,30 +36,6 @@ impl LineHandle {
         println!("GPIO simulation set {} to {}", self.name, val);
         self.val.store(val, Ordering::Relaxed);
         Ok(())
-    }
-}
-
-pub struct LineEvent(u8);
-
-pub struct LineEventHandle {
-    val: Arc<AtomicU8>,
-    prev_val: u8,
-}
-
-impl Iterator for LineEventHandle {
-    type Item = Result<LineEvent, ()>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let val = self.val.load(Ordering::Relaxed);
-
-            if val != self.prev_val {
-                self.prev_val = val;
-                return Some(Ok(LineEvent(val)));
-            }
-
-            sleep(Duration::from_millis(100));
-        }
     }
 }
 
