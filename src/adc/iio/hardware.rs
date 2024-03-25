@@ -35,52 +35,53 @@ use crate::measurement::{Measurement, Timestamp};
 use crate::watched_tasks::WatchedTasksBuilder;
 
 struct ChannelDesc {
-    kernel_name: &'static str,
+    kernel_names: &'static [&'static str],
     calibration_path: &'static str,
     name: &'static str,
 }
 
 // Hard coded list of channels using the internal STM32MP1 ADC.
-// Consists of the IIO channel name, the location of the calibration data
-// in the device tree and an internal name for the channel.
+// Consists of the IIO channel names that the channel could be at,
+// the location of the calibration data in the device tree and an
+// internal name for the channel.
 const CHANNELS_STM32: &[ChannelDesc] = &[
     ChannelDesc {
-        kernel_name: "voltage13",
+        kernel_names: &["voltage13"],
         calibration_path: "baseboard-factory-data/usb-host-curr",
         name: "usb-host-curr",
     },
     ChannelDesc {
-        kernel_name: "voltage15",
+        kernel_names: &["voltage15"],
         calibration_path: "baseboard-factory-data/usb-host1-curr",
         name: "usb-host1-curr",
     },
     ChannelDesc {
-        kernel_name: "voltage0",
+        kernel_names: &["voltage0", "voltage18"],
         calibration_path: "baseboard-factory-data/usb-host2-curr",
         name: "usb-host2-curr",
     },
     ChannelDesc {
-        kernel_name: "voltage1",
+        kernel_names: &["voltage1", "voltage14"],
         calibration_path: "baseboard-factory-data/usb-host3-curr",
         name: "usb-host3-curr",
     },
     ChannelDesc {
-        kernel_name: "voltage2",
+        kernel_names: &["voltage2"],
         calibration_path: "baseboard-factory-data/out0-volt",
         name: "out0-volt",
     },
     ChannelDesc {
-        kernel_name: "voltage10",
+        kernel_names: &["voltage10"],
         calibration_path: "baseboard-factory-data/out1-volt",
         name: "out1-volt",
     },
     ChannelDesc {
-        kernel_name: "voltage5",
+        kernel_names: &["voltage5"],
         calibration_path: "baseboard-factory-data/iobus-curr",
         name: "iobus-curr",
     },
     ChannelDesc {
-        kernel_name: "voltage9",
+        kernel_names: &["voltage9"],
         calibration_path: "baseboard-factory-data/iobus-volt",
         name: "iobus-volt",
     },
@@ -90,12 +91,12 @@ const CHANNELS_STM32: &[ChannelDesc] = &[
 // board.
 const CHANNELS_PWR: &[ChannelDesc] = &[
     ChannelDesc {
-        kernel_name: "voltage",
+        kernel_names: &["voltage"],
         calibration_path: "powerboard-factory-data/pwr-volt",
         name: "pwr-volt",
     },
     ChannelDesc {
-        kernel_name: "current",
+        kernel_names: &["current"],
         calibration_path: "powerboard-factory-data/pwr-curr",
         name: "pwr-curr",
     },
@@ -281,17 +282,22 @@ impl IioThread {
 
         let channels: Result<Vec<Channel>> = channel_descs
             .iter()
-            .map(|ChannelDesc { kernel_name, .. }| {
-                let ch = adc
-                    .find_channel(kernel_name, false)
-                    .ok_or_else(|| anyhow!("Failed to open iio channel {}", kernel_name));
+            .map(
+                |ChannelDesc {
+                     kernel_names, name, ..
+                 }| {
+                    let ch = kernel_names
+                        .iter()
+                        .find_map(|kernel_name| adc.find_channel(kernel_name, false))
+                        .ok_or_else(|| anyhow!("Failed to open iio channel {}", name));
 
-                if let Ok(ch) = ch.as_ref() {
-                    ch.enable();
-                }
+                    if let Ok(ch) = ch.as_ref() {
+                        ch.enable();
+                    }
 
-                ch
-            })
+                    ch
+                },
+            )
             .collect();
 
         let channels = channels?;
