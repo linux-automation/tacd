@@ -50,7 +50,7 @@ use iobus::IoBus;
 use led::Led;
 use regulators::Regulators;
 use setup_mode::SetupMode;
-use system::System;
+use system::{HardwareGeneration, System};
 use temperatures::Temperatures;
 use ui::{message, setup_display, ScreenShooter, Ui, UiResources};
 use usb_hub::UsbHub;
@@ -67,6 +67,10 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     // MQTT/REST APIs.
     // The topics are also used to pass around data inside the tacd.
     let mut bb = BrokerBuilder::new();
+
+    // We need to know which generation of LXA TAC we are running on at various
+    // places in the init process.
+    let hardware_generation = HardwareGeneration::get()?;
 
     // Expose hardware on the TAC via the broker framework.
     let backlight = Backlight::new(&mut bb, &mut wtb)?;
@@ -110,7 +114,7 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
 
     // Expose information about the system provided by the kernel via the
     // broker framework.
-    let system = System::new(&mut bb);
+    let system = System::new(&mut bb, hardware_generation);
 
     // Make sure the ADC and power switching threads of the tacd are not
     // stalled for too long by providing watchdog events to systemd
