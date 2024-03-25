@@ -84,14 +84,6 @@ impl BitOr for LineRequestFlags {
     }
 }
 
-pub struct ChipDecoy;
-
-impl ChipDecoy {
-    pub fn label(&self) -> &'static str {
-        "test"
-    }
-}
-
 pub struct FindDecoy {
     name: String,
     val: Arc<AtomicU8>,
@@ -105,10 +97,6 @@ impl FindDecoy {
             name: self.name.clone(),
             val: self.val.clone(),
         })
-    }
-
-    pub fn chip(&self) -> ChipDecoy {
-        ChipDecoy
     }
 
     pub fn stub_get(&self) -> u8 {

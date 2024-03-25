@@ -82,6 +82,7 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
         adc.pwr_volt.clone(),
         adc.pwr_curr.clone(),
         led.dut_pwr.clone(),
+        hardware_generation,
     )
     .await?;
     let dig_io = DigitalIo::new(&mut bb, &mut wtb, led.out_0.clone(), led.out_1.clone())?;
