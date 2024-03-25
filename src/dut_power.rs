@@ -621,7 +621,7 @@ mod tests {
 
         let (adc, dut_pwr, led) = {
             let mut bb = BrokerBuilder::new();
-            let adc = block_on(Adc::new(&mut bb, &mut wtb)).unwrap();
+            let adc = block_on(Adc::new(&mut bb, &mut wtb, hardware_generation)).unwrap();
             let led = Topic::anonymous(None);
 
             let dut_pwr = block_on(DutPwrThread::new(
@@ -782,7 +782,7 @@ mod tests {
 
         let (adc, dut_pwr) = {
             let mut bb = BrokerBuilder::new();
-            let adc = block_on(Adc::new(&mut bb, &mut wtb)).unwrap();
+            let adc = block_on(Adc::new(&mut bb, &mut wtb, hardware_generation)).unwrap();
             let led = Topic::anonymous(None);
 
             let dut_pwr = block_on(DutPwrThread::new(
