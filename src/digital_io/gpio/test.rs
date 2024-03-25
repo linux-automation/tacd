@@ -26,7 +26,7 @@ use anyhow::Result;
 use async_std::sync::Arc;
 
 std::thread_local! {
-    static LINES: RefCell<Vec<(String, Arc<AtomicU8>)>> = RefCell::new(Vec::new());
+    static LINES: RefCell<Vec<(String, Arc<AtomicU8>)>> = const { RefCell::new(Vec::new()) };
 }
 
 pub struct LineHandle {
