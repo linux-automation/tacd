@@ -59,8 +59,11 @@ pub struct Service {
 #[derive(Clone)]
 pub struct Systemd {
     pub reboot: Arc<Topic<bool>>,
+    #[allow(dead_code)]
     pub networkmanager: Service,
+    #[allow(dead_code)]
     pub labgrid: Service,
+    #[allow(dead_code)]
     pub iobus: Service,
 }
 

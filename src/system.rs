@@ -134,8 +134,11 @@ impl Barebox {
 }
 
 pub struct System {
+    #[allow(dead_code)]
     pub uname: Arc<Topic<Arc<Uname>>>,
+    #[allow(dead_code)]
     pub barebox: Arc<Topic<Arc<Barebox>>>,
+    #[allow(dead_code)]
     pub tacd_version: Arc<Topic<String>>,
 }
 

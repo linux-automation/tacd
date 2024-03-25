@@ -22,7 +22,6 @@ use std::str::{from_utf8, FromStr};
 use sysfs_class::{set_trait_method, trait_method};
 
 pub trait SysClass: Sized {
-    fn class() -> &'static str;
     unsafe fn from_path_unchecked(path: PathBuf) -> Self;
     fn path(&self) -> &Path;
 
@@ -60,7 +59,6 @@ pub trait SysClass: Sized {
 }
 
 pub trait Brightness {
-    fn brightness(&self) -> Result<u64>;
     fn max_brightness(&self) -> Result<u64>;
     fn set_brightness(&self, val: u64) -> Result<()>;
 }
@@ -70,10 +68,6 @@ pub struct Backlight {
 }
 
 impl SysClass for Backlight {
-    fn class() -> &'static str {
-        "backlight"
-    }
-
     unsafe fn from_path_unchecked(path: PathBuf) -> Self {
         Self { path }
     }
@@ -84,7 +78,6 @@ impl SysClass for Backlight {
 }
 
 impl Brightness for Backlight {
-    trait_method!(brightness parse_file u64);
     trait_method!(max_brightness parse_file u64);
     set_trait_method!("brightness", set_brightness u64);
 }

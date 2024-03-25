@@ -67,6 +67,7 @@ use reg::regulator_set;
 
 pub struct Regulators {
     pub iobus_pwr_en: Arc<Topic<bool>>,
+    #[allow(dead_code)]
     pub uart_pwr_en: Arc<Topic<bool>>,
 }
 

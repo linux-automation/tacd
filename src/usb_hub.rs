@@ -31,7 +31,6 @@ use crate::watched_tasks::WatchedTasksBuilder;
 #[cfg(feature = "demo_mode")]
 mod rw {
     use std::collections::HashMap;
-    use std::convert::AsRef;
     use std::io::Result;
     use std::path::Path;
     use std::sync::Mutex;

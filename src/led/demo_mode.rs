@@ -19,7 +19,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::str::{from_utf8, FromStr};
 
-use sysfs_class::{set_trait_method, trait_method};
+use sysfs_class::trait_method;
 
 const FILES_READ: &[(&str, &str)] = &[
     ("tac:green:out0/max_brightness", "1"),
@@ -30,7 +30,6 @@ const FILES_READ: &[(&str, &str)] = &[
 ];
 
 pub trait SysClass: Sized {
-    fn class() -> &'static str;
     unsafe fn from_path_unchecked(path: PathBuf) -> Self;
     fn path(&self) -> &Path;
 
@@ -68,9 +67,7 @@ pub trait SysClass: Sized {
 }
 
 pub trait Brightness {
-    fn brightness(&self) -> Result<u64>;
     fn max_brightness(&self) -> Result<u64>;
-    fn set_brightness(&self, val: u64) -> Result<()>;
 }
 
 pub struct Leds {
@@ -78,10 +75,6 @@ pub struct Leds {
 }
 
 impl SysClass for Leds {
-    fn class() -> &'static str {
-        "leds"
-    }
-
     unsafe fn from_path_unchecked(path: PathBuf) -> Self {
         Self { path }
     }
@@ -92,7 +85,5 @@ impl SysClass for Leds {
 }
 
 impl Brightness for Leds {
-    trait_method!(brightness parse_file u64);
     trait_method!(max_brightness parse_file u64);
-    set_trait_method!("brightness", set_brightness u64);
 }
