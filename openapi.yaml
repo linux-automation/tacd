@@ -347,6 +347,21 @@ paths:
               schema:
                 type: string
 
+  /v1/tac/info/hardware_generation:
+    get:
+      summary: Get the LXA TAC hardware generation
+      tags: [System]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                enum:
+                  - Gen1
+                  - Gen2
+                  - Gen3
+
   /v1/tac/setup_mode:
     get:
       summary: Check if the TAC has completed the set up or is still in setup mode
