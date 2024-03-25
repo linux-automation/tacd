@@ -32,6 +32,7 @@ use log::{debug, error, warn};
 use thread_priority::*;
 
 use crate::measurement::{Measurement, Timestamp};
+use crate::system::HardwareGeneration;
 use crate::watched_tasks::WatchedTasksBuilder;
 
 struct ChannelDesc {
@@ -43,7 +44,7 @@ struct ChannelDesc {
 // Hard coded list of channels using the internal STM32MP1 ADC.
 // Consists of the IIO channel name, the location of the calibration data
 // in the device tree and an internal name for the channel.
-const CHANNELS_STM32: &[ChannelDesc] = &[
+const CHANNELS_STM32_GEN1_GEN2: &[ChannelDesc] = &[
     ChannelDesc {
         kernel_name: "voltage13",
         calibration_path: "baseboard-factory-data/usb-host-curr",
@@ -61,6 +62,49 @@ const CHANNELS_STM32: &[ChannelDesc] = &[
     },
     ChannelDesc {
         kernel_name: "voltage1",
+        calibration_path: "baseboard-factory-data/usb-host3-curr",
+        name: "usb-host3-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage2",
+        calibration_path: "baseboard-factory-data/out0-volt",
+        name: "out0-volt",
+    },
+    ChannelDesc {
+        kernel_name: "voltage10",
+        calibration_path: "baseboard-factory-data/out1-volt",
+        name: "out1-volt",
+    },
+    ChannelDesc {
+        kernel_name: "voltage5",
+        calibration_path: "baseboard-factory-data/iobus-curr",
+        name: "iobus-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage9",
+        calibration_path: "baseboard-factory-data/iobus-volt",
+        name: "iobus-volt",
+    },
+];
+
+const CHANNELS_STM32_GEN3: &[ChannelDesc] = &[
+    ChannelDesc {
+        kernel_name: "voltage13",
+        calibration_path: "baseboard-factory-data/usb-host-curr",
+        name: "usb-host-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage15",
+        calibration_path: "baseboard-factory-data/usb-host1-curr",
+        name: "usb-host1-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage18",
+        calibration_path: "baseboard-factory-data/usb-host2-curr",
+        name: "usb-host2-curr",
+    },
+    ChannelDesc {
+        kernel_name: "voltage14",
         calibration_path: "baseboard-factory-data/usb-host3-curr",
         name: "usb-host3-curr",
     },
@@ -431,14 +475,22 @@ impl IioThread {
         Ok(thread)
     }
 
-    pub async fn new_stm32(wtb: &mut WatchedTasksBuilder) -> Result<Arc<Self>> {
+    pub async fn new_stm32(
+        wtb: &mut WatchedTasksBuilder,
+        hardware_generation: HardwareGeneration,
+    ) -> Result<Arc<Self>> {
+        let channels = match hardware_generation {
+            HardwareGeneration::Gen1 | HardwareGeneration::Gen2 => CHANNELS_STM32_GEN1_GEN2,
+            HardwareGeneration::Gen3 => CHANNELS_STM32_GEN3,
+        };
+
         Self::new(
             wtb,
             "adc-stm32",
             "48003000.adc:adc@0",
             "tim4_trgo",
             80,
-            CHANNELS_STM32,
+            channels,
             4,
         )
         .await

@@ -75,7 +75,7 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     // Expose hardware on the TAC via the broker framework.
     let backlight = Backlight::new(&mut bb, &mut wtb)?;
     let led = Led::new(&mut bb, &mut wtb)?;
-    let adc = Adc::new(&mut bb, &mut wtb).await?;
+    let adc = Adc::new(&mut bb, &mut wtb, hardware_generation).await?;
     let dut_pwr = DutPwrThread::new(
         &mut bb,
         &mut wtb,
