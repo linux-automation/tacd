@@ -80,14 +80,6 @@ impl BitOr for LineRequestFlags {
     }
 }
 
-pub struct ChipDecoy;
-
-impl ChipDecoy {
-    pub fn label(&self) -> &'static str {
-        "demo_mode"
-    }
-}
-
 pub struct FindDecoy {
     name: String,
 }
@@ -101,10 +93,6 @@ impl FindDecoy {
         line_handle.set_value(initial).unwrap();
 
         Ok(line_handle)
-    }
-
-    pub fn chip(&self) -> ChipDecoy {
-        ChipDecoy
     }
 }
 

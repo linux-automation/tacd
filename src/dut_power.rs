@@ -30,6 +30,7 @@ use crate::adc::AdcChannel;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::digital_io::{find_line, LineHandle, LineRequestFlags};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
+use crate::system::HardwareGeneration;
 use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(any(test, feature = "demo_mode"))]
@@ -70,6 +71,27 @@ const MIN_VOLTAGE: f32 = -1.0;
 
 const PWR_LINE_ASSERTED: u8 = 0;
 const DISCHARGE_LINE_ASSERTED: u8 = 0;
+
+trait OutputFlags {
+    fn output_flags(&self) -> LineRequestFlags;
+}
+
+impl OutputFlags for HardwareGeneration {
+    fn output_flags(&self) -> LineRequestFlags {
+        // Early TACs have a i2c port expander on the power board.
+        // This port expander is output only and can not be configured as
+        // open drain.
+        // The outputs on later TACs should however be driven open drain
+        // for EMI reasons.
+
+        match self {
+            HardwareGeneration::Gen1 => LineRequestFlags::OUTPUT,
+            HardwareGeneration::Gen2 | HardwareGeneration::Gen3 => {
+                LineRequestFlags::OUTPUT | LineRequestFlags::OPEN_DRAIN
+            }
+        }
+    }
+}
 
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum OutputRequest {
@@ -295,22 +317,14 @@ impl DutPwrThread {
         pwr_volt: AdcChannel,
         pwr_curr: AdcChannel,
         pwr_led: Arc<Topic<BlinkPattern>>,
+        hardware_generation: HardwareGeneration,
     ) -> Result<Self> {
         let pwr_line = find_line("DUT_PWR_EN")
             .ok_or_else(|| anyhow!("Could not find GPIO line DUT_PWR_EN"))?;
         let discharge_line = find_line("DUT_PWR_DISCH")
             .ok_or_else(|| anyhow!("Could not find GPIO line DUT_PWR_DISCH"))?;
 
-        // Early TACs have a i2c port expander on the power board.
-        // This port expander is output only and can not be configured as
-        // open drain.
-        // The outputs on later TACs should however be driven open drain
-        // for EMI reasons.
-        let flags = match pwr_line.chip().label() {
-            "pca9570" => LineRequestFlags::OUTPUT,
-            _ => LineRequestFlags::OUTPUT | LineRequestFlags::OPEN_DRAIN,
-        };
-
+        let flags = hardware_generation.output_flags();
         let pwr_line = pwr_line.request(flags, 1 - PWR_LINE_ASSERTED, "tacd")?;
         let discharge_line = discharge_line.request(flags, DISCHARGE_LINE_ASSERTED, "tacd")?;
 
@@ -600,6 +614,7 @@ mod tests {
     use crate::adc::Adc;
     use crate::broker::{BrokerBuilder, Topic};
     use crate::digital_io::find_line;
+    use crate::system::HardwareGeneration;
     use crate::watched_tasks::WatchedTasksBuilder;
 
     use super::{
@@ -610,6 +625,7 @@ mod tests {
     #[test]
     fn failsafe() {
         let mut wtb = WatchedTasksBuilder::new();
+        let hardware_generation = HardwareGeneration::Gen3;
         let pwr_line = find_line("DUT_PWR_EN").unwrap();
         let discharge_line = find_line("DUT_PWR_DISCH").unwrap();
 
@@ -624,6 +640,7 @@ mod tests {
                 adc.pwr_volt.clone(),
                 adc.pwr_curr.clone(),
                 led.clone(),
+                hardware_generation,
             ))
             .unwrap();
 
@@ -769,6 +786,7 @@ mod tests {
     #[test]
     fn grace_period() {
         let mut wtb = WatchedTasksBuilder::new();
+        let hardware_generation = HardwareGeneration::Gen3;
         let pwr_line = find_line("DUT_PWR_EN").unwrap();
         let discharge_line = find_line("DUT_PWR_DISCH").unwrap();
 
@@ -783,6 +801,7 @@ mod tests {
                 adc.pwr_volt.clone(),
                 adc.pwr_curr.clone(),
                 led,
+                hardware_generation,
             ))
             .unwrap();
 
