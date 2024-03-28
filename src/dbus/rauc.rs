@@ -74,6 +74,7 @@ mod imports {
 }
 
 const RELOAD_RATE_LIMIT: Duration = Duration::from_secs(10 * 60);
+const STARTUP_DELAY: Duration = Duration::from_secs(2 * 60);
 
 use imports::*;
 
@@ -238,6 +239,13 @@ async fn channel_list_update_task(
 ) -> Result<()> {
     let mut previous: Option<Instant> = None;
     let mut polling_tasks: Vec<JoinHandle<_>> = Vec::new();
+
+    // The tacd is usually started before the network connection is up.
+    // This means the first update polling request will nearly always fail.
+    // We could decide when the network is up based on some heuristic or
+    // based on what NetworkManager tells us.
+    // Or we can just wait a bit after startup.
+    sleep(STARTUP_DELAY).await;
 
     while let Some(reload) = reload_stream.next().await {
         if !reload {
