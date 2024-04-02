@@ -51,6 +51,7 @@ pub struct UiResources {
     pub rauc: crate::dbus::Rauc,
     pub regulators: crate::regulators::Regulators,
     pub setup_mode: crate::setup_mode::SetupMode,
+    #[allow(dead_code)]
     pub system: crate::system::System,
     pub systemd: crate::dbus::Systemd,
     pub temperatures: crate::temperatures::Temperatures,
