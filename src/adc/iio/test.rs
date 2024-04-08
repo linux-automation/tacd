@@ -117,7 +117,7 @@ impl IioThread {
         Ok(Arc::new(Self { channels }))
     }
 
-    pub async fn new_powerboard<W>(_wtb: &W) -> Result<Arc<Self>> {
+    pub async fn new_powerboard<W, G>(_wtb: &W, _hardware_generation: G) -> Result<Arc<Self>> {
         let mut channels = Vec::new();
 
         for name in CHANNELS_PWR {

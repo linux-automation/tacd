@@ -195,7 +195,7 @@ impl IioThread {
         Ok(this)
     }
 
-    pub async fn new_powerboard<W>(_wtb: &W) -> Result<Arc<Self>> {
+    pub async fn new_powerboard<W, G>(_wtb: &W, _hardware_generation: G) -> Result<Arc<Self>> {
         let mut demo_magic = block_on(DEMO_MAGIC_POWERBOARD.lock());
 
         // Only ever set up a single demo_mode "IioThread" per ADC

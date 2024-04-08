@@ -85,7 +85,7 @@ impl Adc {
         hardware_generation: HardwareGeneration,
     ) -> Result<Self> {
         let stm32_thread = IioThread::new_stm32(wtb, hardware_generation).await?;
-        let powerboard_thread = IioThread::new_powerboard(wtb).await?;
+        let powerboard_thread = IioThread::new_powerboard(wtb, hardware_generation).await?;
 
         let adc = Self {
             usb_host_curr: AdcChannel {

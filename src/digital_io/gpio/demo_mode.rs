@@ -33,7 +33,7 @@ impl LineHandle {
         // communicate with this function so that toggling an output
         // has an effect on the measured values.
         let iio_thread_stm32 = block_on(IioThread::new_stm32(&(), ())).unwrap();
-        let iio_thread_pwr = block_on(IioThread::new_powerboard(&())).unwrap();
+        let iio_thread_pwr = block_on(IioThread::new_powerboard(&(), ())).unwrap();
 
         match self.name.as_str() {
             "OUT_0" => iio_thread_stm32
