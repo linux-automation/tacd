@@ -114,7 +114,7 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
 
     // Expose information about the system provided by the kernel via the
     // broker framework.
-    let system = System::new(&mut bb, hardware_generation);
+    let system = System::new(&mut bb, hardware_generation)?;
 
     // Make sure the ADC and power switching threads of the tacd are not
     // stalled for too long by providing watchdog events to systemd
