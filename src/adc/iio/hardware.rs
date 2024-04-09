@@ -32,74 +32,12 @@ use log::{debug, error, warn};
 use thread_priority::*;
 
 use crate::measurement::{Measurement, Timestamp};
+use crate::system::HardwareGeneration;
 use crate::watched_tasks::WatchedTasksBuilder;
 
-struct ChannelDesc {
-    kernel_name: &'static str,
-    calibration_path: &'static str,
-    name: &'static str,
-}
+mod channels;
 
-// Hard coded list of channels using the internal STM32MP1 ADC.
-// Consists of the IIO channel name, the location of the calibration data
-// in the device tree and an internal name for the channel.
-const CHANNELS_STM32: &[ChannelDesc] = &[
-    ChannelDesc {
-        kernel_name: "voltage13",
-        calibration_path: "baseboard-factory-data/usb-host-curr",
-        name: "usb-host-curr",
-    },
-    ChannelDesc {
-        kernel_name: "voltage15",
-        calibration_path: "baseboard-factory-data/usb-host1-curr",
-        name: "usb-host1-curr",
-    },
-    ChannelDesc {
-        kernel_name: "voltage0",
-        calibration_path: "baseboard-factory-data/usb-host2-curr",
-        name: "usb-host2-curr",
-    },
-    ChannelDesc {
-        kernel_name: "voltage1",
-        calibration_path: "baseboard-factory-data/usb-host3-curr",
-        name: "usb-host3-curr",
-    },
-    ChannelDesc {
-        kernel_name: "voltage2",
-        calibration_path: "baseboard-factory-data/out0-volt",
-        name: "out0-volt",
-    },
-    ChannelDesc {
-        kernel_name: "voltage10",
-        calibration_path: "baseboard-factory-data/out1-volt",
-        name: "out1-volt",
-    },
-    ChannelDesc {
-        kernel_name: "voltage5",
-        calibration_path: "baseboard-factory-data/iobus-curr",
-        name: "iobus-curr",
-    },
-    ChannelDesc {
-        kernel_name: "voltage9",
-        calibration_path: "baseboard-factory-data/iobus-volt",
-        name: "iobus-volt",
-    },
-];
-
-// The same as for the STM32MP1 channels but for the discrete ADC on the power
-// board.
-const CHANNELS_PWR: &[ChannelDesc] = &[
-    ChannelDesc {
-        kernel_name: "voltage",
-        calibration_path: "powerboard-factory-data/pwr-volt",
-        name: "pwr-volt",
-    },
-    ChannelDesc {
-        kernel_name: "current",
-        calibration_path: "powerboard-factory-data/pwr-curr",
-        name: "pwr-curr",
-    },
-];
+use channels::{ChannelDesc, Channels};
 
 const TRIGGER_HR_PWR_DIR: &str = "/sys/kernel/config/iio/triggers/hrtimer/tacd-pwr";
 
@@ -431,25 +369,35 @@ impl IioThread {
         Ok(thread)
     }
 
-    pub async fn new_stm32(wtb: &mut WatchedTasksBuilder) -> Result<Arc<Self>> {
+    pub async fn new_stm32(
+        wtb: &mut WatchedTasksBuilder,
+        hardware_generation: HardwareGeneration,
+    ) -> Result<Arc<Self>> {
+        let channels = hardware_generation.channels_stm32();
+
         Self::new(
             wtb,
             "adc-stm32",
             "48003000.adc:adc@0",
             "tim4_trgo",
             80,
-            CHANNELS_STM32,
+            channels,
             4,
         )
         .await
     }
 
-    pub async fn new_powerboard(wtb: &mut WatchedTasksBuilder) -> Result<Arc<Self>> {
+    pub async fn new_powerboard(
+        wtb: &mut WatchedTasksBuilder,
+        hardware_generation: HardwareGeneration,
+    ) -> Result<Arc<Self>> {
         let hr_trigger_path = Path::new(TRIGGER_HR_PWR_DIR);
 
         if !hr_trigger_path.is_dir() {
             create_dir(hr_trigger_path)?;
         }
+
+        let channels = hardware_generation.channels_pwr();
 
         Self::new(
             wtb,
@@ -457,7 +405,7 @@ impl IioThread {
             "lmp92064",
             "tacd-pwr",
             20,
-            CHANNELS_PWR,
+            channels,
             1,
         )
         .await

@@ -137,6 +137,24 @@ export default function DashboardTac() {
               }}
             />
           </Box>
+          <Box>
+            <Box variant="awsui-key-label">Hardware Generation</Box>
+            <MqttBox
+              topic="/v1/tac/info/hardware_generation"
+              format={(msg: string) => {
+                switch (msg) {
+                  case "Gen1":
+                    return "Generation 1";
+                  case "Gen2":
+                    return "Generation 2";
+                  case "Gen3":
+                    return "Generation 3";
+                  default:
+                    return msg;
+                }
+              }}
+            />
+          </Box>
         </ColumnLayout>
 
         <Form

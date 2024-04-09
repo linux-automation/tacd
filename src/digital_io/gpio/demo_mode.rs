@@ -32,8 +32,8 @@ impl LineHandle {
         // It is just a hack to let adc/iio/demo_mode.rs
         // communicate with this function so that toggling an output
         // has an effect on the measured values.
-        let iio_thread_stm32 = block_on(IioThread::new_stm32(&())).unwrap();
-        let iio_thread_pwr = block_on(IioThread::new_powerboard(&())).unwrap();
+        let iio_thread_stm32 = block_on(IioThread::new_stm32(&(), ())).unwrap();
+        let iio_thread_pwr = block_on(IioThread::new_powerboard(&(), ())).unwrap();
 
         match self.name.as_str() {
             "OUT_0" => iio_thread_stm32
@@ -80,14 +80,6 @@ impl BitOr for LineRequestFlags {
     }
 }
 
-pub struct ChipDecoy;
-
-impl ChipDecoy {
-    pub fn label(&self) -> &'static str {
-        "demo_mode"
-    }
-}
-
 pub struct FindDecoy {
     name: String,
 }
@@ -101,10 +93,6 @@ impl FindDecoy {
         line_handle.set_value(initial).unwrap();
 
         Ok(line_handle)
-    }
-
-    pub fn chip(&self) -> ChipDecoy {
-        ChipDecoy
     }
 }
 

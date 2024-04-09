@@ -23,6 +23,7 @@ use async_std::task::sleep;
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::{Measurement, Timestamp};
+use crate::system::HardwareGeneration;
 use crate::watched_tasks::WatchedTasksBuilder;
 
 const HISTORY_LENGTH: usize = 200;
@@ -78,9 +79,13 @@ pub struct Adc {
 }
 
 impl Adc {
-    pub async fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
-        let stm32_thread = IioThread::new_stm32(wtb).await?;
-        let powerboard_thread = IioThread::new_powerboard(wtb).await?;
+    pub async fn new(
+        bb: &mut BrokerBuilder,
+        wtb: &mut WatchedTasksBuilder,
+        hardware_generation: HardwareGeneration,
+    ) -> Result<Self> {
+        let stm32_thread = IioThread::new_stm32(wtb, hardware_generation).await?;
+        let powerboard_thread = IioThread::new_powerboard(wtb, hardware_generation).await?;
 
         let adc = Self {
             usb_host_curr: AdcChannel {
