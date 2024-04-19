@@ -60,8 +60,8 @@ jobs:
       fail-fast: false # Run against all versions even if one fails
       matrix:
         version:
-          - "1.68" # Yocto mickledore
           - "1.70" # Yocto nanbield
+          - "1.75" # Yocto scarthgap
           - "nightly"
     name: cargo check
     runs-on: ubuntu-latest
