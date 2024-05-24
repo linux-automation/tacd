@@ -263,10 +263,12 @@ fn turn_off_with_reason(
     pwr_line: &LineHandle,
     discharge_line: &LineHandle,
     fail_state: &AtomicU8,
-) {
-    pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
-    discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
+) -> Result<()> {
+    pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
+    discharge_line.set_value(DISCHARGE_LINE_ASSERTED)?;
     fail_state.store(reason as u8, Ordering::Relaxed);
+
+    Ok(())
 }
 
 /// Labgrid has a fixed assumption of how a REST based power port should work.
@@ -409,7 +411,7 @@ impl DutPwrThread {
                             &pwr_line,
                             &discharge_line,
                             &state,
-                        );
+                        )?;
                     } else {
                         // We have a fresh ADC value. Signal "everything is well"
                         // to the watchdog task.
@@ -466,7 +468,7 @@ impl DutPwrThread {
                             &pwr_line,
                             &discharge_line,
                             &state,
-                        );
+                        )?;
 
                         continue;
                     }
@@ -477,7 +479,7 @@ impl DutPwrThread {
                             &pwr_line,
                             &discharge_line,
                             &state,
-                        );
+                        )?;
 
                         continue;
                     }
@@ -488,7 +490,7 @@ impl DutPwrThread {
                             &pwr_line,
                             &discharge_line,
                             &state,
-                        );
+                        )?;
 
                         continue;
                     }
@@ -521,7 +523,7 @@ impl DutPwrThread {
             }
 
             // Make sure to enter fail safe mode before leaving the thread
-            turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state);
+            turn_off_with_reason(OutputState::Off, &pwr_line, &discharge_line, &state)?;
 
             Ok(())
         })?;
