@@ -50,9 +50,12 @@ mod prio {
     use thread_priority::*;
 
     pub fn realtime_priority() -> Result<()> {
+        let prio = ThreadPriorityValue::try_from(10)
+            .map_err(|e| anyhow!("Failed to choose realtime priority level 10: {e:?}"))?;
+
         set_thread_priority_and_policy(
             thread_native_id(),
-            ThreadPriority::Crossplatform(ThreadPriorityValue::try_from(10).unwrap()),
+            ThreadPriority::Crossplatform(prio),
             ThreadSchedulePolicy::Realtime(RealtimeThreadSchedulePolicy::Fifo),
         )
         .map_err(|e| anyhow!("Failed to set up realtime priority {e:?}"))
