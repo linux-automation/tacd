@@ -338,7 +338,7 @@ impl DutPwrThread {
         // as well.
         // Use a queue to notify the calling thread if the priority setup
         // succeeded.
-        let (thread_res_tx, mut thread_res_rx) = bounded(1);
+        let (thread_tx, thread_rx) = bounded(1);
 
         // Spawn a high priority thread that handles the power status
         // in a realtimey fashion.
@@ -353,24 +353,20 @@ impl DutPwrThread {
             let mut volt_filter = MedianFilter::<4>::new();
             let mut curr_filter = MedianFilter::<4>::new();
 
-            let (tick_weak, request, state) = match realtime_priority() {
-                Ok(_) => {
-                    let tick = Arc::new(AtomicU32::new(0));
-                    let tick_weak = Arc::downgrade(&tick);
+            realtime_priority()?;
 
-                    let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
-                    let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
+            let (tick_weak, request, state) = {
+                let tick = Arc::new(AtomicU32::new(0));
+                let tick_weak = Arc::downgrade(&tick);
 
-                    thread_res_tx
-                        .try_send(Ok((tick, request.clone(), state.clone())))
-                        .unwrap();
+                let request = Arc::new(AtomicU8::new(OutputRequest::Idle as u8));
+                let state = Arc::new(AtomicU8::new(OutputState::Off as u8));
 
-                    (tick_weak, request, state)
-                }
-                Err(e) => {
-                    thread_res_tx.try_send(Err(e)).unwrap();
-                    panic!()
-                }
+                thread_tx
+                    .try_send((tick, request.clone(), state.clone()))
+                    .expect("Queue that should be empty wasn't");
+
+                (tick_weak, request, state)
             };
 
             // The grace period contains the number of loop iterations until
@@ -501,22 +497,18 @@ impl DutPwrThread {
                 match req {
                     OutputRequest::Idle => {}
                     OutputRequest::On => {
-                        discharge_line
-                            .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                            .unwrap();
-                        pwr_line.set_value(PWR_LINE_ASSERTED).unwrap();
+                        discharge_line.set_value(1 - DISCHARGE_LINE_ASSERTED)?;
+                        pwr_line.set_value(PWR_LINE_ASSERTED)?;
                         state.store(OutputState::On as u8, Ordering::Relaxed);
                     }
                     OutputRequest::Off => {
-                        discharge_line.set_value(DISCHARGE_LINE_ASSERTED).unwrap();
-                        pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                        discharge_line.set_value(DISCHARGE_LINE_ASSERTED)?;
+                        pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
                         state.store(OutputState::Off as u8, Ordering::Relaxed);
                     }
                     OutputRequest::OffFloating => {
-                        discharge_line
-                            .set_value(1 - DISCHARGE_LINE_ASSERTED)
-                            .unwrap();
-                        pwr_line.set_value(1 - PWR_LINE_ASSERTED).unwrap();
+                        discharge_line.set_value(1 - DISCHARGE_LINE_ASSERTED)?;
+                        pwr_line.set_value(1 - PWR_LINE_ASSERTED)?;
                         state.store(OutputState::OffFloating as u8, Ordering::Relaxed);
                     }
                 }
@@ -528,7 +520,7 @@ impl DutPwrThread {
             Ok(())
         })?;
 
-        let (tick, request, state) = thread_res_rx.next().await.unwrap()?;
+        let (tick, request, state) = thread_rx.recv().await?;
 
         // The request and state topic use the same external path, this way one
         // can e.g. publish "On" to the topic and be sure that the output is
