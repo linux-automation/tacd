@@ -532,7 +532,9 @@ impl Rauc {
                 // Poor-mans validation. It feels wrong to let someone point to any
                 // file on the TAC from the web interface.
                 if url.starts_with("http://") || url.starts_with("https://") {
-                    if let Err(e) = proxy.install(&url).await {
+                    let args = HashMap::new();
+
+                    if let Err(e) = proxy.install_bundle(&url, args).await {
                         error!("Failed to install bundle: {}", e);
                     }
                 }
