@@ -45,6 +45,8 @@ use installer::InstallerProxy;
 
 #[cfg(feature = "demo_mode")]
 mod imports {
+    use std::collections::HashMap;
+
     pub(super) struct InstallerProxy<'a> {
         _dummy: &'a (),
     }
@@ -54,11 +56,24 @@ mod imports {
             Some(Self { _dummy: &() })
         }
 
-        pub async fn info(&self, _url: &str) -> anyhow::Result<(String, String)> {
-            let compatible = "Linux Automation GmbH - LXA TAC".to_string();
-            let version = "24.04-20240415070800".to_string();
+        pub async fn inspect_bundle(
+            &self,
+            _source: &str,
+            _args: HashMap<&str, zbus::zvariant::Value<'_>>,
+        ) -> zbus::Result<HashMap<String, zbus::zvariant::OwnedValue>> {
+            let update: HashMap<String, String> = [
+                (
+                    "compatible".into(),
+                    "Linux Automation GmbH - LXA TAC".into(),
+                ),
+                ("version".into(), "24.04-20240415070800".into()),
+            ]
+            .into();
 
-            Ok((compatible, version))
+            let info: HashMap<String, zbus::zvariant::OwnedValue> =
+                [("update".into(), update.into())].into();
+
+            Ok(info)
         }
     }
 
