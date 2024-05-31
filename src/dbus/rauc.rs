@@ -55,8 +55,8 @@ mod imports {
         }
 
         pub async fn info(&self, _url: &str) -> anyhow::Result<(String, String)> {
-            let compatible = "LXA TAC".to_string();
-            let version = "4.0-0-20230428214619".to_string();
+            let compatible = "Linux Automation GmbH - LXA TAC".to_string();
+            let version = "24.04-20240415070800".to_string();
 
             Ok((compatible, version))
         }
