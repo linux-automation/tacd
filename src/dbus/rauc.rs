@@ -102,6 +102,7 @@ pub struct Rauc {
     pub operation: Arc<Topic<String>>,
     pub progress: Arc<Topic<Progress>>,
     pub slot_status: Arc<Topic<Arc<SlotStatus>>>,
+    #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     pub primary: Arc<Topic<String>>,
     pub last_error: Arc<Topic<String>>,
     pub install: Arc<Topic<String>>,
