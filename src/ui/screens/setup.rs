@@ -23,6 +23,7 @@ use async_trait::async_trait;
 use embedded_graphics::{prelude::Point, text::Alignment};
 use serde::{Deserialize, Serialize};
 
+use super::buttons::Source;
 use super::widgets::*;
 use super::{
     ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
@@ -47,6 +48,8 @@ struct Active {
     widgets: WidgetContainer,
     hostname_update_handle: SubscriptionHandle<String, Native>,
     ip_update_handle: SubscriptionHandle<Vec<String>, Native>,
+    alerts: Arc<Topic<AlertList>>,
+    diagnostics_presses: u8,
 }
 
 impl SetupScreen {
@@ -163,10 +166,15 @@ impl ActivatableScreen for SetupScreen {
                 Alignment::Center,
         ));
 
+        let alerts = ui.alerts.clone();
+        let diagnostics_presses = 0;
+
         let active = Active {
             widgets,
             hostname_update_handle,
             ip_update_handle,
+            alerts,
+            diagnostics_presses,
         };
 
         Box::new(active)
@@ -185,5 +193,31 @@ impl ActiveScreen for Active {
         self.widgets.destroy().await
     }
 
-    fn input(&mut self, _ev: InputEvent) {}
+    fn input(&mut self, ev: InputEvent) {
+        // To activate the diagnostics screen we expect the upper and lower
+        // button to be pressed in the following pattern:
+        //
+        //   Upper, Lower, Upper, Lower, Upper, Lower
+        //
+        // Long presses, presses of the wrong button or presses via the web
+        // API are invalid and reset the counter.
+        let expected_button = self.diagnostics_presses % 2;
+
+        let button = match ev {
+            InputEvent::NextScreen => 0,
+            InputEvent::ToggleAction(Source::Local) => 1,
+            _ => 0xff,
+        };
+
+        self.diagnostics_presses += 1;
+
+        if expected_button != button {
+            self.diagnostics_presses = 0;
+        }
+
+        if self.diagnostics_presses >= 6 {
+            self.diagnostics_presses = 0;
+            self.alerts.assert(AlertScreen::Diagnostics);
+        }
+    }
 }
