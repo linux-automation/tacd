@@ -32,7 +32,7 @@ use super::{
     ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
     Ui,
 };
-use crate::{broker::Topic, system::HardwareGeneration};
+use crate::{broker::Topic, led::BlinkPattern, system::HardwareGeneration};
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::Diagnostics;
 
@@ -41,6 +41,10 @@ pub struct DiagnosticsScreen;
 struct Active {
     display: Option<Display>,
     alerts: Arc<Topic<AlertList>>,
+    led_cycle_state: u8,
+    leds: [Arc<Topic<BlinkPattern>>; 5],
+    status_led_color: Arc<Topic<(f32, f32, f32)>>,
+    backlight_brightness: Arc<Topic<f32>>,
 }
 
 fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
@@ -204,9 +208,29 @@ impl ActivatableScreen for DiagnosticsScreen {
                 .unwrap();
         });
 
+        let leds = [
+            ui.res.led.out_0.clone(),
+            ui.res.led.out_1.clone(),
+            ui.res.led.dut_pwr.clone(),
+            ui.res.led.eth_dut.clone(),
+            ui.res.led.eth_lab.clone(),
+        ];
+
+        // Set the status LED to maximum brightness.
+        // (The actual appearance is controlled via the RGB color value)
+        ui.res.led.status.set(BlinkPattern::solid(1.0));
+
+        let status_led_color = ui.res.led.status_color.clone();
+
+        let backlight_brightness = ui.res.backlight.brightness.clone();
+
         let active = Active {
             display: Some(display),
             alerts: ui.alerts.clone(),
+            led_cycle_state: 0,
+            leds,
+            status_led_color,
+            backlight_brightness,
         };
 
         Box::new(active)
@@ -220,13 +244,39 @@ impl ActiveScreen for Active {
     }
 
     async fn deactivate(mut self: Box<Self>) -> Display {
+        self.backlight_brightness.set(1.0);
         self.display.take().unwrap()
     }
 
     fn input(&mut self, ev: InputEvent) {
         match ev {
             InputEvent::NextScreen => {}
-            InputEvent::ToggleAction(_) => {}
+            InputEvent::ToggleAction(_) => {
+                self.led_cycle_state = self.led_cycle_state.wrapping_add(1);
+
+                let on = self.led_cycle_state % 2 != 0;
+                let led_brightness = if on { 1.0 } else { 0.0 };
+                let backlight_brightness = if on { 1.0 } else { 0.1 };
+                let status_color = match self.led_cycle_state % 8 {
+                    0 => (0.0, 1.0, 0.0),
+                    1 => (0.0, 0.0, 1.0),
+                    2 => (1.0, 0.0, 0.0),
+                    3 => (1.0, 1.0, 0.0),
+                    4 => (1.0, 0.0, 1.0),
+                    5 => (0.0, 1.0, 1.0),
+                    6 => (1.0, 1.0, 1.0),
+                    7 => (0.0, 0.0, 0.0),
+                    _ => unreachable!(),
+                };
+
+                self.status_led_color.set(status_color);
+
+                for led in &self.leds {
+                    led.set(BlinkPattern::solid(led_brightness));
+                }
+
+                self.backlight_brightness.set(backlight_brightness);
+            }
             InputEvent::PerformAction(_) => {
                 self.alerts.deassert(SCREEN_TYPE);
             }
