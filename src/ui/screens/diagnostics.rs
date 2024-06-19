@@ -121,6 +121,58 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
         writeln!(&mut text, "- feat: {}", powerboard_featureset)?;
     }
 
+    writeln!(&mut text)?;
+
+    if let Some(channels) = ui.res.rauc.channels.try_get() {
+        write!(&mut text, "chs: ")?;
+
+        for ch in channels {
+            let en = if ch.enabled { "[x]" } else { "[ ]" };
+            let name = ch.name;
+
+            write!(&mut text, "{en} {name}, ")?;
+        }
+
+        writeln!(&mut text)?;
+    }
+
+    if let Some(slot_status) = ui.res.rauc.slot_status.try_get() {
+        let primary = ui.res.rauc.primary.try_get();
+
+        for fs in ["rootfs_0", "rootfs_1"] {
+            let rootfs = slot_status.get(fs);
+
+            let bundle_version = rootfs
+                .and_then(|r| r.get("bundle_version"))
+                .map(|s| s.as_str())
+                .unwrap_or("?");
+            let state = rootfs
+                .and_then(|r| r.get("state"))
+                .map(|s| s.as_str())
+                .unwrap_or("?");
+            let boot_status = rootfs
+                .and_then(|r| r.get("boot_status"))
+                .map(|s| s.as_str())
+                .unwrap_or("?");
+            let status = rootfs
+                .and_then(|r| r.get("status"))
+                .map(|s| s.as_str())
+                .unwrap_or("?");
+
+            let is_primary = primary.as_ref().is_some_and(|p| p == fs);
+
+            // Do do not have much space. Use compact representations.
+            let primary_marker = if is_primary { "[x]" } else { "[ ]" };
+            let fs = fs.trim_start_matches("root");
+            let state = &state[..2];
+
+            writeln!(
+                &mut text,
+                "{primary_marker} {fs} {state} {boot_status} {status} {bundle_version}"
+            )?;
+        }
+    }
+
     Ok(text)
 }
 
