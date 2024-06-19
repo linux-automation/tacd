@@ -74,6 +74,32 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
     }
 
     writeln!(&mut text)?;
+
+    if let Some(bridge_interface) = ui.res.network.bridge_interface.try_get() {
+        write!(&mut text, "br: ")?;
+
+        for ip in bridge_interface {
+            write!(&mut text, "{ip}, ")?;
+        }
+
+        writeln!(&mut text)?;
+    }
+
+    let interfaces = [
+        ("dut", &ui.res.network.dut_interface),
+        ("uplink", &ui.res.network.uplink_interface),
+    ];
+
+    for (name, interface) in interfaces {
+        if let Some(link) = interface.try_get() {
+            let speed = link.speed;
+            let carrier = if link.carrier { "up" } else { "down" };
+
+            write!(&mut text, "{name}: {speed} {carrier} | ")?;
+        }
+    }
+
+    writeln!(&mut text)?;
     writeln!(&mut text)?;
 
     if let Some(barebox) = ui.res.system.barebox.try_get() {
