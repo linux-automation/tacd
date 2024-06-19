@@ -19,6 +19,7 @@ use std::fmt::Write;
 
 use async_std::sync::Arc;
 use async_trait::async_trait;
+use chrono::DateTime;
 use embedded_graphics::{
     mono_font::{ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::BinaryColor,
@@ -31,7 +32,7 @@ use super::{
     ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
     Ui,
 };
-use crate::broker::Topic;
+use crate::{broker::Topic, system::HardwareGeneration};
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::Diagnostics;
 
@@ -42,13 +43,57 @@ struct Active {
     alerts: Arc<Topic<AlertList>>,
 }
 
-fn diagnostic_text() -> Result<String, std::fmt::Error> {
+fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
     let mut text = String::new();
 
     writeln!(&mut text, "Diagnostics | Not self-updating!")?;
     writeln!(&mut text, "Short press lower button to toggle LEDs.")?;
     writeln!(&mut text, "Long press lower button to exit.")?;
     writeln!(&mut text)?;
+
+    if let Some(tacd_version) = ui.res.system.tacd_version.try_get() {
+        writeln!(&mut text, "v: {}", tacd_version)?;
+    }
+
+    if let Some(uname) = ui.res.system.uname.try_get() {
+        writeln!(&mut text, "uname: {} {} ", uname.nodename, uname.release)?;
+    }
+
+    if let Some(hardware_generation) = ui.res.system.hardware_generation.try_get() {
+        let gen = match hardware_generation {
+            HardwareGeneration::Gen1 => "Gen1",
+            HardwareGeneration::Gen2 => "Gen2",
+            HardwareGeneration::Gen3 => "Gen3",
+        };
+
+        write!(&mut text, "generation: {} ", gen)?;
+    }
+
+    if let Some(soc_temperature) = ui.res.temperatures.soc_temperature.try_get() {
+        write!(&mut text, "temperature: {} C", soc_temperature.value)?;
+    }
+
+    writeln!(&mut text)?;
+    writeln!(&mut text)?;
+
+    if let Some(barebox) = ui.res.system.barebox.try_get() {
+        let baseboard_release = barebox.baseboard_release.trim_start_matches("lxatac-");
+        let powerboard_release = barebox.powerboard_release.trim_start_matches("lxatac-");
+        let baseboard_timestamp = DateTime::from_timestamp(barebox.baseboard_timestamp as i64, 0)
+            .map_or_else(|| "???".to_string(), |ts| ts.to_rfc3339());
+        let powerboard_timestamp = DateTime::from_timestamp(barebox.powerboard_timestamp as i64, 0)
+            .map_or_else(|| "???".to_string(), |ts| ts.to_rfc3339());
+        let baseboard_featureset = barebox.baseboard_featureset.join(",");
+        let powerboard_featureset = barebox.powerboard_featureset.join(",");
+
+        writeln!(&mut text, "barebox: {}", barebox.version)?;
+        writeln!(&mut text, "baseboard ({}):", baseboard_release)?;
+        writeln!(&mut text, "- bringup: {}", baseboard_timestamp)?;
+        writeln!(&mut text, "- feat: {}", baseboard_featureset)?;
+        writeln!(&mut text, "powerboard ({}):", powerboard_release)?;
+        writeln!(&mut text, "- bringup: {}", powerboard_timestamp)?;
+        writeln!(&mut text, "- feat: {}", powerboard_featureset)?;
+    }
 
     Ok(text)
 }
@@ -68,7 +113,7 @@ impl ActivatableScreen for DiagnosticsScreen {
         let ui_text_style: MonoTextStyle<BinaryColor> =
             MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
 
-        let text = diagnostic_text().unwrap_or_else(|_| "Failed to format text".into());
+        let text = diagnostic_text(ui).unwrap_or_else(|_| "Failed to format text".into());
 
         display.with_lock(|target| {
             Rectangle::with_corners(Point::new(0, 0), Point::new(239, 239))
