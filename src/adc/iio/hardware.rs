@@ -22,7 +22,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{anyhow, Context, Result};
 use async_std::channel::bounded;
 use async_std::sync::Arc;
 
@@ -275,40 +275,27 @@ impl IioThread {
         // setup was sucessful.
         // This is why we create Self inside the thread and send it back
         // to the calling thread via a queue.
-        let (thread_res_tx, thread_res_rx) = bounded(1);
+        let (thread_tx, thread_rx) = bounded(1);
 
         // Spawn a high priority thread that updates the atomic values in `thread`.
         wtb.spawn_thread(thread_name, move || {
-            let adc_setup_res = Self::adc_setup(
+            let (channels, mut buf) = Self::adc_setup(
                 adc_name,
                 trigger_name,
                 sample_rate,
                 channel_descs,
                 buffer_len,
-            );
-            let (thread, channels, mut buf) = match adc_setup_res {
-                Ok((channels, buf)) => {
-                    let thread = Arc::new(Self {
-                        ref_instant: Instant::now(),
-                        timestamp: AtomicU64::new(TIMESTAMP_ERROR),
-                        values: channels.iter().map(|_| AtomicU16::new(0)).collect(),
-                        channel_descs,
-                    });
+            )?;
 
-                    (thread, channels, buf)
-                }
-                Err(e) => {
-                    // Can not fail in practice as the queue is known to be empty
-                    // at this point.
-                    thread_res_tx
-                        .try_send(Err(e))
-                        .expect("Failed to signal ADC setup error due to full queue");
-                    return Ok(());
-                }
-            };
+            let thread = Arc::new(Self {
+                ref_instant: Instant::now(),
+                timestamp: AtomicU64::new(TIMESTAMP_ERROR),
+                values: channels.iter().map(|_| AtomicU16::new(0)).collect(),
+                channel_descs,
+            });
 
             let thread_weak = Arc::downgrade(&thread);
-            let mut signal_ready = Some((thread, thread_res_tx));
+            let mut signal_ready = Some((thread, thread_tx));
 
             // Stop running as soon as the last reference to this Arc<IioThread>
             // is dropped (e.g. the weak reference can no longer be upgraded).
@@ -318,18 +305,7 @@ impl IioThread {
 
                     error!("Failed to refill {} ADC buffer: {}", adc_name, e);
 
-                    // If the ADC has not yet produced any values we still have the
-                    // queue at hand that signals readiness to the main thread.
-                    // This gives us a chance to return an Err from new().
-                    // If the queue was already used just print an error instead.
-                    if let Some((_, tx)) = signal_ready.take() {
-                        // Can not fail in practice as the queue is only .take()n
-                        // once and thus known to be empty.
-                        tx.try_send(Err(Error::new(e)))
-                            .expect("Failed to signal ADC setup error due to full queue");
-                    }
-
-                    break;
+                    Err(e)?;
                 }
 
                 let values = channels.iter().map(|ch| {
@@ -356,17 +332,14 @@ impl IioThread {
                 if let Some((content, tx)) = signal_ready.take() {
                     // Can not fail in practice as the queue is only .take()n
                     // once and thus known to be empty.
-                    tx.try_send(Ok(content))
-                        .expect("Failed to signal ADC setup completion due to full queue");
+                    tx.try_send(content)?;
                 }
             }
 
             Ok(())
         })?;
 
-        let thread = thread_res_rx.recv().await??;
-
-        Ok(thread)
+        Ok(thread_rx.recv().await?)
     }
 
     pub async fn new_stm32(
