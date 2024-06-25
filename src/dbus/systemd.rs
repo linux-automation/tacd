@@ -52,6 +52,7 @@ pub enum ServiceAction {
 
 #[derive(Clone)]
 pub struct Service {
+    #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     pub action: Arc<Topic<ServiceAction>>,
     pub status: Arc<Topic<ServiceStatus>>,
 }
