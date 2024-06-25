@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+use std::collections::HashMap;
 use std::fs::{read_dir, read_to_string, DirEntry};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -60,6 +61,28 @@ pub struct ChannelFile {
     pub description: String,
     pub url: String,
     pub polling_interval: Option<String>,
+}
+
+fn zvariant_walk_nested_dicts<'a>(map: &'a zvariant::Dict, path: &[&str]) -> Result<&'a str> {
+    let (&key, rem) = path
+        .split_first()
+        .ok_or_else(|| anyhow!("Got an empty path to walk"))?;
+
+    let value: &zvariant::Value = map
+        .get(key)?
+        .ok_or_else(|| anyhow!("Could not find key \"{key}\" in dict"))?;
+
+    if rem.is_empty() {
+        value.downcast_ref().ok_or_else(|| {
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a string")
+        })
+    } else {
+        let value = value.downcast_ref().ok_or_else(|| {
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a dict")
+        })?;
+
+        zvariant_walk_nested_dicts(value, rem)
+    }
 }
 
 impl Channel {
@@ -168,7 +191,14 @@ impl Channel {
         self.bundle = None;
 
         if self.enabled {
-            let (compatible, version) = proxy.info(&self.url).await?;
+            let args = HashMap::new();
+            let bundle = proxy.inspect_bundle(&self.url, args).await?;
+            let bundle: zvariant::Dict = bundle.into();
+
+            let compatible =
+                zvariant_walk_nested_dicts(&bundle, &["update", "compatible"])?.to_owned();
+            let version = zvariant_walk_nested_dicts(&bundle, &["update", "version"])?.to_owned();
+
             self.bundle = Some(UpstreamBundle::new(compatible, version, slot_status));
         }
 
