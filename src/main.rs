@@ -30,6 +30,7 @@ mod iobus;
 mod journal;
 mod led;
 mod measurement;
+mod motd;
 mod regulators;
 mod setup_mode;
 mod system;
@@ -48,6 +49,7 @@ use dut_power::DutPwrThread;
 use http_server::HttpServer;
 use iobus::IoBus;
 use led::Led;
+use motd::Motd;
 use regulators::Regulators;
 use setup_mode::SetupMode;
 use system::{HardwareGeneration, System};
@@ -57,7 +59,7 @@ use usb_hub::UsbHub;
 use watchdog::Watchdog;
 use watched_tasks::WatchedTasksBuilder;
 
-async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)> {
+async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder, Motd)> {
     // The tacd spawns a couple of async tasks that should run as long as
     // the tacd runs and if any one fails the tacd should stop.
     // These tasks are spawned via the watched task builder.
@@ -133,6 +135,19 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     // in the web interface.
     journal::serve(&mut http_server.server);
 
+    // Maintain a /etc/motd with useful information about the TAC.
+    // Keep a reference around because the motd file / bind mount is removed once
+    // the reference is dropped.
+    let motd = motd::Motd::new(
+        &mut wtb,
+        &dut_pwr,
+        &iobus,
+        &rauc,
+        &setup_mode,
+        &temperatures,
+        &usb_hub,
+    )?;
+
     // Set up the user interface for the hardware display on the TAC.
     // The different screens receive updates via the topics provided in
     // the UiResources struct.
@@ -173,7 +188,7 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
         watchdog.keep_fed(&mut wtb)?;
     }
 
-    Ok((ui, wtb))
+    Ok((ui, wtb, motd))
 }
 
 #[async_std::main]
@@ -187,13 +202,18 @@ async fn main() -> Result<()> {
     let screenshooter = display.screenshooter();
 
     match init(screenshooter).await {
-        Ok((ui, mut wtb)) => {
+        Ok((ui, mut wtb, motd)) => {
             // Start drawing the UI
             ui.run(&mut wtb, display)?;
 
             info!("Setup complete. Handling requests");
 
-            wtb.watch().await
+            let res = wtb.watch().await;
+
+            // Remove the motd so we do not leave stale information behind.
+            motd.remove();
+
+            res
         }
         Err(e) => {
             // Display a detailed error message on stderr (and thus in the journal) ...
