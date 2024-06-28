@@ -410,7 +410,7 @@ impl Rauc {
                     primary.set_if_changed(p);
                 }
 
-                // Referesh the slot status whenever the current operation changes
+                // Refresh the slot status whenever the current operation changes
                 // This is mostly relevant for "installing" -> "idle" transitions
                 // but it can't hurt to do it on any transition.
                 if let Ok(slots) = proxy.get_slot_status().await {
@@ -420,7 +420,7 @@ impl Rauc {
                             let mut info: HashMap<String, String> = slot_info
                                 .into_iter()
                                 .map(|(k, v)| {
-                                    // Convert itegers to strings as raw zvariant values are
+                                    // Convert integers to strings as raw zvariant values are
                                     // unusable when json serialized and I can not be bothered
                                     // to fiddle around with an enum that wraps strings and integers
                                     // or something like that

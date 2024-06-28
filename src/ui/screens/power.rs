@@ -126,7 +126,7 @@ impl ActivatableScreen for PowerScreen {
                 Box::new(|state: &OutputState| match state {
                     OutputState::On => IndicatorState::On,
                     OutputState::Off | OutputState::OffFloating => IndicatorState::Off,
-                    OutputState::Changing => IndicatorState::Unkown,
+                    OutputState::Changing => IndicatorState::Unknown,
                     _ => IndicatorState::Error,
                 }),
             )

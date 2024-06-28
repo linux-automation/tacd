@@ -94,7 +94,7 @@ Next you will have to build an SDK using `meta-lxatac`that includes `libiio`:
 
 And install it on your host PC.
 
-To build using the SDK you will have to `souce` it according to the yocto SDK
+To build using the SDK you will have to `source` it according to the yocto SDK
 documentation and add the following to the `.cargo/config.toml`:
 
     [target.armv7-unknown-linux-gnueabihf]

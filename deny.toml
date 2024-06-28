@@ -1,5 +1,5 @@
 # I've removed most of the lines from the template config generated via
-# cargo deny init to keep this readble.
+# cargo deny init to keep this readable.
 # If you want to change something it may be worthwhile to run cargo deny init
 # to get an overview of the options and their defaults.
 
