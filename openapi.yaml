@@ -26,7 +26,7 @@ paths:
               $ref: '#/components/schemas/Screen'
       responses:
         '204':
-          description: The screen was set sucessfully
+          description: The screen was set successfully
         '400':
           description: The value could not be parsed into a screen name
 
@@ -61,7 +61,7 @@ paths:
               type: number
       responses:
         '204':
-          description: The display brightness was set sucessfully
+          description: The display brightness was set successfully
         '400':
           description: The value could not be parsed as a number
 
@@ -109,7 +109,7 @@ paths:
               type: boolean
       responses:
         '204':
-          description: The locator status was set sucessfully
+          description: The locator status was set successfully
         '400':
           description: The value could not be parsed into a boolean
 

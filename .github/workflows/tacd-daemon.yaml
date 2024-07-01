@@ -10,7 +10,7 @@ on:
 
 env:
   # Make sure cargo commands not only fail on hard errors but also on warnings
-  # so we do not accidentially miss newly introduced warnings.
+  # so we do not accidentally miss newly introduced warnings.
   RUSTFLAGS: -D warnings
 
 jobs:

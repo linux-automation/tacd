@@ -272,7 +272,7 @@ impl IioThread {
         // like setting the priority or some iio setup, as not all structs
         // are Send.
         // We do however not want to return from new() before we know that the
-        // setup was sucessful.
+        // setup was successful.
         // This is why we create Self inside the thread and send it back
         // to the calling thread via a queue.
         let (thread_tx, thread_rx) = bounded(1);

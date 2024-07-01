@@ -40,7 +40,7 @@ pub enum IndicatorState {
     On,
     Off,
     Error,
-    Unkown,
+    Unknown,
 }
 
 pub struct WidgetContainer {
@@ -301,7 +301,7 @@ impl<T: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> DynamicWid
 
                         Some(text.bounding_box())
                     }
-                    IndicatorState::Unkown => {
+                    IndicatorState::Unknown => {
                         let text = Text::with_alignment(
                             "?",
                             anchor + Point::new(4, 10),

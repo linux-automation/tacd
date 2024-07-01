@@ -257,7 +257,7 @@ impl Ui {
                             // The NextScreen event for normal screens can be handled
                             // here.
                             // The situation for alerts is a bit more complicated.
-                            // (Some ignore all input. Some acknoledge via the upper button).
+                            // (Some ignore all input. Some acknowledge via the upper button).
                             // Leave handling for NextScreen to them.
 
                             match (st, ev) {

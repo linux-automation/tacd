@@ -103,8 +103,8 @@ async fn file(req: &Request<()>, fs_path: &Path) -> Result {
         })
         .unwrap_or(false);
 
-    // Make sure the client re-validates quite regularily if its cached
-    // ressource is still up to date (every 30s).
+    // Make sure the client re-validates quite regularly if its cached
+    // resource is still up to date (every 30s).
     let res_builder = Response::builder(200)
         .header("Last-Modified", last_modified)
         .header("Cache-Control", "max-age=30, must-revalidate");

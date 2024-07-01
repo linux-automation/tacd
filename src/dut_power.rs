@@ -333,7 +333,7 @@ impl DutPwrThread {
         let pwr_line = pwr_line.request(flags, 1 - PWR_LINE_ASSERTED, "tacd")?;
         let discharge_line = discharge_line.request(flags, DISCHARGE_LINE_ASSERTED, "tacd")?;
 
-        // The realtime priority must be set up inside the tread, but
+        // The realtime priority must be set up inside the thread, but
         // the operation may fail, in which case we want new() to fail
         // as well.
         // Use a queue to notify the calling thread if the priority setup

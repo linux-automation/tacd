@@ -56,7 +56,7 @@ fn load(topics: &[Arc<dyn AnyTopic>]) -> Result<()> {
     let file: PersistenceFile = from_reader(File::open(path)?)?;
 
     if file.format_version != 1 {
-        bail!("Unkown state file version: {}", file.format_version);
+        bail!("Unknown state file version: {}", file.format_version);
     }
 
     let mut content = file.persistent_topics;
