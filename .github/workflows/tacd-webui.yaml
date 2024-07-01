@@ -8,6 +8,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: '48 20 * * 4'
 
 env:
   # Generating sourcemaps fails with file not found in the autolinker
