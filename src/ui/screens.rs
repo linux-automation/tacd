@@ -27,6 +27,7 @@ use embedded_graphics::{
 };
 use serde::{Deserialize, Serialize};
 
+mod diagnostics;
 mod dig_out;
 mod help;
 mod iobus;
@@ -45,6 +46,7 @@ mod update_installation;
 mod usb;
 mod usb_overload;
 
+use diagnostics::DiagnosticsScreen;
 use dig_out::DigOutScreen;
 use help::HelpScreen;
 use iobus::IoBusScreen;
@@ -93,6 +95,7 @@ pub enum AlertScreen {
     UsbOverload,
     Help,
     Setup,
+    Diagnostics,
     OverTemperature,
 }
 
@@ -198,6 +201,7 @@ pub(super) fn init(
         Box::new(SystemScreen::new()),
         Box::new(UartScreen::new()),
         Box::new(UsbScreen::new()),
+        Box::new(DiagnosticsScreen::new()),
         Box::new(HelpScreen::new(wtb, alerts, &res.setup_mode.show_help)?),
         Box::new(IoBusHealthScreen::new(
             wtb,

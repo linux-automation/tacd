@@ -42,6 +42,14 @@ mod read_dt_props {
             "chosen/powerboard-factory-data/pcba-hardware-release",
             "lxatac-S05-R03-V01-C00",
         ),
+        (
+            "chosen/baseboard-factory-data/featureset",
+            "base,tft,calibrated",
+        ),
+        (
+            "chosen/powerboard-factory-data/featureset",
+            "base,calibrated",
+        ),
     ];
 
     const DEMO_DATA_NUM: &[(&str, u32)] = &[
@@ -145,6 +153,8 @@ pub struct Barebox {
     pub powerboard_release: String,
     pub baseboard_timestamp: u32,
     pub powerboard_timestamp: u32,
+    pub baseboard_featureset: Vec<String>,
+    pub powerboard_featureset: Vec<String>,
 }
 
 impl Barebox {
@@ -171,6 +181,18 @@ impl Barebox {
             },
             powerboard_timestamp: {
                 read_dt_property_u32("chosen/powerboard-factory-data/factory-timestamp")?
+            },
+            baseboard_featureset: {
+                read_dt_property("chosen/baseboard-factory-data/featureset")?
+                    .split(',')
+                    .map(str::to_string)
+                    .collect()
+            },
+            powerboard_featureset: {
+                read_dt_property("chosen/powerboard-factory-data/featureset")?
+                    .split(',')
+                    .map(str::to_string)
+                    .collect()
             },
         })
     }
