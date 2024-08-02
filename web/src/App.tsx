@@ -39,6 +39,7 @@ import {
   LocatorNotification,
   OverTemperatureNotification,
   UsbOverloadNotification,
+  CmdHintNotification,
 } from "./TacComponents";
 
 function Navigation() {
@@ -157,7 +158,12 @@ function ConnectionNotification() {
   );
 }
 
-function Notifications() {
+interface NotificationsProps {
+  cmdHint: React.ReactNode | null;
+  setCmdHint: (hint: React.ReactNode | null) => void;
+}
+
+function Notifications(props: NotificationsProps) {
   return (
     <>
       <ConnectionNotification />
@@ -169,11 +175,20 @@ function Notifications() {
       <UpdateNotification />
       <LocatorNotification />
       <IOBusFaultNotification />
+      <CmdHintNotification
+        cmdHint={props.cmdHint}
+        setCmdHint={props.setCmdHint}
+      />
     </>
   );
 }
 
-export default function App() {
+interface AppProps {
+  cmdHint: React.ReactNode | null;
+  setCmdHint: (hint: React.ReactNode | null) => void;
+}
+
+export default function App(props: AppProps) {
   const [runningVersion, setRunningVersion] = useState<string | undefined>();
   const hostname = useMqttSubscription("/v1/tac/network/hostname");
   const setup_mode = useMqttSubscription("/v1/tac/setup_mode");
@@ -209,7 +224,9 @@ export default function App() {
 
   return (
     <AppLayout
-      notifications={<Notifications />}
+      notifications={
+        <Notifications cmdHint={props.cmdHint} setCmdHint={props.setCmdHint} />
+      }
       stickyNotifications={true}
       navigation={<Navigation />}
       content={<Outlet />}
