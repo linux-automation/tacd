@@ -31,23 +31,28 @@ import LandingPage from "./LandingPage";
 import SettingsLabgrid from "./SettingsLabgrid";
 import Setup from "./Setup";
 
+function WebUi() {
+  return (
+    <React.StrictMode>
+      <HashRouter>
+        <Routes>
+          <Route path="/" element={<App />}>
+            <Route path="" element={<LandingPage />} />
+            <Route path="/dashboard/dut" element={<DashboardDut />} />
+            <Route path="/dashboard/journal" element={<DashboardJournal />} />
+            <Route path="/dashboard/tac" element={<DashboardTac />} />
+            <Route path="/settings/labgrid" element={<SettingsLabgrid />} />
+            <Route path="/docs/api" element={<ApiDocs />} />
+          </Route>
+          <Route path="/setup" element={<Setup />} />
+        </Routes>
+      </HashRouter>
+    </React.StrictMode>
+  );
+}
+
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement,
 );
-root.render(
-  <React.StrictMode>
-    <HashRouter>
-      <Routes>
-        <Route path="/" element={<App />}>
-          <Route path="" element={<LandingPage />} />
-          <Route path="/dashboard/dut" element={<DashboardDut />} />
-          <Route path="/dashboard/journal" element={<DashboardJournal />} />
-          <Route path="/dashboard/tac" element={<DashboardTac />} />
-          <Route path="/settings/labgrid" element={<SettingsLabgrid />} />
-          <Route path="/docs/api" element={<ApiDocs />} />
-        </Route>
-        <Route path="/setup" element={<Setup />} />
-      </Routes>
-    </HashRouter>
-  </React.StrictMode>,
-);
+
+root.render(<WebUi />);
