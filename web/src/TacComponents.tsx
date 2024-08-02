@@ -307,7 +307,22 @@ export function UpdateChannels(props: UpdateChannelsProps) {
           id: "enabled",
           header: "Enabled",
           cell: (e) => (
-            <Checkbox checked={e.enabled} disabled={!enable_polling} />
+            <Checkbox
+              checked={e.enabled}
+              disabled={!enable_polling}
+              onChange={() => {
+                let action = e.enabled ? "Disable" : "Enable";
+                let cmd = e.enabled ? "rauc-disable-cert" : "rauc-enable-cert";
+
+                props.setCmdHint(
+                  <p>
+                    # {action} the {e.display_name} update channel:
+                    <br />
+                    {cmd} {e.name}.cert.pem
+                  </p>,
+                );
+              }}
+            />
           ),
         },
         {
