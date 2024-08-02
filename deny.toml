@@ -10,6 +10,7 @@
 # will be
 
 [advisories]
+version = 2
 ignore = [
    "RUSTSEC-2020-0056",
    "RUSTSEC-2020-0077",
@@ -23,16 +24,16 @@ ignore = [
 multiple-versions = "allow"
 
 [licenses]
-unlicensed = "deny"
-default = "deny"
+version = 2
 confidence-threshold = 0.8
-copyleft = "allow"
 
 allow = [
     "Apache-2.0",
     "BSD-2-Clause",
     "BSD-3-Clause",
     "CC0-1.0",
+    "GPL-2.0",
+    "LGPL-2.1 WITH GCC-exception-2.0",
     "MIT",
     "Unicode-DFS-2016",
     "Unlicense",
