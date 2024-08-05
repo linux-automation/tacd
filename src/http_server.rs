@@ -78,8 +78,8 @@ impl HttpServer {
         );
 
         this.expose_openapi_json();
-        this.expose_dir(WEBUI_DIR, "/", false);
-        this.expose_dir(EXTRA_DIR, "/srv", true);
+        this.expose_dir(WEBUI_DIR, "/", false, None);
+        this.expose_dir(EXTRA_DIR, "/srv", true, None);
 
         for (fs_path, web_path) in EXPOSED_FILES_RW {
             let fs_path = FS_PREFIX.to_owned() + *fs_path;
@@ -103,8 +103,14 @@ impl HttpServer {
     }
 
     /// Serve a directory from disk for reading
-    fn expose_dir(&mut self, fs_path: &'static str, web_path: &str, directory_listings: bool) {
-        let handler = move |req| serve_dir(fs_path, directory_listings, req);
+    fn expose_dir(
+        &mut self,
+        fs_path: &'static str,
+        web_path: &str,
+        directory_listings: bool,
+        force_mime: Option<&'static str>,
+    ) {
+        let handler = move |req| serve_dir(req, fs_path, directory_listings, force_mime);
 
         self.server.at(web_path).get(handler);
         self.server.at(web_path).at("").get(handler);
