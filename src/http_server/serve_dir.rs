@@ -46,7 +46,7 @@ fn clamp_timestamp(ts: SystemTime) -> SystemTime {
     max(tacd_build_time, ts)
 }
 
-async fn file(req: &Request<()>, fs_path: &Path) -> Result {
+async fn file(req: &Request<()>, fs_path: &Path, force_mime: Option<&str>) -> Result {
     // Check the files modification date and compare it to the one provided
     // by the client (if any) to determine if we even need to send the file.
     let modification_date = fs_path.metadata()?.modified()?;
@@ -109,7 +109,11 @@ async fn file(req: &Request<()>, fs_path: &Path) -> Result {
         .header("Last-Modified", last_modified)
         .header("Cache-Control", "max-age=30, must-revalidate");
 
-    let body = Body::from_file(fs_path).await?;
+    let mut body = Body::from_file(fs_path).await?;
+
+    if let Some(mime) = force_mime {
+        body.set_mime(mime);
+    }
 
     if have_gz && accept_gz {
         let mut gz_body = Body::from_file(gz_path.unwrap()).await?;
@@ -241,7 +245,12 @@ fn dir_listing(fs_path: &Path, is_root: bool) -> Result {
     Ok(res)
 }
 
-pub async fn serve_dir(base_path: &str, directory_listings: bool, req: Request<()>) -> Result {
+pub async fn serve_dir(
+    req: Request<()>,
+    base_path: &str,
+    directory_listings: bool,
+    force_mime: Option<&str>,
+) -> Result {
     let url_path = req.url().path();
     let has_trailing_slash = url_path.ends_with('/');
 
@@ -274,13 +283,13 @@ pub async fn serve_dir(base_path: &str, directory_listings: bool, req: Request<(
 
     let res = {
         if !is_dir {
-            file(&req, &path).await
+            file(&req, &path, force_mime).await
         } else if !has_trailing_slash {
             redirect_dir(url_path)
         } else if directory_listings && !has_index {
             dir_listing(&path, is_root)
         } else {
-            file(&req, &index_path).await
+            file(&req, &index_path, force_mime).await
         }
     };
 
