@@ -31,7 +31,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: latest
-      - run: npx prettier@=3.0.1 --check .
+      - run: npx prettier@=3.3.3 --check .
 
   license:
     name: npx license-checker

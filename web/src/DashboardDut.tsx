@@ -102,22 +102,26 @@ export default function DashboardDut() {
       >
         <ColumnLayout columns={2} variant="text-grid">
           <Box>
-            <Box variant="awsui-key-label">DUT voltage (V)</Box>
-            <MqttChart
-              title="DUT Voltage"
-              topic="/v1/dut/feedback/voltage"
-              maxSnapPoints={[6, 13, 25, 50]}
-              minSnapPoints={[-1]}
-            />
+            <SpaceBetween direction="vertical" size="xs">
+              <Box variant="awsui-key-label">DUT voltage (V)</Box>
+              <MqttChart
+                title="DUT Voltage"
+                topic="/v1/dut/feedback/voltage"
+                maxSnapPoints={[6, 13, 25, 50]}
+                minSnapPoints={[-1]}
+              />
+            </SpaceBetween>
           </Box>
           <Box>
-            <Box variant="awsui-key-label">DUT current (A)</Box>
-            <MqttChart
-              title="DUT Current"
-              topic="/v1/dut/feedback/current"
-              maxSnapPoints={[0.5, 1, 2, 3, 4, 5]}
-              minSnapPoints={[-0.1, -1]}
-            />
+            <SpaceBetween direction="vertical" size="xs">
+              <Box variant="awsui-key-label">DUT current (A)</Box>
+              <MqttChart
+                title="DUT Current"
+                topic="/v1/dut/feedback/current"
+                maxSnapPoints={[0.5, 1, 2, 3, 4, 5]}
+                minSnapPoints={[-0.1, -1]}
+              />
+            </SpaceBetween>
           </Box>
         </ColumnLayout>
         <ColumnLayout columns={4} variant="text-grid">
