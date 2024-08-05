@@ -104,7 +104,7 @@ impl HttpServer {
 
     /// Serve a directory from disk for reading
     fn expose_dir(&mut self, fs_path: &'static str, web_path: &str, directory_listings: bool) {
-        let handler = move |req| async move { serve_dir(fs_path, directory_listings, req).await };
+        let handler = move |req| serve_dir(fs_path, directory_listings, req);
 
         self.server.at(web_path).get(handler);
         self.server.at(web_path).at("").get(handler);
