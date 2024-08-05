@@ -1,0 +1,9 @@
+PACKAGE NAME: tacd
+PACKAGE VERSION: 0.1.0+gitAUTOINC+803b2084b2
+RECIPE NAME: tacd
+LICENSE: GPL-2.0-or-later
+
+PACKAGE NAME: tacd-webinterface
+PACKAGE VERSION: 0.1.0+gitAUTOINC+803b2084b2
+RECIPE NAME: tacd-webinterface
+LICENSE: GPL-2.0-or-later
