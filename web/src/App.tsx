@@ -121,6 +121,12 @@ function Navigation() {
                 text: "LXA TAC Manual",
                 href: "https://www.linux-automation.com/lxatac-M02/index.html",
               },
+              {
+                type: "link",
+                external: true,
+                text: "Software Licenses",
+                href: `/license`,
+              },
             ],
           },
         ]}
