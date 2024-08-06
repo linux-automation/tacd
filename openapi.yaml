@@ -1050,6 +1050,14 @@ components:
           type: string
         powerboard_timestamp:
           type: string
+        baseboard_featureset:
+          type: array
+          items:
+            type: string
+        powerboard_featureset:
+          type: array
+          items:
+            type: string
 
     IOBusServerInfo:
       type: object
