@@ -128,7 +128,11 @@ type Channel = {
   bundle?: UpstreamBundle;
 };
 
-export function SlotStatus() {
+interface SlotStatusProps {
+  setCmdHint: (hint: React.ReactNode | null) => void;
+}
+
+export function SlotStatus(props: SlotStatusProps) {
   const slot_status = useMqttSubscription<RaucSlots>("/v1/tac/update/slots");
 
   if (slot_status === undefined) {
@@ -188,6 +192,15 @@ export function SlotStatus() {
             loadingText="Loading resources"
             selectionType="single"
             trackBy="name"
+            onSelectionChange={(ev) => {
+              props.setCmdHint(
+                <p>
+                  # Mark a RAUC slot as active:
+                  <br />
+                  rauc status mark-active {ev.detail.selectedItems[0].bootname}
+                </p>,
+              );
+            }}
           />
         </Container>
 
@@ -245,7 +258,11 @@ export function UpdateConfig() {
   );
 }
 
-export function UpdateChannels() {
+interface UpdateChannelsProps {
+  setCmdHint: (hint: React.ReactNode | null) => void;
+}
+
+export function UpdateChannels(props: UpdateChannelsProps) {
   const channels_topic = useMqttSubscription<Array<Channel>>(
     "/v1/tac/update/channels",
   );
@@ -290,7 +307,22 @@ export function UpdateChannels() {
           id: "enabled",
           header: "Enabled",
           cell: (e) => (
-            <Checkbox checked={e.enabled} disabled={!enable_polling} />
+            <Checkbox
+              checked={e.enabled}
+              disabled={!enable_polling}
+              onChange={() => {
+                let action = e.enabled ? "Disable" : "Enable";
+                let cmd = e.enabled ? "rauc-disable-cert" : "rauc-enable-cert";
+
+                props.setCmdHint(
+                  <p>
+                    # {action} the {e.display_name} update channel:
+                    <br />
+                    {cmd} {e.name}.cert.pem
+                  </p>,
+                );
+              }}
+            />
           ),
         },
         {
@@ -461,7 +493,11 @@ export function RebootNotification() {
   );
 }
 
-export function UpdateContainer() {
+interface UpdateContainerProps {
+  setCmdHint: (hint: React.ReactNode | null) => void;
+}
+
+export function UpdateContainer(props: UpdateContainerProps) {
   return (
     <Container
       header={
@@ -475,8 +511,8 @@ export function UpdateContainer() {
     >
       <SpaceBetween size="m">
         <UpdateConfig />
-        <UpdateChannels />
-        <SlotStatus />
+        <UpdateChannels setCmdHint={props.setCmdHint} />
+        <SlotStatus setCmdHint={props.setCmdHint} />
       </SpaceBetween>
     </Container>
   );
@@ -657,6 +693,27 @@ export function PowerFailNotification() {
       header="DUT powered off"
     >
       The DUT was powered off due to {reason}.
+    </Alert>
+  );
+}
+
+interface CmdHintNotificationProps {
+  cmdHint: React.ReactNode | null;
+  setCmdHint: (hint: React.ReactNode | null) => void;
+}
+
+export function CmdHintNotification(props: CmdHintNotificationProps) {
+  return (
+    <Alert
+      dismissible
+      statusIconAriaLabel="Info"
+      visible={props.cmdHint !== null}
+      header="Complete an action on the command line"
+      onDismiss={() => props.setCmdHint(null)}
+    >
+      The selected action can not be performed in the web interface. To complete
+      it use the command line interface instead:
+      <Box variant="code">{props.cmdHint}</Box>
     </Alert>
   );
 }

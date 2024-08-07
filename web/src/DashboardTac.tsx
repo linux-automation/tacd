@@ -55,7 +55,11 @@ type Bootloader = {
   powerboard_timestamp: number;
 };
 
-export default function DashboardTac() {
+interface DashboardTacProps {
+  setCmdHint: (hint: React.ReactNode | null) => void;
+}
+
+export default function DashboardTac(props: DashboardTacProps) {
   const [counter, setCounter] = useState(0);
 
   useEffect(() => {
@@ -214,7 +218,7 @@ export default function DashboardTac() {
         </ColumnLayout>
       </Container>
 
-      <UpdateContainer />
+      <UpdateContainer setCmdHint={props.setCmdHint} />
 
       <Container
         header={
