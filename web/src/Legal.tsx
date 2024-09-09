@@ -30,7 +30,7 @@ type Package = {
   license: string;
 };
 
-function parse_manifest(text: string) {
+export function parse_manifest(text: string) {
   let packages: Package[] = [];
 
   // The content of `text` looks something like this:
