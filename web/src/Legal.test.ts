@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import ReactDOM from "react-dom/client";
 
-import { parse_manifest } from "./Legal";
+import { parse_manifest, package_table } from "./Legal";
 
 const manifest_ref = [
   {
@@ -26,4 +27,13 @@ it("parses the manifest", () => {
   const manifest = parse_manifest(manifest_raw);
 
   expect(manifest).toEqual(manifest_ref);
+});
+
+it("renders", () => {
+  const div = document.createElement("div");
+  const root = ReactDOM.createRoot(div);
+
+  const manifest_table = package_table(manifest_ref);
+
+  root.render(manifest_table);
 });

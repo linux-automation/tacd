@@ -74,7 +74,7 @@ export function parse_manifest(text: string) {
   return packages;
 }
 
-function package_table(packages?: Package[]) {
+export function package_table(packages?: Package[]) {
   return (
     <Table
       header={
