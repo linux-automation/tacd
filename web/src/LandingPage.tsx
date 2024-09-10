@@ -72,6 +72,11 @@ export default function LandingPage() {
             href: "/#/docs/api",
             description: "Find API definitions to automate you LXA TAC",
           },
+          {
+            name: "Documentation / Legal Information",
+            href: "/#/docs/legal",
+            description: "See the software components and their licenses",
+          },
         ]}
       />
     </SpaceBetween>

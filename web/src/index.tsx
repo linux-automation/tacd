@@ -30,6 +30,7 @@ import DashboardTac from "./DashboardTac";
 import LandingPage from "./LandingPage";
 import SettingsLabgrid from "./SettingsLabgrid";
 import Setup from "./Setup";
+import Legal from "./Legal";
 
 import { useState } from "react";
 
@@ -53,6 +54,7 @@ function WebUi() {
             />
             <Route path="/settings/labgrid" element={<SettingsLabgrid />} />
             <Route path="/docs/api" element={<ApiDocs />} />
+            <Route path="/docs/legal" element={<Legal />} />y
           </Route>
           <Route path="/setup" element={<Setup />} />
         </Routes>
