@@ -5,6 +5,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use futures::FutureExt;
+use nix::errno::Errno;
 use nix::mount::MsFlags;
 
 use crate::dut_power::OutputState;
@@ -16,6 +17,13 @@ use crate::WatchedTasksBuilder;
 mod setup {
     pub(super) const VAR_RUN_TACD: &str = "demo_files/var/run/tacd";
     pub(super) const ETC: &str = "demo_files/etc";
+
+    /// umount stub for demo_mode that works without root permissions
+    ///
+    /// (by doing nothing).
+    pub(super) fn umount(_target: &std::path::Path) -> nix::Result<()> {
+        Err(nix::errno::Errno::EINVAL)
+    }
 
     /// mount stub for demo_mode that works without root permissions
     ///
@@ -33,7 +41,7 @@ mod setup {
 
 #[cfg(not(feature = "demo_mode"))]
 mod setup {
-    pub(super) use nix::mount::mount;
+    pub(super) use nix::mount::{mount, umount};
     pub(super) const VAR_RUN_TACD: &str = "/var/run/tacd";
     pub(super) const ETC: &str = "/etc";
 }
@@ -243,7 +251,14 @@ impl Motd {
         // Create the motd file in /var/run/tacd.
         let runtime_motd = File::create(&path_runtime_motd)?;
 
-        // Bind (re)mount /var/run/tacd/motd to /etc/motd.
+        // Try to unmount the bind mount at /etc/motd before trying to set up a new one.
+        // Filter out the expected error for when /etc/motd is not a bind mount yet.
+        umount(&path_etc_motd).or_else(|err| match err {
+            Errno::EINVAL => Ok(()),
+            _ => Err(err),
+        })?;
+
+        // Bind mount /var/run/tacd/motd to /etc/motd.
         // The benefit over writing to /etc/motd directly is that we do not
         // hammer the eMMC as much.
         // The benefit over a symlink is that the bind-mount does not persist
@@ -255,7 +270,7 @@ impl Motd {
             Some(&path_runtime_motd),
             &path_etc_motd,
             None::<&str>,
-            MsFlags::MS_BIND | MsFlags::MS_REMOUNT,
+            MsFlags::MS_BIND,
             None::<&str>,
         )?;
 
