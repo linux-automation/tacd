@@ -18,6 +18,7 @@ ignore = [
    "RUSTSEC-2021-0060",
    "RUSTSEC-2021-0064",
    "RUSTSEC-2023-0065",
+   "RUSTSEC-2023-0086",
 ]
 
 [bans]
