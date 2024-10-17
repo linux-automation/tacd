@@ -66,7 +66,7 @@ const COLOR_RESET: &str = "\x1b[0m";
 
 impl Display for Motd {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Welcome to you TAC!")?;
+        writeln!(f, "Welcome to your TAC!")?;
         writeln!(f)?;
 
         if self.temperature_warning {
