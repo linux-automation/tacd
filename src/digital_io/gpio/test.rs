@@ -40,7 +40,7 @@ impl LineHandle {
 }
 
 #[allow(clippy::upper_case_acronyms, non_camel_case_types)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum LineRequestFlags {
     OUTPUT,
     OPEN_DRAIN,

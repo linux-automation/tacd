@@ -26,7 +26,7 @@ framebuffer = "0.3"
 futures = "0.3"
 futures-lite = "1.12"
 futures-util = "0.3"
-gpio-cdev = "0.5"
+gpio-cdev = "0.6"
 html-escape = "0.2"
 industrial-io = { version = "0.5", default-features = false }
 log = { version = "0.4", features = ["release_max_level_warn"]}
