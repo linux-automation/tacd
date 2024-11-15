@@ -424,7 +424,7 @@ impl Rauc {
                                     // unusable when json serialized and I can not be bothered
                                     // to fiddle around with an enum that wraps strings and integers
                                     // or something like that
-                                    let ss = v.downcast_ref::<str>().map(|s| s.to_string());
+                                    let ss = v.downcast_ref::<String>();
                                     let s32 = v.downcast_ref::<u32>().map(|i| format!("{i}"));
                                     let s64 = v.downcast_ref::<u64>().map(|i| format!("{i}"));
 
