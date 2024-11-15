@@ -46,9 +46,9 @@ systemd = { version = "0.10", optional = true}
 thread-priority = "0.13"
 tide = "0.16"
 unique-token = "0.2"
-zbus = "3.11"
-zvariant_derive = "3.12"
-zvariant = { version = "3.12", default-features = false, features = ["enumflags2"] }
+zbus = "4.2"
+zvariant_derive = "4.2"
+zvariant = { version = "4.2", default-features = false, features = ["enumflags2"] }
 
 [features]
 default = ["systemd"]

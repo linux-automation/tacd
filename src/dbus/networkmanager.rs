@@ -212,7 +212,7 @@ async fn handle_ipv4_updates(
                         .iter()
                         .filter_map(|a| {
                             a.get("address")
-                                .and_then(|e| e.downcast_ref::<zvariant::Str>())
+                                .and_then(|e| e.downcast_ref::<zvariant::Str>().ok())
                                 .map(|e| e.as_str().to_owned())
                         })
                         .collect();
