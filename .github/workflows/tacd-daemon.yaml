@@ -62,7 +62,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      - run: rustup toolchain install stable
+      - run: cargo install --locked cargo-deny
+      - run: cargo deny check
 
   test:
     name: cargo test
