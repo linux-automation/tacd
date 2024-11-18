@@ -38,11 +38,7 @@ jobs:
       - run: sudo apt update
       - run: sudo apt install libsystemd-dev libiio-dev
       - run: rustup toolchain install stable
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: ${{ matrix.features }}
-          name: Clippy Output
+      - run: cargo clippy ${{ matrix.features }}
 
   check:
     strategy:
