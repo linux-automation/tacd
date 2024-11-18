@@ -50,6 +50,12 @@ jobs:
           "0BSD;Apache-2.0;BSD-2-Clause;BSD-3-Clause;CC-BY-4.0;CC0-1.0;EPL-1.0;ISC;MIT;MPL-2.0;Python-2.0;Unlicense;WTFPL"
 
   build:
+    strategy:
+      fail-fast: false # Run against all versions even if one fails
+      matrix:
+        version:
+          - "20.12.2" # Yocto scarthgap
+          - "20.17.0" # Yocto styhead
     name: npm run build
     runs-on: ubuntu-latest
     defaults:
@@ -59,7 +65,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20.17.0
+          node-version: ${{ matrix.version }}
       - run: npm ci
       - run: npm run build
 
