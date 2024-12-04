@@ -195,7 +195,7 @@ impl OriginDimensions for DisplayExclusive {
     }
 }
 
-impl<'a> DrawTarget for DisplayRotated<'a> {
+impl DrawTarget for DisplayRotated<'_> {
     type Color = BinaryColor;
     type Error = core::convert::Infallible;
 
@@ -214,7 +214,7 @@ impl<'a> DrawTarget for DisplayRotated<'a> {
     }
 }
 
-impl<'a> OriginDimensions for DisplayRotated<'a> {
+impl OriginDimensions for DisplayRotated<'_> {
     fn size(&self) -> Size {
         let orig = self.inner.size();
 
