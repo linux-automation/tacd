@@ -17,8 +17,8 @@ ignore = [
    "RUSTSEC-2021-0059",
    "RUSTSEC-2021-0060",
    "RUSTSEC-2021-0064",
-   "RUSTSEC-2023-0065",
    "RUSTSEC-2023-0086",
+   "RUSTSEC-2024-0384",
 ]
 
 [bans]
@@ -36,6 +36,7 @@ allow = [
     "GPL-2.0",
     "LGPL-2.1 WITH GCC-exception-2.0",
     "MIT",
+    "Unicode-3.0",
     "Unicode-DFS-2016",
     "Unlicense",
     "WTFPL",

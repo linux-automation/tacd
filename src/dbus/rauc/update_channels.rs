@@ -63,22 +63,22 @@ pub struct ChannelFile {
     pub polling_interval: Option<String>,
 }
 
-fn zvariant_walk_nested_dicts<'a>(map: &'a zvariant::Dict, path: &[&str]) -> Result<&'a str> {
+fn zvariant_walk_nested_dicts(map: &zvariant::Dict, path: &[&str]) -> Result<String> {
     let (&key, rem) = path
         .split_first()
         .ok_or_else(|| anyhow!("Got an empty path to walk"))?;
 
     let value: &zvariant::Value = map
-        .get(key)?
+        .get(&key)?
         .ok_or_else(|| anyhow!("Could not find key \"{key}\" in dict"))?;
 
     if rem.is_empty() {
-        value.downcast_ref().ok_or_else(|| {
-            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a string")
+        value.downcast_ref().map_err(|e| {
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a string: {e}")
         })
     } else {
-        let value = value.downcast_ref().ok_or_else(|| {
-            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a dict")
+        let value = value.downcast_ref().map_err(|e| {
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a dict: {e}")
         })?;
 
         zvariant_walk_nested_dicts(value, rem)

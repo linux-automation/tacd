@@ -330,7 +330,7 @@ impl DutPwrThread {
             .ok_or_else(|| anyhow!("Could not find GPIO line DUT_PWR_DISCH"))?;
 
         let flags = hardware_generation.output_flags();
-        let pwr_line = pwr_line.request(flags, 1 - PWR_LINE_ASSERTED, "tacd")?;
+        let pwr_line = pwr_line.request(flags.clone(), 1 - PWR_LINE_ASSERTED, "tacd")?;
         let discharge_line = discharge_line.request(flags, DISCHARGE_LINE_ASSERTED, "tacd")?;
 
         // The realtime priority must be set up inside the thread, but
