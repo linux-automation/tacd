@@ -80,7 +80,7 @@ impl ServiceStatus {
     }
 
     #[cfg(not(feature = "demo_mode"))]
-    async fn get<'a>(unit: &service::UnitProxy<'a>) -> Result<Self> {
+    async fn get(unit: &service::UnitProxy<'_>) -> Result<Self> {
         Ok(Self {
             active_state: unit.active_state().await?,
             sub_state: unit.sub_state().await?,
