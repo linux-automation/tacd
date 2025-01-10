@@ -211,7 +211,7 @@ pub fn run(
                         .filter_map(|ch| {
                             ch.bundle
                             .as_ref()
-                            .map_or(false, |b| b.newer_than_installed)
+                            .is_some_and(|b| b.newer_than_installed)
                             .then_some(ch.url)
                         })
                         .collect();
