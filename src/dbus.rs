@@ -68,7 +68,7 @@ pub use rauc::Rauc;
 pub use tacd::Tacd;
 
 /// Bunch together everything that uses a DBus system connection here, even
-/// though it is conceptionally independent
+/// though it is conceptually independent
 pub struct DbusSession {
     pub hostname: Hostname,
     pub network: Network,
