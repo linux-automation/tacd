@@ -10,6 +10,11 @@ use zbus::proxy;
     default_path = "/"
 )]
 pub trait Installer {
+    /// GetArtifactStatus method
+    fn get_artifact_status(
+        &self,
+    ) -> zbus::Result<Vec<std::collections::HashMap<String, zbus::zvariant::OwnedValue>>>;
+
     /// GetPrimary method
     fn get_primary(&self) -> zbus::Result<String>;
 
