@@ -43,6 +43,9 @@ mod installer;
 #[cfg(not(feature = "demo_mode"))]
 use installer::InstallerProxy;
 
+#[cfg(not(feature = "demo_mode"))]
+mod poller;
+
 #[cfg(feature = "demo_mode")]
 mod imports {
     use std::collections::HashMap;
