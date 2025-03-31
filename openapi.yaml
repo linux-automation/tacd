@@ -1162,6 +1162,10 @@ components:
                 type: string,
               newer_than_installed:
                 type: boolean
+          force_polling:
+            type: boolean
+          force_auto_install:
+            type: boolean
 
     ServiceStatus:
       type: object
