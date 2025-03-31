@@ -65,7 +65,20 @@ pub fn update_system_conf(
     enable_auto_install: bool,
 ) -> std::io::Result<bool> {
     let dynamic_conf = {
-        match polling_section(primary_channel, enable_polling, enable_auto_install) {
+        // Allow force-enabling update polling and automatic installations
+        // via the update channel config file to implement company wide
+        // auto-update policies.
+        let force_polling = primary_channel
+            .and_then(|pc| pc.force_polling)
+            .unwrap_or(false);
+        let force_auto_install = primary_channel
+            .and_then(|pc| pc.force_auto_install)
+            .unwrap_or(false);
+
+        let polling = enable_polling || force_polling;
+        let auto_install = enable_auto_install || force_auto_install;
+
+        match polling_section(primary_channel, polling, auto_install) {
             Ok(Some(ps)) => {
                 // We use the config in /usr/lib as a template ...
                 let static_conf = read_to_string(STATIC_CONF_PATH)?;
