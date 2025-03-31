@@ -1166,6 +1166,12 @@ components:
             type: boolean
           force_auto_install:
             type: boolean
+          candidate_criteria:
+            type: string
+          install_criteria:
+            type: string
+          reboot_criteria:
+            type: string
 
     ServiceStatus:
       type: object

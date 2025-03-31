@@ -45,14 +45,25 @@ fn polling_section(
         writeln!(&mut section, "interval-sec={}", interval.as_secs())?;
     }
 
-    writeln!(&mut section, "candidate-criteria=different-version")?;
+    let candidate_criteria = primary_channel
+        .candidate_criteria
+        .as_deref()
+        .unwrap_or("different-version");
+
+    writeln!(&mut section, "candidate-criteria={candidate_criteria}")?;
 
     if auto_install {
-        writeln!(&mut section, "install-criteria=different-version")?;
-        writeln!(
-            &mut section,
-            "reboot-criteria=updated-slots;updated-artifacts"
-        )?;
+        let install_criteria = primary_channel
+            .install_criteria
+            .as_deref()
+            .unwrap_or("different-version");
+        let reboot_criteria = primary_channel
+            .reboot_criteria
+            .as_deref()
+            .unwrap_or("updated-slots;updated-artifacts");
+
+        writeln!(&mut section, "install-criteria={install_criteria}")?;
+        writeln!(&mut section, "reboot-criteria={reboot_criteria}")?;
         writeln!(&mut section, "reboot-cmd=systemctl reboot")?;
     }
 
