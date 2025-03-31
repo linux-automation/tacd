@@ -53,6 +53,8 @@ pub struct Channel {
     pub enabled: bool,
     pub primary: bool,
     pub bundle: Option<UpstreamBundle>,
+    pub force_polling: Option<bool>,
+    pub force_auto_install: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -65,6 +67,8 @@ pub struct ChannelFile {
     pub description: String,
     pub url: String,
     pub polling_interval: Option<String>,
+    pub force_polling: Option<bool>,
+    pub force_auto_install: Option<bool>,
 }
 
 #[cfg(not(feature = "demo_mode"))]
@@ -144,6 +148,8 @@ impl Channel {
             enabled: false,
             primary: false,
             bundle: None,
+            force_polling: channel_file.force_polling,
+            force_auto_install: channel_file.force_auto_install,
         };
 
         ch.update_enabled();
