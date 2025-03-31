@@ -55,6 +55,9 @@ pub struct Channel {
     pub bundle: Option<UpstreamBundle>,
     pub force_polling: Option<bool>,
     pub force_auto_install: Option<bool>,
+    pub candidate_criteria: Option<String>,
+    pub install_criteria: Option<String>,
+    pub reboot_criteria: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -69,6 +72,9 @@ pub struct ChannelFile {
     pub polling_interval: Option<String>,
     pub force_polling: Option<bool>,
     pub force_auto_install: Option<bool>,
+    pub candidate_criteria: Option<String>,
+    pub install_criteria: Option<String>,
+    pub reboot_criteria: Option<String>,
 }
 
 #[cfg(not(feature = "demo_mode"))]
@@ -150,6 +156,9 @@ impl Channel {
             bundle: None,
             force_polling: channel_file.force_polling,
             force_auto_install: channel_file.force_auto_install,
+            candidate_criteria: channel_file.candidate_criteria,
+            install_criteria: channel_file.install_criteria,
+            reboot_criteria: channel_file.reboot_criteria,
         };
 
         ch.update_enabled();
