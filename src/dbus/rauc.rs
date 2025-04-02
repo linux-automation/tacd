@@ -20,10 +20,11 @@ use anyhow::Result;
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
 use futures_util::FutureExt;
-use log::warn;
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 
 use super::Connection;
+use super::systemd::Service;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -53,7 +54,6 @@ mod imports {
 #[cfg(not(feature = "demo_mode"))]
 mod imports {
     pub(super) use anyhow::bail;
-    pub(super) use log::error;
 
     pub(super) const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
 }
@@ -184,9 +184,11 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
 }
 
 async fn channel_list_update_task(
+    conn: Arc<Connection>,
     reload: Arc<Topic<bool>>,
     enable_polling: Arc<Topic<bool>>,
     channels: Arc<Topic<Channels>>,
+    rauc_service: Service,
 ) -> Result<()> {
     let (reload_stream, _) = reload.subscribe_unbounded();
     let (mut enable_polling_stream, _) = enable_polling.subscribe_unbounded();
@@ -214,9 +216,19 @@ async fn channel_list_update_task(
             }
         };
 
-        update_system_conf(new_channels.primary(), enable_polling)?;
+        let should_reload = update_system_conf(new_channels.primary(), enable_polling)?;
 
         channels.set(new_channels);
+
+        if should_reload {
+            info!("New RAUC config written. Triggering daemon restart.");
+
+            if let Err(e) = rauc_service.reload(&conn).await {
+                error!("Failed to reload the RAUC service: {e}");
+            }
+        } else {
+            info!("Config is up to date. Will not reload.");
+        }
     }
 }
 
@@ -248,6 +260,7 @@ impl Rauc {
         bb: &mut BrokerBuilder,
         wtb: &mut WatchedTasksBuilder,
         _conn: &Arc<Connection>,
+        rauc_service: Service,
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
@@ -259,9 +272,11 @@ impl Rauc {
         wtb.spawn_task(
             "rauc-channel-list-update",
             channel_list_update_task(
+                Arc::new(Connection),
                 inst.reload.clone(),
                 inst.enable_polling.clone(),
                 inst.channels.clone(),
+                rauc_service,
             ),
         )?;
 
@@ -273,6 +288,7 @@ impl Rauc {
         bb: &mut BrokerBuilder,
         wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
+        rauc_service: Service,
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
@@ -465,9 +481,11 @@ impl Rauc {
         wtb.spawn_task(
             "rauc-channel-list-update",
             channel_list_update_task(
+                conn.clone(),
                 inst.reload.clone(),
                 inst.enable_polling.clone(),
                 inst.channels.clone(),
+                rauc_service,
             ),
         )?;
 

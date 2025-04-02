@@ -51,7 +51,6 @@ pub enum ServiceAction {
 
 #[derive(Clone)]
 pub struct Service {
-    #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     unit_name: &'static str,
     #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     pub action: Arc<Topic<ServiceAction>>,
@@ -67,7 +66,6 @@ pub struct Systemd {
     pub labgrid: Service,
     #[allow(dead_code)]
     pub iobus: Service,
-    #[allow(dead_code)]
     pub rauc: Service,
 }
 
@@ -90,6 +88,47 @@ impl ServiceStatus {
             active_enter_ts: unit.active_enter_timestamp().await?,
             active_exit_ts: unit.active_exit_timestamp().await?,
         })
+    }
+}
+
+pub enum ReloadError {
+    Canceled,
+    Timeout,
+    Failed,
+    Dependency,
+    Skipped,
+    DBus(zbus::Error),
+}
+
+impl From<&str> for ReloadError {
+    fn from(value: &str) -> Self {
+        match value {
+            "canceled" => Self::Canceled,
+            "timeout" => Self::Timeout,
+            "failed" => Self::Failed,
+            "dependency" => Self::Dependency,
+            "skipped" => Self::Skipped,
+            _ => Self::DBus(zbus::Error::Failure(format!("Unknown job result: {value}"))),
+        }
+    }
+}
+
+impl From<zbus::Error> for ReloadError {
+    fn from(value: zbus::Error) -> Self {
+        Self::DBus(value)
+    }
+}
+
+impl std::fmt::Display for ReloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Canceled => write!(f, "The reload job was canceled"),
+            Self::Timeout => write!(f, "The reload job timed out"),
+            Self::Failed => write!(f, "The reload job failed"),
+            Self::Dependency => write!(f, "The reload job failed due to a dependency"),
+            Self::Skipped => write!(f, "The reload job was skipped"),
+            Self::DBus(e) => write!(f, "A DBus error occurred: {e}"),
+        }
     }
 }
 
@@ -183,6 +222,52 @@ impl Service {
         })?;
 
         Ok(())
+    }
+
+    #[cfg(feature = "demo_mode")]
+    pub async fn reload(&self, _conn: &Connection) -> std::result::Result<(), ReloadError> {
+        log::info!("Reloaded {}", self.unit_name);
+        Ok(())
+    }
+
+    #[cfg(not(feature = "demo_mode"))]
+    pub async fn reload(&self, conn: &Connection) -> std::result::Result<(), ReloadError> {
+        let manager = manager::ManagerProxy::new(conn).await?;
+
+        // According to the systemd dbus interface documentation the race-free
+        // way to receive results for a Job (like restarting a service) is to
+        // subscribe to JobRemoved signals before triggering the job and then
+        // waiting for a removed job with the correct object path.
+
+        // Subscribe to JobRemoved signals
+        let mut job_removed_stream = manager.receive_job_removed().await?;
+
+        // Trigger the reload and receive an object path as result
+        let reload_job = manager
+            .reload_or_restart_unit(self.unit_name, "replace")
+            .await?;
+
+        loop {
+            // .next() returning None would mean the signal stream from systemd
+            // ending, which should be an extremely unlikely scenario.
+            let removed = job_removed_stream
+                .next()
+                .await
+                .ok_or(zbus::Error::InvalidReply)?;
+
+            let args = removed.args()?;
+
+            if args.job == *reload_job {
+                // This is the job we are looking for
+
+                // The result is a string with values like "done", "failed", etc.
+                // Convert that to a Result and exit.
+                break match args.result {
+                    "done" => Ok(()),
+                    res => Err(res.into()),
+                };
+            }
+        }
     }
 }
 
