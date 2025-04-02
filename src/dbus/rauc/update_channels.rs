@@ -15,7 +15,6 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use std::collections::HashMap;
 use std::fs::{read_dir, read_to_string, DirEntry};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -23,8 +22,6 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, Result};
 use serde::{Deserialize, Serialize};
-
-use super::{compare_versions, InstallerProxy, SlotStatus};
 
 #[cfg(feature = "demo_mode")]
 const ENABLE_DIR: &str = "demo_files/etc/rauc/certificates-enabled";
@@ -64,28 +61,6 @@ pub struct ChannelFile {
     pub description: String,
     pub url: String,
     pub polling_interval: Option<String>,
-}
-
-fn zvariant_walk_nested_dicts(map: &zvariant::Dict, path: &[&str]) -> Result<String> {
-    let (&key, rem) = path
-        .split_first()
-        .ok_or_else(|| anyhow!("Got an empty path to walk"))?;
-
-    let value: &zvariant::Value = map
-        .get(&key)?
-        .ok_or_else(|| anyhow!("Could not find key \"{key}\" in dict"))?;
-
-    if rem.is_empty() {
-        value.downcast_ref().map_err(|e| {
-            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a string: {e}")
-        })
-    } else {
-        let value = value.downcast_ref().map_err(|e| {
-            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a dict: {e}")
-        })?;
-
-        zvariant_walk_nested_dicts(value, rem)
-    }
 }
 
 impl Channel {
@@ -150,31 +125,6 @@ impl Channel {
 
         self.enabled = cert_path.exists();
     }
-
-    /// Ask RAUC to determine the version of the bundle on the server
-    pub(super) async fn poll(
-        &mut self,
-        proxy: &InstallerProxy<'_>,
-        slot_status: Option<&SlotStatus>,
-    ) -> Result<()> {
-        self.update_enabled();
-
-        self.bundle = None;
-
-        if self.enabled {
-            let args = HashMap::new();
-            let bundle = proxy.inspect_bundle(&self.url, args).await?;
-            let bundle: zvariant::Dict = bundle.into();
-
-            let compatible =
-                zvariant_walk_nested_dicts(&bundle, &["update", "compatible"])?.to_owned();
-            let version = zvariant_walk_nested_dicts(&bundle, &["update", "version"])?.to_owned();
-
-            self.bundle = Some(UpstreamBundle::new(compatible, version, slot_status));
-        }
-
-        Ok(())
-    }
 }
 
 impl Channels {
@@ -212,47 +162,5 @@ impl Channels {
 
     pub fn into_vec(self) -> Vec<Channel> {
         self.0
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<Channel> {
-        self.0.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<Channel> {
-        self.0.iter_mut()
-    }
-}
-
-impl UpstreamBundle {
-    fn new(compatible: String, version: String, slot_status: Option<&SlotStatus>) -> Self {
-        let mut ub = Self {
-            compatible,
-            version,
-            newer_than_installed: false,
-        };
-
-        if let Some(slot_status) = slot_status {
-            ub.update_install(slot_status);
-        }
-
-        ub
-    }
-
-    pub(super) fn update_install(&mut self, slot_status: &SlotStatus) {
-        let slot_0_is_older = slot_status
-            .get("rootfs_0")
-            .filter(|r| r.get("boot_status").is_some_and(|b| b == "good"))
-            .and_then(|r| r.get("bundle_version"))
-            .and_then(|v| compare_versions(&self.version, v).map(|c| c.is_gt()))
-            .unwrap_or(true);
-
-        let slot_1_is_older = slot_status
-            .get("rootfs_1")
-            .filter(|r| r.get("boot_status").is_some_and(|b| b == "good"))
-            .and_then(|r| r.get("bundle_version"))
-            .and_then(|v| compare_versions(&self.version, v).map(|c| c.is_gt()))
-            .unwrap_or(true);
-
-        self.newer_than_installed = slot_0_is_older && slot_1_is_older;
     }
 }
