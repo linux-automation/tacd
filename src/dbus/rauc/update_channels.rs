@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
+#[cfg(not(feature = "demo_mode"))]
+use std::convert::TryFrom;
 use std::fs::{DirEntry, read_dir, read_to_string};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -61,6 +63,34 @@ pub struct ChannelFile {
     pub description: String,
     pub url: String,
     pub polling_interval: Option<String>,
+}
+
+#[cfg(not(feature = "demo_mode"))]
+fn zvariant_walk_nested_dicts<'a, T>(map: &'a zvariant::Dict, path: &'a [&'a str]) -> Result<&'a T>
+where
+    &'a T: TryFrom<&'a zvariant::Value<'a>>,
+    <&'a T as TryFrom<&'a zvariant::Value<'a>>>::Error: Into<zvariant::Error>,
+{
+    let (key, rem) = path
+        .split_first()
+        .ok_or_else(|| anyhow!("Got an empty path to walk"))?;
+
+    let value: &zvariant::Value = map
+        .get(key)?
+        .ok_or_else(|| anyhow!("Could not find key \"{key}\" in dict"))?;
+
+    if rem.is_empty() {
+        value.downcast_ref().map_err(|e| {
+            let type_name = std::any::type_name::<T>();
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to {type_name}: {e}")
+        })
+    } else {
+        let value = value.downcast_ref().map_err(|e| {
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a dict: {e}")
+        })?;
+
+        zvariant_walk_nested_dicts(value, rem)
+    }
 }
 
 impl Channel {
@@ -181,5 +211,56 @@ impl Channels {
     /// command line) but polling only happens for the primary one.
     pub(super) fn primary(&self) -> Option<&Channel> {
         self.0.iter().find(|ch| ch.primary)
+    }
+
+    #[cfg(not(feature = "demo_mode"))]
+    fn primary_mut(&mut self) -> Option<&mut Channel> {
+        self.0.iter_mut().find(|ch| ch.primary)
+    }
+
+    /// Update the channel information with info from RAUCs last poll
+    ///
+    /// This should be called when RAUC has completed a poll for the
+    /// primary channels update URL so updated information can be shown
+    /// in the web interface and on the local display.
+    ///
+    /// Returns `Ok(true)` if this is a different bundle than the one
+    /// we already know.
+    /// Returns `Ok(false)` if we already knew about this bundle.
+    #[cfg(not(feature = "demo_mode"))]
+    pub(super) fn update_from_poll_status(&mut self, poll_status: zvariant::Dict) -> Result<bool> {
+        let compatible: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["manifest", "update", "compatible"])?;
+        let version: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["manifest", "update", "version"])?;
+        let newer_than_installed: &bool =
+            zvariant_walk_nested_dicts(&poll_status, &["update-available"])?;
+
+        // Do we already know about this exact bundle version?
+        // Then there is nothing to do.
+        if let Some(pb) = self.0.iter().find_map(|ch| ch.bundle.as_ref())
+            && compatible == pb.compatible.as_str()
+            && version == pb.version.as_str()
+            && *newer_than_installed == pb.newer_than_installed
+        {
+            return Ok(false);
+        }
+
+        // Otherwise clear out all the bundle information we have for all
+        // update channels ...
+        self.0.iter_mut().for_each(|ch| ch.bundle = None);
+
+        // ... and populate the information for the primary update channel.
+        // This assumes that the RAUC poll was in fact for the primary channel.
+        // This should be the case, since that's the URL we configure in RAUC.
+        if let Some(primary) = self.primary_mut() {
+            primary.bundle = Some(UpstreamBundle {
+                compatible: compatible.as_str().into(),
+                version: version.as_str().into(),
+                newer_than_installed: *newer_than_installed,
+            });
+        }
+
+        Ok(true)
     }
 }
