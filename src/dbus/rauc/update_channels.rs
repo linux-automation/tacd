@@ -172,4 +172,15 @@ impl Channels {
     pub fn into_vec(self) -> Vec<Channel> {
         self.0
     }
+
+    /// Get a reference to the primary update channel.
+    ///
+    /// There can only be a single primary update channel,
+    /// but there can be multiple enabled update channels.
+    /// RAUC will accept updates from all enabled channels (i.e. via the
+    /// command line) but polling only happens for the primary one.
+    #[cfg(not(feature = "demo_mode"))]
+    pub(super) fn primary(&self) -> Option<&Channel> {
+        self.0.iter().find(|ch| ch.primary)
+    }
 }
