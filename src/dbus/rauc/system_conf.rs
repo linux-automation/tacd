@@ -74,6 +74,7 @@ pub fn update_system_conf(
     primary_channel: Option<&Channel>,
     enable_polling: bool,
     enable_auto_install: bool,
+    setup_mode: bool,
 ) -> std::io::Result<bool> {
     let dynamic_conf = {
         // Allow force-enabling update polling and automatic installations
@@ -86,8 +87,13 @@ pub fn update_system_conf(
             .and_then(|pc| pc.force_auto_install)
             .unwrap_or(false);
 
+        // Allow polling for updates, but not automatically installing them
+        // while the user is still in setup mode.
+        // Otherwise they may unbox a TAC, click through the setup process,
+        // activate auto installation, and then an installation starts in the
+        // background without them even noticing.
         let polling = enable_polling || force_polling;
-        let auto_install = enable_auto_install || force_auto_install;
+        let auto_install = (enable_auto_install || force_auto_install) && !setup_mode;
 
         match poll_section(primary_channel, polling, auto_install) {
             Ok(Some(ps)) => {

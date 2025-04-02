@@ -207,6 +207,7 @@ async fn channel_list_update_task(
     reload: Arc<Topic<bool>>,
     enable_polling: Arc<Topic<bool>>,
     enable_auto_install: Arc<Topic<bool>>,
+    setup_mode: Arc<Topic<bool>>,
     channels: Arc<Topic<Channels>>,
     rauc_service: Service,
 ) -> Result<()> {
@@ -215,9 +216,11 @@ async fn channel_list_update_task(
     let (reload_stream, _) = reload.subscribe_unbounded();
     let (mut enable_polling_stream, _) = enable_polling.subscribe_unbounded();
     let (mut enable_auto_install_stream, _) = enable_auto_install.subscribe_unbounded();
+    let (mut setup_mode_stream, _) = setup_mode.subscribe_unbounded();
 
     let mut enable_polling = enable_polling_stream.next().await.unwrap_or(false);
     let mut enable_auto_install = enable_auto_install_stream.next().await.unwrap_or(false);
+    let mut setup_mode = setup_mode_stream.next().await.unwrap_or(true);
 
     'reload_loop: loop {
         futures::select! {
@@ -232,6 +235,9 @@ async fn channel_list_update_task(
             enable_auto_install_new = enable_auto_install_stream.recv().fuse() => {
                 enable_auto_install = enable_auto_install_new?;
             }
+            setup_mode_new = setup_mode_stream.recv().fuse() => {
+                setup_mode = setup_mode_new?;
+            }
         };
 
         // Read the list of available update channels
@@ -243,8 +249,12 @@ async fn channel_list_update_task(
             }
         };
 
-        let should_reload =
-            update_system_conf(new_channels.primary(), enable_polling, enable_auto_install)?;
+        let should_reload = update_system_conf(
+            new_channels.primary(),
+            enable_polling,
+            enable_auto_install,
+            setup_mode,
+        )?;
 
         channels.set(new_channels);
 
@@ -329,6 +339,7 @@ impl Rauc {
         wtb: &mut WatchedTasksBuilder,
         _conn: &Arc<Connection>,
         rauc_service: Service,
+        setup_mode: Arc<Topic<bool>>,
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
@@ -344,6 +355,7 @@ impl Rauc {
                 inst.reload.clone(),
                 inst.enable_polling.clone(),
                 inst.enable_auto_install.clone(),
+                setup_mode,
                 inst.channels.clone(),
                 rauc_service,
             ),
@@ -358,6 +370,7 @@ impl Rauc {
         wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
         rauc_service: Service,
+        setup_mode: Arc<Topic<bool>>,
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
@@ -613,6 +626,7 @@ impl Rauc {
                 inst.reload.clone(),
                 inst.enable_polling.clone(),
                 inst.enable_auto_install.clone(),
+                setup_mode,
                 inst.channels.clone(),
                 rauc_service,
             ),

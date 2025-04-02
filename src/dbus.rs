@@ -82,6 +82,7 @@ impl DbusSession {
         wtb: &mut WatchedTasksBuilder,
         led_dut: Arc<Topic<BlinkPattern>>,
         led_uplink: Arc<Topic<BlinkPattern>>,
+        setup_mode: Arc<Topic<bool>>,
     ) -> anyhow::Result<Self> {
         let tacd = Tacd::new();
 
@@ -94,7 +95,7 @@ impl DbusSession {
         Ok(Self {
             hostname: Hostname::new(bb, wtb, &conn)?,
             network: Network::new(bb, wtb, &conn, led_dut, led_uplink)?,
-            rauc: Rauc::new(bb, wtb, &conn, systemd.rauc.clone())?,
+            rauc: Rauc::new(bb, wtb, &conn, systemd.rauc.clone(), setup_mode)?,
             systemd,
         })
     }
