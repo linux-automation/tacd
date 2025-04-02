@@ -65,6 +65,8 @@ pub struct Systemd {
     pub labgrid: Service,
     #[allow(dead_code)]
     pub iobus: Service,
+    #[allow(dead_code)]
+    pub rauc: Service,
 }
 
 impl ServiceStatus {
@@ -235,6 +237,7 @@ impl Systemd {
         let networkmanager = Service::new(bb, "network-manager");
         let labgrid = Service::new(bb, "labgrid-exporter");
         let iobus = Service::new(bb, "lxa-iobus");
+        let rauc = Service::new(bb, "rauc");
 
         networkmanager
             .connect(wtb, conn.clone(), "NetworkManager.service")
@@ -245,12 +248,14 @@ impl Systemd {
         iobus
             .connect(wtb, conn.clone(), "lxa-iobus.service")
             .await?;
+        rauc.connect(wtb, conn.clone(), "rauc.service").await?;
 
         Ok(Self {
             reboot,
             networkmanager,
             labgrid,
             iobus,
+            rauc,
         })
     }
 }
