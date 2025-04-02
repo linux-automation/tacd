@@ -166,6 +166,9 @@ export default function Setup() {
                       <MqttToggle topic="/v1/tac/update/enable_polling">
                         Periodically check for updates
                       </MqttToggle>
+                      <MqttToggle topic="/v1/tac/update/enable_auto_install">
+                        Automatically install and boot updates
+                      </MqttToggle>
                     </Box>
                   </Container>
                 ),
