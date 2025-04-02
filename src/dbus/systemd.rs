@@ -65,7 +65,6 @@ pub struct Systemd {
     pub labgrid: Service,
     #[allow(dead_code)]
     pub iobus: Service,
-    #[allow(dead_code)]
     pub rauc: Service,
 }
 
