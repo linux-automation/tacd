@@ -827,12 +827,12 @@ paths:
         content:
           application/json:
             schema:
-              type: string
+              $ref: '#/components/schemas/UpdateRequest'
       responses:
         '204':
-          description: The value was parsed as string and will be tried
+          description: The value was parsed successfully and will be tried
         '400':
-          description: The value could not be parsed as string
+          description: The value could not be parsed
 
   /v1/tac/update/channels:
     get:
@@ -1101,6 +1101,12 @@ components:
           type: string
         nesting_depth:
           type: number
+
+    UpdateRequest:
+      type: object
+      properties:
+        url:
+          type: string
 
     UpdateChannels:
       type: array
