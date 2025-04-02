@@ -29,7 +29,7 @@ use super::{
     Ui, row_anchor,
 };
 use crate::broker::Topic;
-use crate::dbus::rauc::{Channel, Channels};
+use crate::dbus::rauc::{Channel, Channels, UpdateRequest};
 use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UpdateAvailable;
@@ -120,9 +120,15 @@ impl Selection {
         }
     }
 
-    fn perform(&self, alerts: &Arc<Topic<AlertList>>, install: &Arc<Topic<String>>) {
+    fn perform(&self, alerts: &Arc<Topic<AlertList>>, install: &Arc<Topic<UpdateRequest>>) {
         match self.highlight {
-            Highlight::Channel(ch) => install.set(self.channels[ch].url.clone()),
+            Highlight::Channel(ch) => {
+                let req = UpdateRequest {
+                    url: Some(self.channels[ch].url.clone()),
+                };
+
+                install.set(req);
+            }
             Highlight::Dismiss => alerts.deassert(SCREEN_TYPE),
         }
     }
@@ -135,7 +141,7 @@ pub struct UpdateAvailableScreen {
 struct Active {
     widgets: WidgetContainer,
     alerts: Arc<Topic<AlertList>>,
-    install: Arc<Topic<String>>,
+    install: Arc<Topic<UpdateRequest>>,
     selection: Arc<Topic<Selection>>,
 }
 

@@ -113,6 +113,30 @@ impl From<(i32, String, i32)> for Progress {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(from = "UpdateRequestDe")]
+pub struct UpdateRequest {
+    pub url: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum UpdateRequestDe {
+    UrlObject { url: Option<String> },
+    UrlOnly(String),
+}
+
+impl From<UpdateRequestDe> for UpdateRequest {
+    fn from(de: UpdateRequestDe) -> Self {
+        // Provide API backward compatibility by allowing either just a String
+        // as argument or a map with url and manifest hash inside.
+        match de {
+            UpdateRequestDe::UrlObject { url } => Self { url },
+            UpdateRequestDe::UrlOnly(url) => Self { url: Some(url) },
+        }
+    }
+}
+
 type SlotStatus = HashMap<String, HashMap<String, String>>;
 
 pub struct Rauc {
@@ -122,7 +146,7 @@ pub struct Rauc {
     #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     pub primary: Arc<Topic<String>>,
     pub last_error: Arc<Topic<String>>,
-    pub install: Arc<Topic<String>>,
+    pub install: Arc<Topic<UpdateRequest>>,
     pub channels: Arc<Topic<Channels>>,
     pub reload: Arc<Topic<bool>>,
     pub should_reboot: Arc<Topic<bool>>,
@@ -335,7 +359,7 @@ impl Rauc {
             slot_status: bb.topic_ro("/v1/tac/update/slots", None),
             primary: bb.topic_ro("/v1/tac/update/primary", None),
             last_error: bb.topic_ro("/v1/tac/update/last_error", None),
-            install: bb.topic_wo("/v1/tac/update/install", Some("".to_string())),
+            install: bb.topic_wo("/v1/tac/update/install", None),
             channels: bb.topic_ro("/v1/tac/update/channels", None),
             reload: bb.topic_wo("/v1/tac/update/channels/reload", Some(true)),
             should_reboot: bb.topic_ro("/v1/tac/update/should_reboot", Some(false)),
@@ -545,7 +569,12 @@ impl Rauc {
         wtb.spawn_task("rauc-forward-install", async move {
             let proxy = InstallerProxy::new(&conn_task).await.unwrap();
 
-            while let Some(url) = install_stream.next().await {
+            while let Some(update_request) = install_stream.next().await {
+                let url = match update_request.url {
+                    Some(url) => url,
+                    None => continue,
+                };
+
                 // Poor-mans validation. It feels wrong to let someone point to any
                 // file on the TAC from the web interface.
                 if url.starts_with("http://") || url.starts_with("https://") {
