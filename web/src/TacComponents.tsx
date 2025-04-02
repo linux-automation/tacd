@@ -124,6 +124,7 @@ type Channel = {
   url: string;
   polling_interval?: Duration;
   enabled: boolean;
+  primary: boolean;
   bundle?: UpstreamBundle;
 };
 
@@ -376,6 +377,10 @@ export function UpdateChannels(props: UpdateChannelsProps) {
           cell: (e) => {
             if (!e.enabled) {
               return "Not enabled";
+            }
+
+            if (!e.primary) {
+              return "Not primary";
             }
 
             if (!e.bundle) {
