@@ -775,6 +775,21 @@ paths:
         '400':
           description: The value could not be parsed as boolean
 
+  /v1/tac/update/enable_auto_install:
+    put:
+      summary: Enable automatic installation of operating system updates
+      tags: [Updating]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: Automatic installation of updates was enabled/disabled
+        '400':
+          description: The value could not be parsed as boolean
+
   /v1/tac/update/operation:
     get:
       summary: Get the currently running system update operation

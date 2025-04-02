@@ -26,6 +26,7 @@ const MAGIC_LINE: &str = "\n# <tacd-polling-section>\n";
 fn polling_section(
     primary_channel: Option<&Channel>,
     polling: bool,
+    auto_install: bool,
 ) -> Result<Option<String>, std::fmt::Error> {
     // If no primary channel is configured or if polling is not enabled,
     // then we do not need a `[polling]` section at all.
@@ -46,15 +47,25 @@ fn polling_section(
 
     writeln!(&mut section, "candidate-criteria=different-version")?;
 
+    if auto_install {
+        writeln!(&mut section, "install-criteria=different-version")?;
+        writeln!(
+            &mut section,
+            "reboot-criteria=updated-slots;updated-artifacts"
+        )?;
+        writeln!(&mut section, "reboot-cmd=systemctl reboot")?;
+    }
+
     Ok(Some(section))
 }
 
 pub fn update_system_conf(
     primary_channel: Option<&Channel>,
     enable_polling: bool,
+    enable_auto_install: bool,
 ) -> std::io::Result<bool> {
     let dynamic_conf = {
-        match polling_section(primary_channel, enable_polling) {
+        match polling_section(primary_channel, enable_polling, enable_auto_install) {
             Ok(Some(ps)) => {
                 // We use the config in /usr/lib as a template ...
                 let static_conf = read_to_string(STATIC_CONF_PATH)?;
