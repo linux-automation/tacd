@@ -21,6 +21,7 @@ use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
 };
+use log::error;
 use serde::{Deserialize, Serialize};
 
 use super::widgets::*;
@@ -123,12 +124,16 @@ impl Selection {
     fn perform(&self, alerts: &Arc<Topic<AlertList>>, install: &Arc<Topic<UpdateRequest>>) {
         match self.highlight {
             Highlight::Channel(ch) => {
-                let req = UpdateRequest {
-                    url: Some(self.channels[ch].url.clone()),
-                    manifest_hash: None,
-                };
+                if let Some(bundle) = &self.channels[ch].bundle {
+                    let req = UpdateRequest {
+                        url: Some(bundle.effective_url.clone()),
+                        manifest_hash: Some(bundle.manifest_hash.clone()),
+                    };
 
-                install.set(req);
+                    install.set(req);
+                } else {
+                    error!("Update channel is missing upstream bundle information.");
+                };
             }
             Highlight::Dismiss => alerts.deassert(SCREEN_TYPE),
         }

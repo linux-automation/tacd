@@ -552,11 +552,20 @@ impl Rauc {
                     }
                 };
 
+                let upstream_bundle = match primary.bundle.as_ref() {
+                    Some(us) => us,
+                    None => {
+                        warn!("Got install request with no upstream bundle info available yet");
+                        continue
+                    }
+                };
+
                 let url = match &update_request.url {
-                    None => &primary.url,
+                    None => &upstream_bundle.effective_url,
+                    Some(url) if url == &upstream_bundle.effective_url => &upstream_bundle.effective_url,
                     Some(url) if url == &primary.url => &primary.url,
                     Some(_) => {
-                        warn!("Got install request with URL not matching primary channel URL");
+                        warn!("Got install request with URL matching neither channel URL nor effective bundle URL");
                         continue;
                     }
                 };
