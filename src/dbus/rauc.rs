@@ -139,6 +139,7 @@ pub struct Rauc {
     pub reload: Arc<Topic<bool>>,
     pub should_reboot: Arc<Topic<bool>>,
     pub enable_polling: Arc<Topic<bool>>,
+    pub enable_auto_install: Arc<Topic<bool>>,
 }
 
 #[cfg(not(feature = "demo_mode"))]
@@ -204,6 +205,7 @@ async fn channel_list_update_task(
     conn: Arc<Connection>,
     reload: Arc<Topic<bool>>,
     enable_polling: Arc<Topic<bool>>,
+    enable_auto_install: Arc<Topic<bool>>,
     channels: Arc<Topic<Channels>>,
     rauc_service: Service,
 ) -> Result<()> {
@@ -211,8 +213,10 @@ async fn channel_list_update_task(
 
     let (reload_stream, _) = reload.subscribe_unbounded();
     let (mut enable_polling_stream, _) = enable_polling.subscribe_unbounded();
+    let (mut enable_auto_install_stream, _) = enable_auto_install.subscribe_unbounded();
 
     let mut enable_polling = enable_polling_stream.next().await.unwrap_or(false);
+    let mut enable_auto_install = enable_auto_install_stream.next().await.unwrap_or(false);
 
     'reload_loop: loop {
         futures::select! {
@@ -223,6 +227,9 @@ async fn channel_list_update_task(
             }
             enable_polling_new = enable_polling_stream.recv().fuse() => {
                 enable_polling = enable_polling_new?;
+            }
+            enable_auto_install_new = enable_auto_install_stream.recv().fuse() => {
+                enable_auto_install = enable_auto_install_new?;
             }
         };
 
@@ -235,7 +242,8 @@ async fn channel_list_update_task(
             }
         };
 
-        let should_reload = update_system_conf(new_channels.primary(), enable_polling)?;
+        let should_reload =
+            update_system_conf(new_channels.primary(), enable_polling, enable_auto_install)?;
 
         channels.set(new_channels);
 
@@ -303,6 +311,14 @@ impl Rauc {
                 Some(false),
                 1,
             ),
+            enable_auto_install: bb.topic(
+                "/v1/tac/update/enable_auto_install",
+                true,
+                true,
+                true,
+                Some(false),
+                1,
+            ),
         }
     }
 
@@ -326,6 +342,7 @@ impl Rauc {
                 Arc::new(Connection),
                 inst.reload.clone(),
                 inst.enable_polling.clone(),
+                inst.enable_auto_install.clone(),
                 inst.channels.clone(),
                 rauc_service,
             ),
@@ -594,6 +611,7 @@ impl Rauc {
                 conn.clone(),
                 inst.reload.clone(),
                 inst.enable_polling.clone(),
+                inst.enable_auto_install.clone(),
                 inst.channels.clone(),
                 rauc_service,
             ),
