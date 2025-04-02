@@ -18,9 +18,9 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use async_std::channel::Receiver;
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
+use futures_util::FutureExt;
 use log::warn;
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +30,9 @@ use crate::watched_tasks::WatchedTasksBuilder;
 
 mod update_channels;
 pub use update_channels::{Channel, Channels};
+
+mod system_conf;
+use system_conf::update_system_conf;
 
 #[cfg(feature = "demo_mode")]
 mod demo_mode;
@@ -119,7 +122,6 @@ pub struct Rauc {
     pub channels: Arc<Topic<Channels>>,
     pub reload: Arc<Topic<bool>>,
     pub should_reboot: Arc<Topic<bool>>,
-    #[allow(dead_code)]
     pub enable_polling: Arc<Topic<bool>>,
 }
 
@@ -183,13 +185,26 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
 }
 
 async fn channel_list_update_task(
-    mut reload_stream: Receiver<bool>,
+    reload: Arc<Topic<bool>>,
+    enable_polling: Arc<Topic<bool>>,
     channels: Arc<Topic<Channels>>,
 ) -> Result<()> {
-    while let Some(reload) = reload_stream.next().await {
-        if !reload {
-            continue;
-        }
+    let (reload_stream, _) = reload.subscribe_unbounded();
+    let (mut enable_polling_stream, _) = enable_polling.subscribe_unbounded();
+
+    let mut enable_polling = enable_polling_stream.next().await.unwrap_or(false);
+
+    'reload_loop: loop {
+        futures::select! {
+            reload = reload_stream.recv().fuse() => {
+                if !(reload?) {
+                    continue 'reload_loop
+                }
+            }
+            enable_polling_new = enable_polling_stream.recv().fuse() => {
+                enable_polling = enable_polling_new?;
+            }
+        };
 
         // Read the list of available update channels
         let new_channels = match Channels::from_directory(CHANNELS_DIR) {
@@ -200,10 +215,10 @@ async fn channel_list_update_task(
             }
         };
 
+        update_system_conf(new_channels.primary(), enable_polling)?;
+
         channels.set(new_channels);
     }
-
-    Ok(())
 }
 
 impl Rauc {
@@ -242,10 +257,13 @@ impl Rauc {
         inst.last_error.set("".to_string());
 
         // Reload the channel list on request
-        let (reload_stream, _) = inst.reload.clone().subscribe_unbounded();
         wtb.spawn_task(
             "rauc-channel-list-update",
-            channel_list_update_task(reload_stream, inst.channels.clone()),
+            channel_list_update_task(
+                inst.reload.clone(),
+                inst.enable_polling.clone(),
+                inst.channels.clone(),
+            ),
         )?;
 
         Ok(inst)
@@ -444,11 +462,14 @@ impl Rauc {
             Ok(())
         })?;
 
-        // Reload the channel list on request
-        let (reload_stream, _) = inst.reload.clone().subscribe_unbounded();
+        // Reload the channel list when required
         wtb.spawn_task(
             "rauc-channel-list-update",
-            channel_list_update_task(reload_stream, inst.channels.clone()),
+            channel_list_update_task(
+                inst.reload.clone(),
+                inst.enable_polling.clone(),
+                inst.channels.clone(),
+            ),
         )?;
 
         Ok(inst)
