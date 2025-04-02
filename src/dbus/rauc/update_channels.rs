@@ -38,6 +38,8 @@ const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
 pub struct UpstreamBundle {
     pub compatible: String,
     pub version: String,
+    pub manifest_hash: String,
+    pub effective_url: String,
     pub newer_than_installed: bool,
 }
 
@@ -233,6 +235,10 @@ impl Channels {
             zvariant_walk_nested_dicts(&poll_status, &["manifest", "update", "compatible"])?;
         let version: &zvariant::Str =
             zvariant_walk_nested_dicts(&poll_status, &["manifest", "update", "version"])?;
+        let manifest_hash: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["manifest", "manifest-hash"])?;
+        let effective_url: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["bundle", "effective-url"])?;
         let newer_than_installed: &bool =
             zvariant_walk_nested_dicts(&poll_status, &["update-available"])?;
 
@@ -241,6 +247,8 @@ impl Channels {
         if let Some(pb) = self.0.iter().find_map(|ch| ch.bundle.as_ref())
             && compatible == pb.compatible.as_str()
             && version == pb.version.as_str()
+            && manifest_hash == pb.manifest_hash.as_str()
+            && effective_url == pb.effective_url.as_str()
             && *newer_than_installed == pb.newer_than_installed
         {
             return Ok(false);
@@ -257,6 +265,8 @@ impl Channels {
             primary.bundle = Some(UpstreamBundle {
                 compatible: compatible.as_str().into(),
                 version: version.as_str().into(),
+                manifest_hash: manifest_hash.as_str().into(),
+                effective_url: effective_url.as_str().into(),
                 newer_than_installed: *newer_than_installed,
             });
         }

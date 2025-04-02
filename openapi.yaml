@@ -1141,6 +1141,10 @@ components:
                 type: string
               version:
                 type: string,
+              manifest_hash:
+                type: string,
+              effective_url:
+                type: string,
               newer_than_installed:
                 type: boolean
 
