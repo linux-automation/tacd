@@ -393,6 +393,7 @@ impl Rauc {
         })?;
 
         let conn_task = conn.clone();
+        let channels = inst.channels.clone();
         let (mut install_stream, _) = inst.install.clone().subscribe_unbounded();
 
         // Forward the "install" topic from the broker framework to RAUC
@@ -400,26 +401,42 @@ impl Rauc {
             let proxy = InstallerProxy::new(&conn_task).await.unwrap();
 
             while let Some(update_request) = install_stream.next().await {
-                let url = match update_request.url {
-                    Some(url) => url,
-                    None => continue,
+                let channels = match channels.try_get() {
+                    Some(chs) => chs,
+                    None => {
+                        warn!("Got install request with no channels available yet");
+                        continue;
+                    }
                 };
 
-                // Poor-mans validation. It feels wrong to let someone point to any
-                // file on the TAC from the web interface.
-                if url.starts_with("http://") || url.starts_with("https://") {
-                    let manifest_hash: Option<zbus::zvariant::Value> =
-                        update_request.manifest_hash.map(|mh| mh.into());
-
-                    let mut args = HashMap::new();
-
-                    if let Some(manifest_hash) = &manifest_hash {
-                        args.insert("require-manifest-hash", manifest_hash);
+                let primary = match channels.primary() {
+                    Some(primary) => primary,
+                    None => {
+                        warn!("Got install request with no primary channel configured");
+                        continue;
                     }
+                };
 
-                    if let Err(e) = proxy.install_bundle(&url, args).await {
-                        error!("Failed to install bundle: {}", e);
+                let url = match &update_request.url {
+                    None => &primary.url,
+                    Some(url) if url == &primary.url => &primary.url,
+                    Some(_) => {
+                        warn!("Got install request with URL not matching primary channel URL");
+                        continue;
                     }
+                };
+
+                let manifest_hash: Option<zbus::zvariant::Value> =
+                    update_request.manifest_hash.map(|mh| mh.into());
+
+                let mut args = HashMap::new();
+
+                if let Some(manifest_hash) = &manifest_hash {
+                    args.insert("require-manifest-hash", manifest_hash);
+                }
+
+                if let Err(e) = proxy.install_bundle(url, args).await {
+                    error!("Failed to install bundle: {}", e);
                 }
             }
 
