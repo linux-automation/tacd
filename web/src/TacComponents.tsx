@@ -114,6 +114,8 @@ type Duration = {
 type UpstreamBundle = {
   compatible: string;
   version: string;
+  manifest_hash: string;
+  effective_url: string;
   newer_than_installed: boolean;
 };
 
@@ -126,6 +128,11 @@ type Channel = {
   enabled: boolean;
   primary: boolean;
   bundle?: UpstreamBundle;
+};
+
+type UpdateRequest = {
+  manifest_hash: string;
+  url: string;
 };
 
 interface SlotStatusProps {
@@ -401,11 +408,16 @@ export function UpdateChannels(props: UpdateChannelsProps) {
               return "Up to date";
             }
 
+            const request: UpdateRequest = {
+              manifest_hash: e.bundle.manifest_hash,
+              url: e.bundle.effective_url,
+            };
+
             return (
               <MqttButton
                 iconName="download"
                 topic="/v1/tac/update/install"
-                send={e.url}
+                send={request}
               >
                 Upgrade
               </MqttButton>
@@ -538,7 +550,16 @@ export function UpdateNotification() {
   if (channels !== undefined) {
     for (let ch of channels) {
       if (ch.enabled && ch.bundle && ch.bundle.newer_than_installed) {
-        updates.push(ch);
+        const request: UpdateRequest = {
+          manifest_hash: ch.bundle.manifest_hash,
+          url: ch.bundle.effective_url,
+        };
+
+        updates.push({
+          name: ch.name,
+          display_name: ch.display_name,
+          request: request,
+        });
       }
     }
   }
@@ -548,7 +569,7 @@ export function UpdateNotification() {
       key={u.name}
       iconName="download"
       topic="/v1/tac/update/install"
-      send={u.url}
+      send={u.request}
     >
       Install new {u.display_name} bundle
     </MqttButton>
