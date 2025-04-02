@@ -223,6 +223,7 @@ pub fn run(
                 },
                 update = channels_events.recv().fuse() => {
                     motd.rauc_update_urls = update?
+                        .into_vec()
                         .into_iter()
                         .filter_map(|ch| {
                             ch.bundle

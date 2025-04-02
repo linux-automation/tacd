@@ -29,7 +29,7 @@ use super::{
     Ui, row_anchor,
 };
 use crate::broker::Topic;
-use crate::dbus::rauc::Channel;
+use crate::dbus::rauc::{Channel, Channels};
 use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UpdateAvailable;
@@ -72,8 +72,9 @@ impl Selection {
         !self.channels.is_empty()
     }
 
-    fn update_channels(&self, channels: Vec<Channel>) -> Option<Self> {
+    fn update_channels(&self, channels: Channels) -> Option<Self> {
         let channels: Vec<Channel> = channels
+            .into_vec()
             .into_iter()
             .filter(|ch| {
                 ch.bundle
@@ -142,7 +143,7 @@ impl UpdateAvailableScreen {
     pub fn new(
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
-        channels: &Arc<Topic<Vec<Channel>>>,
+        channels: &Arc<Topic<Channels>>,
     ) -> Result<Self> {
         let (mut channels_events, _) = channels.clone().subscribe_unbounded();
         let alerts = alerts.clone();

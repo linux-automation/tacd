@@ -53,6 +53,9 @@ pub struct Channel {
     pub bundle: Option<UpstreamBundle>,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct Channels(Vec<Channel>);
+
 #[derive(Deserialize)]
 pub struct ChannelFile {
     pub name: String,
@@ -139,38 +142,6 @@ impl Channel {
         Ok(ch)
     }
 
-    pub(super) fn from_directory(dir: &str) -> Result<Vec<Self>> {
-        // Find all .yaml files in CHANNELS_DIR
-        let mut dir_entries: Vec<DirEntry> = read_dir(dir)?
-            .filter_map(|dir_entry| dir_entry.ok())
-            .filter(|dir_entry| {
-                dir_entry
-                    .file_name()
-                    .as_os_str()
-                    .as_bytes()
-                    .ends_with(b".yaml")
-            })
-            .collect();
-
-        // And sort them alphabetically, so that 01_stable.yaml takes precedence over
-        // 05_testing.yaml.
-        dir_entries.sort_by_key(|dir_entry| dir_entry.file_name());
-
-        let mut channels: Vec<Self> = Vec::new();
-
-        for dir_entry in dir_entries {
-            let channel = Self::from_file(&dir_entry.path())?;
-
-            if channels.iter().any(|ch| ch.name == channel.name) {
-                bail!("Encountered duplicate channel name \"{}\"", channel.name);
-            }
-
-            channels.push(channel);
-        }
-
-        Ok(channels)
-    }
-
     fn update_enabled(&mut self) {
         // Which channels are enabled is decided based on which RAUC certificates are enabled.
         let cert_file = self.name.clone() + ".cert.pem";
@@ -202,6 +173,52 @@ impl Channel {
         }
 
         Ok(())
+    }
+}
+
+impl Channels {
+    pub(super) fn from_directory(dir: &str) -> Result<Self> {
+        // Find all .yaml files in CHANNELS_DIR
+        let mut dir_entries: Vec<DirEntry> = read_dir(dir)?
+            .filter_map(|dir_entry| dir_entry.ok())
+            .filter(|dir_entry| {
+                dir_entry
+                    .file_name()
+                    .as_os_str()
+                    .as_bytes()
+                    .ends_with(b".yaml")
+            })
+            .collect();
+
+        // And sort them alphabetically, so that 01_stable.yaml takes precedence over
+        // 05_testing.yaml.
+        dir_entries.sort_by_key(|dir_entry| dir_entry.file_name());
+
+        let mut channels: Vec<Channel> = Vec::new();
+
+        for dir_entry in dir_entries {
+            let channel = Channel::from_file(&dir_entry.path())?;
+
+            if channels.iter().any(|ch| ch.name == channel.name) {
+                bail!("Encountered duplicate channel name \"{}\"", channel.name);
+            }
+
+            channels.push(channel);
+        }
+
+        Ok(Self(channels))
+    }
+
+    pub fn into_vec(self) -> Vec<Channel> {
+        self.0
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, Channel> {
+        self.0.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Channel> {
+        self.0.iter_mut()
     }
 }
 

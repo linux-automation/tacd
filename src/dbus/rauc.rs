@@ -31,7 +31,7 @@ use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
 mod update_channels;
-pub use update_channels::Channel;
+pub use update_channels::{Channel, Channels};
 
 #[cfg(feature = "demo_mode")]
 mod demo_mode;
@@ -123,7 +123,7 @@ pub struct Rauc {
     pub primary: Arc<Topic<String>>,
     pub last_error: Arc<Topic<String>>,
     pub install: Arc<Topic<String>>,
-    pub channels: Arc<Topic<Vec<Channel>>>,
+    pub channels: Arc<Topic<Channels>>,
     pub reload: Arc<Topic<bool>>,
     pub should_reboot: Arc<Topic<bool>>,
     pub enable_polling: Arc<Topic<bool>>,
@@ -202,7 +202,7 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
 async fn channel_polling_task(
     conn: Arc<Connection>,
     enable_polling: Arc<Topic<bool>>,
-    channels: Arc<Topic<Vec<Channel>>>,
+    channels: Arc<Topic<Channels>>,
     slot_status: Arc<Topic<Arc<SlotStatus>>>,
     name: String,
 ) {
@@ -212,7 +212,7 @@ async fn channel_polling_task(
 
     while let Some(mut channel) = channels
         .try_get()
-        .and_then(|chs| chs.into_iter().find(|ch| ch.name == name))
+        .and_then(|chs| chs.into_vec().into_iter().find(|ch| ch.name == name))
     {
         // Make sure update polling is enabled before doing anything,
         // as contacting the update server requires user consent.
@@ -270,7 +270,7 @@ async fn channel_list_update_task(
     conn: Arc<Connection>,
     mut reload_stream: Receiver<bool>,
     enable_polling: Arc<Topic<bool>>,
-    channels: Arc<Topic<Vec<Channel>>>,
+    channels: Arc<Topic<Channels>>,
     slot_status: Arc<Topic<Arc<SlotStatus>>>,
 ) -> Result<()> {
     let mut previous: Option<Instant> = None;
@@ -291,7 +291,7 @@ async fn channel_list_update_task(
         }
 
         // Read the list of available update channels
-        let new_channels = match Channel::from_directory(CHANNELS_DIR) {
+        let new_channels = match Channels::from_directory(CHANNELS_DIR) {
             Ok(chs) => chs,
             Err(e) => {
                 warn!("Failed to get list of update channels: {e}");
