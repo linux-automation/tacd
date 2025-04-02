@@ -29,7 +29,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import Spinner from "@cloudscape-design/components/spinner";
 import Table from "@cloudscape-design/components/table";
 
-import { MqttButton, MqttToggle } from "./MqttComponents";
+import { MqttButton, MqttHider, MqttToggle } from "./MqttComponents";
 import { useMqttSubscription } from "./mqtt";
 
 type RootfsSlot = {
@@ -253,6 +253,14 @@ export function UpdateConfig() {
             Periodically check for updates
           </MqttToggle>
         </Box>
+        <MqttHider topic="/v1/tac/update/enable_polling">
+          <Box>
+            <Box variant="awsui-key-label">Auto Install</Box>
+            <MqttToggle topic="/v1/tac/update/enable_auto_install">
+              Automatically install and boot updates
+            </MqttToggle>
+          </Box>
+        </MqttHider>
       </ColumnLayout>
     </Container>
   );
