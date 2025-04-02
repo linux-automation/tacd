@@ -697,6 +697,7 @@ paths:
             - network-manager
             - labgrid-exporter
             - lxa-iobus
+            - rauc
     put:
       summary: Perform an action on a systemd service
       tags: [System]
@@ -722,6 +723,7 @@ paths:
             - network-manager
             - labgrid-exporter
             - lxa-iobus
+            - rauc
     get:
       summary: Get the status of a systemd service
       tags: [System]
