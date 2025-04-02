@@ -47,6 +47,7 @@ pub struct Channel {
     pub url: String,
     pub polling_interval: Option<Duration>,
     pub enabled: bool,
+    pub primary: bool,
     pub bundle: Option<UpstreamBundle>,
 }
 
@@ -109,6 +110,7 @@ impl Channel {
             url: channel_file.url.trim().to_string(),
             polling_interval,
             enabled: false,
+            primary: false,
             bundle: None,
         };
 
@@ -146,12 +148,20 @@ impl Channels {
 
         let mut channels: Vec<Channel> = Vec::new();
 
+        let mut have_primary = false;
+
         for dir_entry in dir_entries {
-            let channel = Channel::from_file(&dir_entry.path())?;
+            let mut channel = Channel::from_file(&dir_entry.path())?;
 
             if channels.iter().any(|ch| ch.name == channel.name) {
                 bail!("Encountered duplicate channel name \"{}\"", channel.name);
             }
+
+            // There can only be one primary channel.
+            // If multiple channels are enabled the primary one is the one with
+            // the highest precedence.
+            channel.primary = channel.enabled && !have_primary;
+            have_primary |= channel.primary;
 
             channels.push(channel);
         }
