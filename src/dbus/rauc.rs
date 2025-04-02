@@ -116,13 +116,17 @@ impl From<(i32, String, i32)> for Progress {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(from = "UpdateRequestDe")]
 pub struct UpdateRequest {
+    pub manifest_hash: Option<String>,
     pub url: Option<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum UpdateRequestDe {
-    UrlObject { url: Option<String> },
+    UrlAndHash {
+        manifest_hash: Option<String>,
+        url: Option<String>,
+    },
     UrlOnly(String),
 }
 
@@ -131,8 +135,11 @@ impl From<UpdateRequestDe> for UpdateRequest {
         // Provide API backward compatibility by allowing either just a String
         // as argument or a map with url and manifest hash inside.
         match de {
-            UpdateRequestDe::UrlObject { url } => Self { url },
-            UpdateRequestDe::UrlOnly(url) => Self { url: Some(url) },
+            UpdateRequestDe::UrlAndHash { manifest_hash, url } => Self { manifest_hash, url },
+            UpdateRequestDe::UrlOnly(url) => Self {
+                manifest_hash: None,
+                url: Some(url),
+            },
         }
     }
 }
@@ -578,7 +585,14 @@ impl Rauc {
                 // Poor-mans validation. It feels wrong to let someone point to any
                 // file on the TAC from the web interface.
                 if url.starts_with("http://") || url.starts_with("https://") {
-                    let args = HashMap::new();
+                    let manifest_hash: Option<zbus::zvariant::Value> =
+                        update_request.manifest_hash.map(|mh| mh.into());
+
+                    let mut args = HashMap::new();
+
+                    if let Some(manifest_hash) = &manifest_hash {
+                        args.insert("require-manifest-hash", manifest_hash);
+                    }
 
                     if let Err(e) = proxy.install_bundle(&url, args).await {
                         error!("Failed to install bundle: {}", e);
