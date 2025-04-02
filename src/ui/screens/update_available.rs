@@ -126,6 +126,7 @@ impl Selection {
             Highlight::Channel(ch) => {
                 let req = UpdateRequest {
                     url: Some(self.channels[ch].url.clone()),
+                    manifest_hash: None,
                 };
 
                 install.set(req);

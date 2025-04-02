@@ -1107,6 +1107,8 @@ components:
       properties:
         url:
           type: string
+        manifest_hash:
+          type: string
 
     UpdateChannels:
       type: array
