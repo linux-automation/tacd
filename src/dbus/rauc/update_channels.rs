@@ -173,7 +173,6 @@ impl Channels {
         self.0
     }
 
-    #[cfg(not(feature = "demo_mode"))]
     pub(super) fn primary(&self) -> Option<&Channel> {
         self.0.iter().find(|ch| ch.primary)
     }
