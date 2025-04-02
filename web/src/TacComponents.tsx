@@ -253,6 +253,12 @@ export function UpdateConfig() {
             Periodically check for updates
           </MqttToggle>
         </Box>
+        <Box>
+          <Box variant="awsui-key-label">Auto Install</Box>
+          <MqttToggle topic="/v1/tac/update/enable_auto_install">
+            Automatically install and boot updates
+          </MqttToggle>
+        </Box>
       </ColumnLayout>
     </Container>
   );
