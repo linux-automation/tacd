@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
+#[cfg(not(feature = "demo_mode"))]
+use std::convert::TryFrom;
 use std::fs::{DirEntry, read_dir, read_to_string};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -61,6 +63,34 @@ pub struct ChannelFile {
     pub description: String,
     pub url: String,
     pub polling_interval: Option<String>,
+}
+
+#[cfg(not(feature = "demo_mode"))]
+fn zvariant_walk_nested_dicts<'a, T>(map: &'a zvariant::Dict, path: &'a [&'a str]) -> Result<&'a T>
+where
+    &'a T: TryFrom<&'a zvariant::Value<'a>>,
+    <&'a T as TryFrom<&'a zvariant::Value<'a>>>::Error: Into<zvariant::Error>,
+{
+    let (key, rem) = path
+        .split_first()
+        .ok_or_else(|| anyhow!("Got an empty path to walk"))?;
+
+    let value: &zvariant::Value = map
+        .get(key)?
+        .ok_or_else(|| anyhow!("Could not find key \"{key}\" in dict"))?;
+
+    if rem.is_empty() {
+        value.downcast_ref().map_err(|e| {
+            let type_name = std::any::type_name::<T>();
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to {type_name}: {e}")
+        })
+    } else {
+        let value = value.downcast_ref().map_err(|e| {
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a dict: {e}")
+        })?;
+
+        zvariant_walk_nested_dicts(value, rem)
+    }
 }
 
 impl Channel {
@@ -175,5 +205,40 @@ impl Channels {
 
     pub(super) fn primary(&self) -> Option<&Channel> {
         self.0.iter().find(|ch| ch.primary)
+    }
+
+    #[cfg(not(feature = "demo_mode"))]
+    fn primary_mut(&mut self) -> Option<&mut Channel> {
+        self.0.iter_mut().find(|ch| ch.primary)
+    }
+
+    #[cfg(not(feature = "demo_mode"))]
+    pub(super) fn update_from_poll_status(&mut self, poll_status: zvariant::Dict) -> Result<bool> {
+        let compatible: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["manifest", "update", "compatible"])?;
+        let version: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["manifest", "update", "version"])?;
+        let newer_than_installed: &bool =
+            zvariant_walk_nested_dicts(&poll_status, &["update-available"])?;
+
+        if let Some(pb) = self.0.iter().find_map(|ch| ch.bundle.as_ref())
+            && compatible == pb.compatible.as_str()
+            && version == pb.version.as_str()
+            && *newer_than_installed == pb.newer_than_installed
+        {
+            return Ok(false);
+        }
+
+        self.0.iter_mut().for_each(|ch| ch.bundle = None);
+
+        if let Some(primary) = self.primary_mut() {
+            primary.bundle = Some(UpstreamBundle {
+                compatible: compatible.as_str().into(),
+                version: version.as_str().into(),
+                newer_than_installed: *newer_than_installed,
+            });
+        }
+
+        Ok(true)
     }
 }

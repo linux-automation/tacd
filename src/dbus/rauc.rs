@@ -479,6 +479,56 @@ impl Rauc {
 
         let conn_task = conn.clone();
         let channels = inst.channels.clone();
+
+        // Forward the "Poller::status" property to the broker framework
+        wtb.spawn_task("rauc-forward-poller-status", async move {
+            let proxy = PollerProxy::new(&conn_task).await.unwrap();
+
+            let mut stream = proxy.receive_status_changed().await;
+
+            if let Ok(status) = proxy.status().await {
+                channels.modify(|chs| {
+                    let mut chs = chs?;
+
+                    match chs.update_from_poll_status(status.into()) {
+                        Ok(true) => Some(chs),
+                        Ok(false) => None,
+                        Err(e) => {
+                            warn!("Could not update channel list from poll status: {e}");
+                            None
+                        }
+                    }
+                });
+            }
+
+            while let Some(status) = stream.next().await {
+                let status = match status.get().await {
+                    Ok(status) => status,
+                    Err(e) => {
+                        warn!("Could not get poll status: {e}");
+                        continue;
+                    }
+                };
+
+                channels.modify(|chs| {
+                    let mut chs = chs?;
+
+                    match chs.update_from_poll_status(status.into()) {
+                        Ok(true) => Some(chs),
+                        Ok(false) => None,
+                        Err(e) => {
+                            warn!("Could not update channel list from poll status: {e}");
+                            None
+                        }
+                    }
+                });
+            }
+
+            Ok(())
+        })?;
+
+        let conn_task = conn.clone();
+        let channels = inst.channels.clone();
         let (mut install_stream, _) = inst.install.clone().subscribe_unbounded();
 
         // Forward the "install" topic from the broker framework to RAUC
