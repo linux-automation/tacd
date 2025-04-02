@@ -1132,6 +1132,8 @@ components:
                 type: integer
           enabled:
             type: boolean
+          primary:
+            type: boolean
           bundle:
             type: object
             properties:
