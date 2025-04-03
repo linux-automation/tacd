@@ -46,9 +46,26 @@ use installer::InstallerProxy;
 #[cfg(not(feature = "demo_mode"))]
 mod poller;
 
+#[cfg(not(feature = "demo_mode"))]
+use poller::PollerProxy;
+
 #[cfg(feature = "demo_mode")]
 mod imports {
     pub(super) const CHANNELS_DIR: &str = "demo_files/usr/share/tacd/update_channels";
+
+    pub(super) struct PollerProxy<'a> {
+        _dummy: &'a (),
+    }
+
+    impl PollerProxy<'_> {
+        pub async fn new<C>(_conn: C) -> Option<Self> {
+            Some(Self { _dummy: &() })
+        }
+
+        pub async fn poll(&self) -> zbus::Result<()> {
+            Ok(())
+        }
+    }
 }
 
 #[cfg(not(feature = "demo_mode"))]
@@ -190,6 +207,8 @@ async fn channel_list_update_task(
     channels: Arc<Topic<Channels>>,
     rauc_service: Service,
 ) -> Result<()> {
+    let poller = PollerProxy::new(&conn).await.unwrap();
+
     let (reload_stream, _) = reload.subscribe_unbounded();
     let (mut enable_polling_stream, _) = enable_polling.subscribe_unbounded();
 
@@ -225,9 +244,18 @@ async fn channel_list_update_task(
 
             if let Err(e) = rauc_service.reload(&conn).await {
                 error!("Failed to reload the RAUC service: {e}");
+                continue 'reload_loop;
             }
         } else {
             info!("Config is up to date. Will not reload.");
+        }
+
+        if enable_polling {
+            info!("Trigger a poll");
+
+            if let Err(err) = poller.poll().await {
+                error!("Failed to poll for updates: {err}");
+            }
         }
     }
 }
