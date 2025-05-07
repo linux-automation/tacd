@@ -45,8 +45,7 @@ jobs:
       fail-fast: false # Run against all versions even if one fails
       matrix:
         version:
-          - "1.75" # Yocto scarthgap
-          - "1.79" # Yocto styhead
+          - "1.84" # Yocto walnascar
           - "nightly"
     name: cargo check
     runs-on: ubuntu-latest
