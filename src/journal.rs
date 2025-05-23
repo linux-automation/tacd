@@ -28,8 +28,8 @@ use tide::{Request, Response, Server};
 #[cfg(any(test, feature = "demo_mode"))]
 mod sd {
     use std::collections::btree_map::BTreeMap;
+    use std::io::Error;
     pub(super) use std::io::Result;
-    use std::io::{Error, ErrorKind};
     use std::thread::sleep;
     use std::time::{Duration, SystemTime};
 
@@ -81,7 +81,7 @@ mod sd {
                 sleep(Duration::from_secs(5));
             }
 
-            Err(Error::new(ErrorKind::Other, "Simulation ended"))
+            Err(Error::other("Simulation ended"))
         }
     }
 }
