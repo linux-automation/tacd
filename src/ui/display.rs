@@ -144,7 +144,7 @@ impl DisplayExclusive {
     ///
     /// Drawing a pixel to the bottom of DisplayRotated results in the pixel
     /// appearing on the right of the actual screen.
-    pub fn rotate(&mut self) -> DisplayRotated {
+    pub fn rotate(&mut self) -> DisplayRotated<'_> {
         // This could easily be made more generic, by accepting a direction
         // parameter, but that would result in dead code because we only
         // draw the button legend rotated.
