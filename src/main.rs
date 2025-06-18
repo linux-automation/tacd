@@ -106,9 +106,23 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
         adc.iobus_curr.fast.clone(),
         adc.iobus_volt.fast.clone(),
     )?;
+
+    // Set up a http server and provide some static files like the web
+    // interface and config files that may be edited inside the web ui.
+    let mut http_server = HttpServer::new();
+
+    // Allow editing some aspects of the TAC configuration when in "setup mode".
+    let setup_mode = SetupMode::new(&mut bb, &mut wtb, &mut http_server.server)?;
+
     let (hostname, network, rauc, systemd) = {
-        let dbus =
-            DbusSession::new(&mut bb, &mut wtb, led.eth_dut.clone(), led.eth_lab.clone()).await?;
+        let dbus = DbusSession::new(
+            &mut bb,
+            &mut wtb,
+            led.eth_dut.clone(),
+            led.eth_lab.clone(),
+            setup_mode.setup_mode.clone(),
+        )
+        .await?;
 
         (dbus.hostname, dbus.network, dbus.rauc, dbus.systemd)
     };
@@ -121,13 +135,6 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     // stalled for too long by providing watchdog events to systemd
     // (if requested on start).
     let watchdog = Watchdog::new(dut_pwr.tick());
-
-    // Set up a http server and provide some static files like the web
-    // interface and config files that may be edited inside the web ui.
-    let mut http_server = HttpServer::new();
-
-    // Allow editing some aspects of the TAC configuration when in "setup mode".
-    let setup_mode = SetupMode::new(&mut bb, &mut wtb, &mut http_server.server)?;
 
     // Expose a live log of the TAC's systemd journal so it can be viewed
     // in the web interface.

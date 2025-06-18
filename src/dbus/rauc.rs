@@ -14,24 +14,25 @@
 // You should have received a copy of the GNU General Public License along
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use async_std::channel::Receiver;
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
-use async_std::task::{sleep, spawn, JoinHandle};
-use log::warn;
+use futures_util::FutureExt;
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 
+use super::systemd::{Service, ServiceAction};
 use super::Connection;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
 mod update_channels;
-pub use update_channels::Channel;
+pub use update_channels::{Channel, Channels};
+
+mod system_conf;
+use system_conf::update_system_conf;
 
 #[cfg(feature = "demo_mode")]
 mod demo_mode;
@@ -42,54 +43,37 @@ mod installer;
 #[cfg(not(feature = "demo_mode"))]
 use installer::InstallerProxy;
 
+#[cfg(not(feature = "demo_mode"))]
+mod poller;
+
+#[cfg(not(feature = "demo_mode"))]
+use poller::PollerProxy;
+
 #[cfg(feature = "demo_mode")]
 mod imports {
-    use std::collections::HashMap;
+    pub(super) const CHANNELS_DIR: &str = "demo_files/usr/share/tacd/update_channels";
 
-    pub(super) struct InstallerProxy<'a> {
+    pub(super) struct PollerProxy<'a> {
         _dummy: &'a (),
     }
 
-    impl<'a> InstallerProxy<'a> {
-        pub async fn new<C>(_conn: C) -> Option<InstallerProxy<'a>> {
+    impl PollerProxy<'_> {
+        pub async fn new<C>(_conn: C) -> Option<Self> {
             Some(Self { _dummy: &() })
         }
 
-        pub async fn inspect_bundle(
-            &self,
-            _source: &str,
-            _args: HashMap<&str, zbus::zvariant::Value<'_>>,
-        ) -> zbus::Result<HashMap<String, zbus::zvariant::OwnedValue>> {
-            let update: HashMap<String, String> = [
-                (
-                    "compatible".into(),
-                    "Linux Automation GmbH - LXA TAC".into(),
-                ),
-                ("version".into(), "24.04-20240415070800".into()),
-            ]
-            .into();
-
-            let info: HashMap<String, zbus::zvariant::OwnedValue> =
-                [("update".into(), update.into())].into();
-
-            Ok(info)
+        pub async fn poll(&self) -> zbus::Result<()> {
+            Ok(())
         }
     }
-
-    pub(super) const CHANNELS_DIR: &str = "demo_files/usr/share/tacd/update_channels";
 }
 
 #[cfg(not(feature = "demo_mode"))]
 mod imports {
     pub(super) use anyhow::bail;
-    pub(super) use log::error;
 
     pub(super) const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
 }
-
-const RELOAD_RATE_LIMIT: Duration = Duration::from_secs(10 * 60);
-const RETRY_INTERVAL_MIN: Duration = Duration::from_secs(60);
-const RETRY_INTERVAL_MAX: Duration = Duration::from_secs(60 * 60);
 
 use imports::*;
 
@@ -110,6 +94,37 @@ impl From<(i32, String, i32)> for Progress {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(from = "UpdateRequestDe")]
+pub struct UpdateRequest {
+    pub manifest_hash: Option<String>,
+    pub url: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum UpdateRequestDe {
+    UrlAndHash {
+        manifest_hash: Option<String>,
+        url: Option<String>,
+    },
+    UrlOnly(String),
+}
+
+impl From<UpdateRequestDe> for UpdateRequest {
+    fn from(de: UpdateRequestDe) -> Self {
+        // Provide API backward compatibility by allowing either just a String
+        // as argument or a map with url and manifest hash inside.
+        match de {
+            UpdateRequestDe::UrlAndHash { manifest_hash, url } => Self { manifest_hash, url },
+            UpdateRequestDe::UrlOnly(url) => Self {
+                manifest_hash: None,
+                url: Some(url),
+            },
+        }
+    }
+}
+
 type SlotStatus = HashMap<String, HashMap<String, String>>;
 
 pub struct Rauc {
@@ -119,22 +134,12 @@ pub struct Rauc {
     #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     pub primary: Arc<Topic<String>>,
     pub last_error: Arc<Topic<String>>,
-    pub install: Arc<Topic<String>>,
-    pub channels: Arc<Topic<Vec<Channel>>>,
+    pub install: Arc<Topic<UpdateRequest>>,
+    pub channels: Arc<Topic<Channels>>,
     pub reload: Arc<Topic<bool>>,
     pub should_reboot: Arc<Topic<bool>>,
     pub enable_polling: Arc<Topic<bool>>,
-}
-
-fn compare_versions(v1: &str, v2: &str) -> Option<Ordering> {
-    // Version strings look something like this: "4.0-0-20230428214619"
-    // Use string sorting on the date part to determine which bundle is newer.
-    let date_1 = v1.rsplit_once('-').map(|(_, d)| d);
-    let date_2 = v2.rsplit_once('-').map(|(_, d)| d);
-
-    // Return Sone if either version could not be split or a Some with the
-    // ordering between the dates.
-    date_1.zip(date_2).map(|(d1, d2)| d1.cmp(d2))
+    pub enable_auto_install: Arc<Topic<bool>>,
 }
 
 #[cfg(not(feature = "demo_mode"))]
@@ -196,99 +201,46 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
     }
 }
 
-async fn channel_polling_task(
-    conn: Arc<Connection>,
-    enable_polling: Arc<Topic<bool>>,
-    channels: Arc<Topic<Vec<Channel>>>,
-    slot_status: Arc<Topic<Arc<SlotStatus>>>,
-    name: String,
-) {
-    let proxy = InstallerProxy::new(&conn).await.unwrap();
-
-    let mut retry_interval = RETRY_INTERVAL_MIN;
-
-    while let Some(mut channel) = channels
-        .try_get()
-        .and_then(|chs| chs.into_iter().find(|ch| ch.name == name))
-    {
-        // Make sure update polling is enabled before doing anything,
-        // as contacting the update server requires user consent.
-        enable_polling.wait_for(true).await;
-
-        let polling_interval = channel.polling_interval;
-        let slot_status = slot_status.try_get();
-
-        if let Err(e) = channel.poll(&proxy, slot_status.as_deref()).await {
-            warn!(
-                "Failed to fetch update for update channel \"{}\": {}. Retrying in {}s.",
-                channel.name,
-                e,
-                retry_interval.as_secs()
-            );
-
-            if retry_interval < RETRY_INTERVAL_MAX {
-                sleep(retry_interval).await;
-
-                // Perform a (limited) exponential backoff on the retry interval to recover
-                // fast from short-term issues while also preventing the update server from
-                // being DDOSed by excessive retries.
-                retry_interval *= 2;
-
-                continue;
-            }
-        }
-
-        retry_interval = RETRY_INTERVAL_MIN;
-
-        channels.modify(|chs| {
-            let mut chs = chs?;
-            let channel_prev = chs.iter_mut().find(|ch| ch.name == name)?;
-
-            // Check if the bundle we polled is the same as before and we don't need
-            // to send a message to the subscribers.
-            if *channel_prev == channel {
-                return None;
-            }
-
-            // Update the channel description with the newly polled bundle info
-            *channel_prev = channel;
-
-            Some(chs)
-        });
-
-        match polling_interval {
-            Some(pi) => sleep(pi).await,
-            None => break,
-        }
-    }
-}
-
 async fn channel_list_update_task(
     conn: Arc<Connection>,
-    mut reload_stream: Receiver<bool>,
+    reload: Arc<Topic<bool>>,
     enable_polling: Arc<Topic<bool>>,
-    channels: Arc<Topic<Vec<Channel>>>,
-    slot_status: Arc<Topic<Arc<SlotStatus>>>,
+    enable_auto_install: Arc<Topic<bool>>,
+    setup_mode: Arc<Topic<bool>>,
+    channels: Arc<Topic<Channels>>,
+    rauc_service: Service,
 ) -> Result<()> {
-    let mut previous: Option<Instant> = None;
-    let mut polling_tasks: Vec<JoinHandle<_>> = Vec::new();
+    let poller = PollerProxy::new(&conn).await.unwrap();
 
-    while let Some(reload) = reload_stream.next().await {
-        if !reload {
-            continue;
-        }
+    let (reload_stream, _) = reload.subscribe_unbounded();
+    let (mut enable_polling_stream, _) = enable_polling.subscribe_unbounded();
+    let (mut enable_auto_install_stream, _) = enable_auto_install.subscribe_unbounded();
+    let (mut setup_mode_stream, _) = setup_mode.subscribe_unbounded();
 
-        // Polling for updates is a somewhat expensive operation.
-        // Make sure it can not be abused to DOS the tacd.
-        if previous
-            .map(|p| p.elapsed() < RELOAD_RATE_LIMIT)
-            .unwrap_or(false)
-        {
-            continue;
-        }
+    let mut enable_polling = enable_polling_stream.next().await.unwrap_or(false);
+    let mut enable_auto_install = enable_auto_install_stream.next().await.unwrap_or(false);
+    let mut setup_mode = setup_mode_stream.next().await.unwrap_or(true);
+
+    'reload_loop: loop {
+        futures::select! {
+            reload = reload_stream.recv().fuse() => {
+                if !(reload?) {
+                    continue 'reload_loop
+                }
+            }
+            enable_polling_new = enable_polling_stream.recv().fuse() => {
+                enable_polling = enable_polling_new?;
+            }
+            enable_auto_install_new = enable_auto_install_stream.recv().fuse() => {
+                enable_auto_install = enable_auto_install_new?;
+            }
+            setup_mode_new = setup_mode_stream.recv().fuse() => {
+                setup_mode = setup_mode_new?;
+            }
+        };
 
         // Read the list of available update channels
-        let new_channels = match Channel::from_directory(CHANNELS_DIR) {
+        let new_channels = match Channels::from_directory(CHANNELS_DIR) {
             Ok(chs) => chs,
             Err(e) => {
                 warn!("Failed to get list of update channels: {e}");
@@ -296,32 +248,57 @@ async fn channel_list_update_task(
             }
         };
 
-        // Stop the currently running polling tasks
-        for task in polling_tasks.drain(..) {
-            task.cancel().await;
-        }
-
-        let names: Vec<String> = new_channels.iter().map(|c| c.name.clone()).collect();
+        let should_reload = update_system_conf(
+            new_channels.primary(),
+            enable_polling,
+            enable_auto_install,
+            setup_mode,
+        )?;
 
         channels.set(new_channels);
 
-        // Spawn new polling tasks. They will poll once immediately.
-        for name in names.into_iter() {
-            let polling_task = spawn(channel_polling_task(
-                conn.clone(),
-                enable_polling.clone(),
-                channels.clone(),
-                slot_status.clone(),
-                name,
-            ));
+        if should_reload {
+            info!("New RAUC config written. Triggering daemon restart.");
 
-            polling_tasks.push(polling_task);
+            let (mut status, status_subscription) =
+                rauc_service.status.clone().subscribe_unbounded();
+            rauc_service.action.set(ServiceAction::Restart);
+
+            info!("Waiting for daemon to go down");
+
+            while let Some(ev) = status.next().await {
+                info!("Current status: {} ({})", ev.active_state, ev.sub_state);
+
+                if ev.active_state != "active" {
+                    break;
+                }
+            }
+
+            info!("Waiting for daemon to come up again");
+
+            while let Some(ev) = status.next().await {
+                info!("Current status: {} ({})", ev.active_state, ev.sub_state);
+
+                if ev.active_state == "active" {
+                    break;
+                }
+            }
+
+            info!("Done");
+
+            status_subscription.unsubscribe();
+        } else {
+            info!("Config is up to date. Will not reload.");
         }
 
-        previous = Some(Instant::now());
-    }
+        if enable_polling {
+            info!("Trigger a poll");
 
-    Ok(())
+            if let Err(err) = poller.poll().await {
+                error!("Failed to poll for updates: {err}");
+            }
+        }
+    }
 }
 
 impl Rauc {
@@ -332,12 +309,20 @@ impl Rauc {
             slot_status: bb.topic_ro("/v1/tac/update/slots", None),
             primary: bb.topic_ro("/v1/tac/update/primary", None),
             last_error: bb.topic_ro("/v1/tac/update/last_error", None),
-            install: bb.topic_wo("/v1/tac/update/install", Some("".to_string())),
+            install: bb.topic_wo("/v1/tac/update/install", None),
             channels: bb.topic_ro("/v1/tac/update/channels", None),
             reload: bb.topic_wo("/v1/tac/update/channels/reload", Some(true)),
             should_reboot: bb.topic_ro("/v1/tac/update/should_reboot", Some(false)),
             enable_polling: bb.topic(
                 "/v1/tac/update/enable_polling",
+                true,
+                true,
+                true,
+                Some(false),
+                1,
+            ),
+            enable_auto_install: bb.topic(
+                "/v1/tac/update/enable_auto_install",
                 true,
                 true,
                 true,
@@ -352,6 +337,8 @@ impl Rauc {
         bb: &mut BrokerBuilder,
         wtb: &mut WatchedTasksBuilder,
         _conn: &Arc<Connection>,
+        rauc_service: Service,
+        setup_mode: Arc<Topic<bool>>,
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
@@ -360,15 +347,16 @@ impl Rauc {
         inst.last_error.set("".to_string());
 
         // Reload the channel list on request
-        let (reload_stream, _) = inst.reload.clone().subscribe_unbounded();
         wtb.spawn_task(
             "rauc-channel-list-update",
             channel_list_update_task(
                 Arc::new(Connection),
-                reload_stream,
+                inst.reload.clone(),
                 inst.enable_polling.clone(),
+                inst.enable_auto_install.clone(),
+                setup_mode,
                 inst.channels.clone(),
-                inst.slot_status.clone(),
+                rauc_service,
             ),
         )?;
 
@@ -380,6 +368,8 @@ impl Rauc {
         bb: &mut BrokerBuilder,
         wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
+        rauc_service: Service,
+        setup_mode: Arc<Topic<bool>>,
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
@@ -387,7 +377,6 @@ impl Rauc {
         let operation = inst.operation.clone();
         let slot_status = inst.slot_status.clone();
         let primary = inst.primary.clone();
-        let channels = inst.channels.clone();
         let should_reboot = inst.should_reboot.clone();
 
         wtb.spawn_task("rauc-slot-status-update", async move {
@@ -449,23 +438,6 @@ impl Rauc {
                             (slot_name.replace('.', "_"), info)
                         })
                         .collect();
-
-                    // Update the `newer_than_installed` field for the upstream bundles inside
-                    // of the update channels.
-                    channels.modify(|prev| {
-                        let prev = prev?;
-
-                        let mut new = prev.clone();
-
-                        for ch in new.iter_mut() {
-                            if let Some(bundle) = ch.bundle.as_mut() {
-                                bundle.update_install(&slots);
-                            }
-                        }
-
-                        // Only send out messages if anything changed
-                        (new != prev).then_some(new)
-                    });
 
                     // Provide a simple yes/no "should reboot into other slot?" information
                     // based on the bundle versions in the booted slot and the other slot.
@@ -536,37 +508,126 @@ impl Rauc {
         })?;
 
         let conn_task = conn.clone();
+        let channels = inst.channels.clone();
+
+        // Forward the "Poller::status" property to the broker framework
+        wtb.spawn_task("rauc-forward-poller-status", async move {
+            let proxy = PollerProxy::new(&conn_task).await.unwrap();
+
+            let mut stream = proxy.receive_status_changed().await;
+
+            if let Ok(status) = proxy.status().await {
+                channels.modify(|chs| {
+                    let mut chs = chs?;
+
+                    match chs.update_from_poll_status(status.into()) {
+                        Ok(true) => Some(chs),
+                        Ok(false) => None,
+                        Err(e) => {
+                            warn!("Could not update channel list from poll status: {e}");
+                            None
+                        }
+                    }
+                });
+            }
+
+            while let Some(status) = stream.next().await {
+                let status = match status.get().await {
+                    Ok(status) => status,
+                    Err(e) => {
+                        warn!("Could not get poll status: {e}");
+                        continue;
+                    }
+                };
+
+                channels.modify(|chs| {
+                    let mut chs = chs?;
+
+                    match chs.update_from_poll_status(status.into()) {
+                        Ok(true) => Some(chs),
+                        Ok(false) => None,
+                        Err(e) => {
+                            warn!("Could not update channel list from poll status: {e}");
+                            None
+                        }
+                    }
+                });
+            }
+
+            Ok(())
+        })?;
+
+        let conn_task = conn.clone();
+        let channels = inst.channels.clone();
         let (mut install_stream, _) = inst.install.clone().subscribe_unbounded();
 
         // Forward the "install" topic from the broker framework to RAUC
         wtb.spawn_task("rauc-forward-install", async move {
             let proxy = InstallerProxy::new(&conn_task).await.unwrap();
 
-            while let Some(url) = install_stream.next().await {
-                // Poor-mans validation. It feels wrong to let someone point to any
-                // file on the TAC from the web interface.
-                if url.starts_with("http://") || url.starts_with("https://") {
-                    let args = HashMap::new();
-
-                    if let Err(e) = proxy.install_bundle(&url, args).await {
-                        error!("Failed to install bundle: {}", e);
+            while let Some(update_request) = install_stream.next().await {
+                let channels = match channels.try_get() {
+                    Some(chs) => chs,
+                    None => {
+                        warn!("Got install request with no channels available yet");
+                        continue;
                     }
+                };
+
+                let primary = match channels.primary() {
+                    Some(primary) => primary,
+                    None => {
+                        warn!("Got install request with no primary channel configured");
+                        continue;
+                    }
+                };
+
+                let upstream_bundle = match primary.bundle.as_ref() {
+                    Some(us) => us,
+                    None => {
+                        warn!("Got install request with no upstream bundle info available yet");
+                        continue
+                    }
+                };
+
+                let url = match &update_request.url {
+                    None => &upstream_bundle.effective_url,
+                    Some(url) if url == &upstream_bundle.effective_url => &upstream_bundle.effective_url,
+                    Some(url) if url == &primary.url => &primary.url,
+                    Some(_) => {
+                        warn!("Got install request with URL matching neither channel URL nor effective bundle URL");
+                        continue;
+                    }
+                };
+
+                let manifest_hash: Option<zbus::zvariant::Value> =
+                    update_request.manifest_hash.map(|mh| mh.into());
+
+                let mut args = HashMap::new();
+
+                if let Some(manifest_hash) = &manifest_hash {
+                    args.insert("require-manifest-hash", manifest_hash);
+                }
+
+                if let Err(e) = proxy.install_bundle(url, args).await {
+                    error!("Failed to install bundle: {}", e);
                 }
             }
 
             Ok(())
         })?;
 
-        // Reload the channel list on request
-        let (reload_stream, _) = inst.reload.clone().subscribe_unbounded();
+        // Reload the channel list when required
         wtb.spawn_task(
             "rauc-channel-list-update",
             channel_list_update_task(
                 conn.clone(),
-                reload_stream,
+                inst.reload.clone(),
                 inst.enable_polling.clone(),
+                inst.enable_auto_install.clone(),
+                setup_mode,
                 inst.channels.clone(),
-                inst.slot_status.clone(),
+                rauc_service,
             ),
         )?;
 
