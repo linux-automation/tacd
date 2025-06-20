@@ -28,7 +28,7 @@ mod backend {
         pub device: (),
         pub var_screen_info: VarScreeninfo,
         pub fix_screen_info: FixScreeninfo,
-        pub frame: [u8; 240 * 240 * 2],
+        pub frame: [u8; 240 * 240 * 4],
     }
 
     impl Framebuffer {
@@ -36,16 +36,16 @@ mod backend {
             Ok(Self {
                 device: (),
                 var_screen_info: VarScreeninfo {
-                    bits_per_pixel: 16,
+                    bits_per_pixel: 32,
                     xres: 240,
                     yres: 240,
                     ..Default::default()
                 },
                 fix_screen_info: FixScreeninfo {
-                    line_length: 480,
+                    line_length: 240 * 4,
                     ..Default::default()
                 },
-                frame: [0; 240 * 240 * 2],
+                frame: [0; 240 * 240 * 4],
             })
         }
 
@@ -61,6 +61,8 @@ mod backend {
 }
 
 use backend::Framebuffer;
+
+const BACKGROUND: &[(u8, u8, u8)] = include!(concat!(env!("OUT_DIR"), "/background.rs"));
 
 pub struct DisplayExclusive(Framebuffer);
 
@@ -96,7 +98,7 @@ impl Display {
     }
 
     pub fn clear(&self) {
-        self.with_lock(|target| target.0.frame.iter_mut().for_each(|p| *p = 0x00));
+        self.with_lock(|target| target.clear(BinaryColor::Off).unwrap());
     }
 
     pub fn screenshooter(&self) -> ScreenShooter {
@@ -111,14 +113,21 @@ impl ScreenShooter {
         let (image, xres, yres) = {
             let fb = &self.inner.lock().unwrap().0;
 
-            let bpp = (fb.var_screen_info.bits_per_pixel / 8) as usize;
-            let xres = fb.var_screen_info.xres;
-            let yres = fb.var_screen_info.yres;
-            let res = (xres as usize) * (yres as usize);
+            assert!(fb.var_screen_info.bits_per_pixel == 32);
+            let xres = fb.var_screen_info.xres as usize;
+            let yres = fb.var_screen_info.yres as usize;
 
-            let image: Vec<u8> = (0..res)
-                .map(|i| if fb.frame[i * bpp] != 0 { 0xff } else { 0 })
-                .collect();
+            let mut image = vec![0; xres * yres * 3];
+
+            for y in 0..yres {
+                for x in 0..xres {
+                    let idx = y * xres + x;
+
+                    image[idx * 3] = fb.frame[idx * 4 + 2];
+                    image[idx * 3 + 1] = fb.frame[idx * 4 + 1];
+                    image[idx * 3 + 2] = fb.frame[idx * 4];
+                }
+            }
 
             (image, xres, yres)
         };
@@ -126,8 +135,8 @@ impl ScreenShooter {
         let mut dst = Cursor::new(Vec::new());
 
         let mut writer = {
-            let mut enc = Encoder::new(&mut dst, xres, yres);
-            enc.set_color(ColorType::Grayscale);
+            let mut enc = Encoder::new(&mut dst, xres as u32, yres as u32);
+            enc.set_color(ColorType::Rgb);
             enc.set_depth(BitDepth::Eight);
             enc.write_header().unwrap()
         };
@@ -161,7 +170,7 @@ impl DrawTarget for DisplayExclusive {
     where
         I: IntoIterator<Item = Pixel<Self::Color>>,
     {
-        let bpp = self.0.var_screen_info.bits_per_pixel / 8;
+        assert!(self.0.var_screen_info.bits_per_pixel == 32);
         let xres = self.0.var_screen_info.xres;
         let yres = self.0.var_screen_info.yres;
         let line_length = self.0.fix_screen_info.line_length;
@@ -174,14 +183,17 @@ impl DrawTarget for DisplayExclusive {
                 continue;
             }
 
-            let offset = line_length * y + bpp * x;
+            let offset_bg = (y * xres + x) as usize;
+            let offset_fb = (line_length * y + 4 * x) as usize;
 
-            for b in 0..bpp {
-                self.0.frame[(offset + b) as usize] = match color {
-                    BinaryColor::Off => 0x00,
-                    BinaryColor::On => 0xff,
-                }
-            }
+            let rgb = match color {
+                BinaryColor::Off => BACKGROUND[offset_bg],
+                BinaryColor::On => (255, 255, 255),
+            };
+
+            self.0.frame[offset_fb] = rgb.2;
+            self.0.frame[offset_fb + 1] = rgb.1;
+            self.0.frame[offset_fb + 2] = rgb.0;
         }
 
         Ok(())
