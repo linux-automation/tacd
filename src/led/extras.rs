@@ -142,7 +142,7 @@ impl Pattern for Leds {
                     let brightness = (brightness * max).round();
                     let duration = duration.as_millis();
 
-                    write!(dst, "{} {} ", brightness, duration)
+                    write!(dst, "{brightness} {duration} ")
                         .expect("Writing to a String should never fail");
 
                     dst

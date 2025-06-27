@@ -55,7 +55,7 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
     writeln!(&mut text)?;
 
     if let Some(tacd_version) = ui.res.system.tacd_version.try_get() {
-        writeln!(&mut text, "v: {}", tacd_version)?;
+        writeln!(&mut text, "v: {tacd_version}")?;
     }
 
     if let Some(uname) = ui.res.system.uname.try_get() {
@@ -69,7 +69,7 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
             HardwareGeneration::Gen3 => "Gen3",
         };
 
-        write!(&mut text, "generation: {} ", gen)?;
+        write!(&mut text, "generation: {gen} ")?;
     }
 
     if let Some(soc_temperature) = ui.res.temperatures.soc_temperature.try_get() {
@@ -116,12 +116,12 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
         let powerboard_featureset = barebox.powerboard_featureset.join(",");
 
         writeln!(&mut text, "barebox: {}", barebox.version)?;
-        writeln!(&mut text, "baseboard ({}):", baseboard_release)?;
-        writeln!(&mut text, "- bringup: {}", baseboard_timestamp)?;
-        writeln!(&mut text, "- feat: {}", baseboard_featureset)?;
-        writeln!(&mut text, "powerboard ({}):", powerboard_release)?;
-        writeln!(&mut text, "- bringup: {}", powerboard_timestamp)?;
-        writeln!(&mut text, "- feat: {}", powerboard_featureset)?;
+        writeln!(&mut text, "baseboard ({baseboard_release}):")?;
+        writeln!(&mut text, "- bringup: {baseboard_timestamp}")?;
+        writeln!(&mut text, "- feat: {baseboard_featureset}")?;
+        writeln!(&mut text, "powerboard ({powerboard_release}):")?;
+        writeln!(&mut text, "- bringup: {powerboard_timestamp}")?;
+        writeln!(&mut text, "- feat: {powerboard_featureset}")?;
     }
 
     writeln!(&mut text)?;
