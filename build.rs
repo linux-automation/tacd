@@ -96,7 +96,7 @@ fn generate_build_date() {
         .unwrap()
         .as_secs();
 
-    println!("cargo:rustc-env=BUILD_TIMESTAMP={}", timestamp);
+    println!("cargo:rustc-env=BUILD_TIMESTAMP={timestamp}");
 }
 
 fn main() {
