@@ -15,12 +15,14 @@
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
 use std::env::var_os;
-use std::fs::{read_to_string, write};
+use std::fs::{read_to_string, write, File};
+use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 use std::time::SystemTime;
 
 use chrono::prelude::Utc;
+use png::{BitDepth, ColorType, Decoder};
 
 fn generate_openapi_include() {
     let cargo_dir = {
@@ -99,8 +101,70 @@ fn generate_build_date() {
     println!("cargo:rustc-env=BUILD_TIMESTAMP={timestamp}");
 }
 
+fn decode_png(path: &Path) -> Vec<(u8, u8, u8)> {
+    let mut reader = Decoder::new(File::open(path).unwrap()).read_info().unwrap();
+
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).unwrap();
+
+    let width = info.width as usize;
+    let height = info.height as usize;
+
+    let bytes_per_pixel = match (info.bit_depth, info.color_type) {
+        (BitDepth::Eight, ColorType::Rgb) => 3,
+        (BitDepth::Eight, ColorType::Rgba) => 4,
+        _ => unimplemented!(),
+    };
+
+    let mut pixels = vec![(0, 0, 0); width * height];
+
+    for y in 0..height {
+        for x in 0..width {
+            let idx = y * width + x;
+
+            pixels[idx] = (
+                buf[idx * bytes_per_pixel],
+                buf[idx * bytes_per_pixel + 1],
+                buf[idx * bytes_per_pixel + 2],
+            );
+        }
+    }
+
+    pixels
+}
+
+fn generate_background() {
+    let cargo_dir = {
+        let dir = var_os("CARGO_MANIFEST_DIR").unwrap();
+        Path::new(&dir).to_path_buf()
+    };
+
+    let out_dir = {
+        let dir = var_os("OUT_DIR").unwrap();
+        Path::new(&dir).to_path_buf()
+    };
+
+    let mut output = {
+        let output_path = out_dir.join("background.rs");
+        File::create(output_path).unwrap()
+    };
+
+    println!("cargo:rerun-if-changed=assets/background.png");
+
+    let pixels = decode_png(&cargo_dir.join("assets/background.png"));
+
+    writeln!(&mut output, "&[").unwrap();
+
+    for (r, g, b) in pixels {
+        writeln!(&mut output, "    ({}, {}, {}),", r, g, b).unwrap();
+    }
+
+    writeln!(&mut output, "]").unwrap();
+}
+
 fn main() {
     generate_openapi_include();
     generate_version_string();
     generate_build_date();
+    generate_background();
 }
