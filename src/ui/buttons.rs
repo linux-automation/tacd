@@ -38,7 +38,7 @@ mod evd {
             Ok(Self {})
         }
 
-        pub fn fetch_events(&mut self) -> Result<FetchEventsSynced, ()> {
+        pub fn fetch_events(&mut self) -> Result<FetchEventsSynced<'_>, ()> {
             loop {
                 std::thread::park()
             }
