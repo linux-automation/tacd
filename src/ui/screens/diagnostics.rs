@@ -253,7 +253,7 @@ impl ActiveScreen for Active {
             InputEvent::ToggleAction(_) => {
                 self.led_cycle_state = self.led_cycle_state.wrapping_add(1);
 
-                let on = self.led_cycle_state % 2 != 0;
+                let on = !self.led_cycle_state.is_multiple_of(2);
                 let led_brightness = if on { 1.0 } else { 0.0 };
                 let backlight_brightness = if on { 1.0 } else { 0.1 };
                 let status_color = match self.led_cycle_state % 8 {
