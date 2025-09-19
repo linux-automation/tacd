@@ -120,7 +120,7 @@ impl ActivatableScreen for LocatorScreen {
                 display,
                 Box::new(move |now, target| {
                     // Blink a bar below the hostname at 2Hz
-                    let on = (now.duration_since(start).as_millis() / 500) % 2 == 0;
+                    let on = (now.duration_since(start).as_millis() / 500).is_multiple_of(2);
 
                     if on {
                         let line = Line::new(Point::new(40, 135), Point::new(200, 135))
