@@ -58,3 +58,10 @@ lto = true
 overflow-checks = true
 opt-level = "z"
 codegen-units = 1
+
+[lints.clippy]
+# This is necessary because the `.is_multiple_of()` function that this lint
+# suggests is not yet stabilized in the rust version used in Yocto walnascar
+# (1.84.1).
+# TODO: remove this when updating to a newer yocto release.
+manual_is_multiple_of = "allow"
