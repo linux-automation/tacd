@@ -54,7 +54,6 @@ jobs:
       fail-fast: false # Run against all versions even if one fails
       matrix:
         version:
-          - "22.14.0" # Yocto walnascar
           - "22.22.0" # Yocto whinlatter
     name: npm run build
     runs-on: ubuntu-latest
