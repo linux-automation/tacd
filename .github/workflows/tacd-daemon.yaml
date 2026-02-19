@@ -46,6 +46,7 @@ jobs:
       matrix:
         version:
           - "1.84" # Yocto walnascar
+          - "1.90" # Yocto whinlatter
           - "nightly"
     name: cargo check
     runs-on: ubuntu-latest
