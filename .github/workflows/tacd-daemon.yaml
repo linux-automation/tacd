@@ -45,7 +45,6 @@ jobs:
       fail-fast: false # Run against all versions even if one fails
       matrix:
         version:
-          - "1.84" # Yocto walnascar
           - "1.90" # Yocto whinlatter
           - "nightly"
     name: cargo check
