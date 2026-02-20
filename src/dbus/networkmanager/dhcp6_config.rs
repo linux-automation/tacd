@@ -12,7 +12,7 @@ use zbus::proxy;
     interface = "org.freedesktop.NetworkManager.DHCP6Config",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait DHCP6Config {
+pub trait DHCP6Config {
     /// Options property
     #[zbus(property)]
     fn options(

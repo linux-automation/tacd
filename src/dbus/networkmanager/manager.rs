@@ -10,7 +10,7 @@ use zbus::proxy;
     default_service = "org.freedesktop.NetworkManager",
     default_path = "/org/freedesktop/NetworkManager"
 )]
-trait NetworkManager {
+pub trait NetworkManager {
     /// ActivateConnection method
     fn activate_connection(
         &self,
