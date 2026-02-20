@@ -29,7 +29,7 @@ pub const LONG_PRESS: Duration = Duration::from_millis(500);
 #[cfg(feature = "demo_mode")]
 mod evd {
     use evdev::FetchEventsSynced;
-    pub(super) use evdev::{EventType, InputEventKind, Key};
+    pub(super) use evdev::{EventSummary, KeyCode};
 
     pub(super) struct Device {}
 
@@ -51,7 +51,7 @@ mod evd {
     pub(super) use evdev::*;
 }
 
-use evd::{Device, EventType, InputEventKind, Key};
+use evd::{Device, EventSummary, KeyCode};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub enum Direction {
@@ -146,13 +146,9 @@ pub fn handle_buttons(
 
         loop {
             for ev in device.fetch_events().unwrap() {
-                if ev.event_type() != EventType::KEY {
-                    continue;
-                }
-
-                let id = match ev.kind() {
-                    InputEventKind::Key(Key::KEY_HOME) => 0,
-                    InputEventKind::Key(Key::KEY_ESC) => 1,
+                let (id, value) = match ev.destructure() {
+                    EventSummary::Key(_, KeyCode::KEY_HOME, value) => (0, value),
+                    EventSummary::Key(_, KeyCode::KEY_ESC, value) => (1, value),
                     _ => continue,
                 };
 
@@ -160,7 +156,7 @@ pub fn handle_buttons(
                     block_on(task.cancel());
                 }
 
-                if ev.value() == 0 {
+                if value == 0 {
                     // Button release -> send event
                     if let Some(start) = start_time[id].take()
                         && let Ok(duration) = ev.timestamp().duration_since(start)
