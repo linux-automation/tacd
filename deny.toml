@@ -29,6 +29,7 @@ multiple-versions = "allow"
 [licenses]
 version = 2
 confidence-threshold = 0.8
+unused-allowed-license = "deny"
 
 allow = [
     "Apache-2.0",
