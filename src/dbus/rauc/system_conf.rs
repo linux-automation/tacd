@@ -45,6 +45,10 @@ fn polling_section(
         writeln!(&mut section, "interval-sec={}", interval.as_secs())?;
     }
 
+    let inhibit_files = primary_channel.inhibit_files.as_deref().unwrap_or_default();
+
+    writeln!(&mut section, "inhibit-files={inhibit_files}")?;
+
     let candidate_criteria = primary_channel
         .candidate_criteria
         .as_deref()
