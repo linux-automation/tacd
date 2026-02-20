@@ -375,7 +375,7 @@ async fn handle_connection(
     // - Clients don't care
     // - The WebSocket may be closed by the peer and not by us
     let stream_tx = stream_tx.lock().await.take().unwrap();
-    let mut ws = stream_tx.reunite(stream_rx).unwrap();
+    let mut ws = WebSocketStream::reunite(stream_tx, stream_rx).unwrap();
 
     let code = if res.is_err() {
         CloseCode::Error
@@ -384,14 +384,11 @@ async fn handle_connection(
     };
 
     let reason = match res {
-        Err(e) => e.to_string(),
-        Ok(_) => "".to_string(),
+        Err(e) => e.to_string().into(),
+        Ok(_) => "".into(),
     };
 
-    let close_frame = CloseFrame {
-        code,
-        reason: std::borrow::Cow::from(&reason),
-    };
+    let close_frame = CloseFrame { code, reason };
 
     let _ = ws.close(Some(close_frame)).await;
 }
