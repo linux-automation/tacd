@@ -21,7 +21,7 @@ use std::time::Instant;
 use anyhow::{anyhow, Result};
 use async_std::sync::{Arc, Mutex};
 use async_std::task::block_on;
-use rand::{thread_rng, Rng};
+use rand::random;
 
 use crate::measurement::{Measurement, Timestamp};
 
@@ -135,7 +135,7 @@ impl CalibratedChannel {
 
         value -= nominal;
         value *= decay;
-        value += (2.0 * thread_rng().gen::<f32>() - 1.0) * self.inner.noise;
+        value += (2.0 * random::<f32>() - 1.0) * self.inner.noise;
         value += self
             .inner
             .parents
