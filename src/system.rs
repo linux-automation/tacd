@@ -216,7 +216,7 @@ impl HardwareGeneration {
             "lxa,stm32mp157c-tac-gen1" => Ok(Self::Gen1),
             "lxa,stm32mp157c-tac-gen2" => Ok(Self::Gen2),
             "lxa,stm32mp153c-tac-gen3" => Ok(Self::Gen3),
-            gen => bail!("Running on unknown LXA TAC hardware generation \"{gen}\""),
+            generation => bail!("Running on unknown LXA TAC hardware generation \"{generation}\""),
         }
     }
 }

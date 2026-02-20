@@ -63,13 +63,13 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
     }
 
     if let Some(hardware_generation) = ui.res.system.hardware_generation.try_get() {
-        let gen = match hardware_generation {
+        let generation = match hardware_generation {
             HardwareGeneration::Gen1 => "Gen1",
             HardwareGeneration::Gen2 => "Gen2",
             HardwareGeneration::Gen3 => "Gen3",
         };
 
-        write!(&mut text, "generation: {gen} ")?;
+        write!(&mut text, "generation: {generation} ")?;
     }
 
     if let Some(soc_temperature) = ui.res.temperatures.soc_temperature.try_get() {
