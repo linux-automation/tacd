@@ -94,7 +94,7 @@ impl Channel {
 
         let mut channel_file: ChannelFile = {
             let content = read_to_string(path)?;
-            serde_yaml::from_str(&content)?
+            yaml_serde::from_str(&content)?
         };
 
         let polling_interval = match channel_file.polling_interval.take() {

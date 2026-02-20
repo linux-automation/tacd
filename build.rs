@@ -36,7 +36,7 @@ fn generate_openapi_include() {
     println!("cargo:rerun-if-changed=openapi.yaml");
     let openapi_json = {
         let yaml = read_to_string(cargo_dir.join("openapi.yaml")).unwrap();
-        let json: serde_json::Value = serde_yaml::from_str(&yaml).unwrap();
+        let json: serde_json::Value = yaml_serde::from_str(&yaml).unwrap();
         serde_json::to_vec(&json).unwrap()
     };
 
