@@ -48,7 +48,7 @@ fn polling_section(
     let inhibit_files = primary_channel
         .inhibit_files
         .as_deref()
-        .unwrap_or("/var/run/tacd/inhibit/setup-mode");
+        .unwrap_or("/var/run/tacd/inhibit/dut-pwr;/var/run/tacd/inhibit/setup-mode");
 
     writeln!(&mut section, "inhibit-files={inhibit_files}")?;
 

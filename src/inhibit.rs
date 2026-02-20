@@ -20,6 +20,7 @@ use std::{
     path::PathBuf,
 };
 
+use crate::dut_power::OutputState;
 use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
@@ -60,8 +61,21 @@ impl InhibitFile {
 
 pub fn run(
     wtb: &mut WatchedTasksBuilder,
+    dut_pwr: &crate::dut_power::DutPwrThread,
     setup_mode: &crate::setup_mode::SetupMode,
 ) -> anyhow::Result<()> {
+    let (dut_pwr_state_events, _) = dut_pwr.state.clone().subscribe_unbounded();
+    let dut_pwr_inhibit = InhibitFile::new("dut-pwr");
+
+    wtb.spawn_task("inhibit-dut-pwr-service", async move {
+        loop {
+            match dut_pwr_state_events.recv().await? {
+                OutputState::On => dut_pwr_inhibit.inhibit()?,
+                _ => dut_pwr_inhibit.release()?,
+            }
+        }
+    })?;
+
     let (setup_mode_events, _) = setup_mode.setup_mode.clone().subscribe_unbounded();
     let setup_mode_inhibit = InhibitFile::new("setup-mode");
     wtb.spawn_task("inhibit-setup-mode-service", async move {
