@@ -19,10 +19,10 @@ use std::marker::PhantomData;
 use std::ops::Not;
 use std::sync::{Arc, Mutex, Weak};
 
-use async_std::channel::{unbounded, Receiver, Sender, TrySendError};
+use async_std::channel::{Receiver, Sender, TrySendError, unbounded};
 use async_std::prelude::*;
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use unique_token::Unique;
 
@@ -492,9 +492,9 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
 #[cfg(test)]
 mod tests {
     use super::{AnyTopic, RetainedValue, Topic, TopicName};
-    use async_std::channel::{unbounded, Receiver};
+    use async_std::channel::{Receiver, unbounded};
     use async_std::sync::Arc;
-    use serde::{de::DeserializeOwned, Deserialize, Serialize};
+    use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
     #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
     struct SerTestType {

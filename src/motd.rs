@@ -15,7 +15,7 @@
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
 use std::fmt::{self, Display, Formatter};
-use std::fs::{create_dir_all, File};
+use std::fs::{File, create_dir_all};
 use std::io::{Seek, Write};
 use std::path::Path;
 
@@ -24,10 +24,10 @@ use futures::FutureExt;
 use nix::errno::Errno;
 use nix::mount::MsFlags;
 
+use crate::WatchedTasksBuilder;
 use crate::dut_power::OutputState;
 use crate::temperatures::Warning;
 use crate::usb_hub::OverloadedPort;
-use crate::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod setup {
@@ -135,9 +135,9 @@ impl Display for Motd {
             OutputState::Off | OutputState::OffFloating | OutputState::Changing => {}
             OutputState::InvertedPolarity => {
                 writeln!(
-                        f,
-                        "- {COLOR_RED}WARNING{COLOR_RESET}: The device under test was powered off due to inverted polarity.",
-                    )?;
+                    f,
+                    "- {COLOR_RED}WARNING{COLOR_RESET}: The device under test was powered off due to inverted polarity.",
+                )?;
             }
             OutputState::OverCurrent => {
                 writeln!(
@@ -153,9 +153,9 @@ impl Display for Motd {
             }
             OutputState::RealtimeViolation => {
                 writeln!(
-                        f,
-                        "- {COLOR_RED}WARNING{COLOR_RESET}: The device under test was powered because the TAC could not hold",
-                    )?;
+                    f,
+                    "- {COLOR_RED}WARNING{COLOR_RESET}: The device under test was powered because the TAC could not hold",
+                )?;
 
                 writeln!(f, "  its realtime guarantees.",)?;
             }

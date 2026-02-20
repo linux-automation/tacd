@@ -16,7 +16,7 @@
 
 use std::ffi::OsStr;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use async_std::sync::Arc;
 use nix::sys::utsname::uname;
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ use crate::broker::{BrokerBuilder, Topic};
 
 #[cfg(feature = "demo_mode")]
 mod read_dt_props {
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
 
     const DEMO_DATA_STR: &[(&str, &str)] = &[
         (
@@ -88,7 +88,7 @@ mod read_dt_props {
     use std::fs::read;
     use std::str::from_utf8;
 
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
 
     const DT_BASE: &str = "/sys/firmware/devicetree/base/";
 

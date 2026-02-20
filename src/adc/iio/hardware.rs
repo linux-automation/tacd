@@ -21,7 +21,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_std::channel::bounded;
 use async_std::sync::Arc;
 

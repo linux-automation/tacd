@@ -17,17 +17,17 @@
 use anyhow::anyhow;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use async_std::task::{spawn, JoinHandle};
+use async_std::task::{JoinHandle, spawn};
 use async_trait::async_trait;
 use embedded_graphics::{
-    mono_font::{ascii::FONT_10X20, ascii::FONT_8X13, MonoFont, MonoTextStyle},
+    mono_font::{MonoFont, MonoTextStyle, ascii::FONT_8X13, ascii::FONT_10X20},
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::{Circle, Line, PrimitiveStyle, PrimitiveStyleBuilder, Rectangle},
     text::{Alignment, Text},
 };
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::broker::{Native, SubscriptionHandle, Topic};
 use crate::ui::display::{Display, DisplayExclusive};

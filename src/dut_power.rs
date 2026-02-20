@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License along
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_std::channel::bounded;
 use async_std::prelude::*;
 use async_std::sync::{Arc, Weak};
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::adc::AdcChannel;
 use crate::broker::{BrokerBuilder, Topic};
-use crate::digital_io::{find_line, LineHandle, LineRequestFlags};
+use crate::digital_io::{LineHandle, LineRequestFlags, find_line};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
 use crate::system::HardwareGeneration;
 use crate::watched_tasks::WatchedTasksBuilder;
@@ -45,7 +45,7 @@ mod prio {
 mod prio {
     use std::convert::TryFrom;
 
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use thread_priority::*;
 
     pub fn realtime_priority() -> Result<()> {
@@ -614,8 +614,8 @@ mod tests {
     use crate::watched_tasks::WatchedTasksBuilder;
 
     use super::{
-        DutPwrThread, OutputRequest, OutputState, DISCHARGE_LINE_ASSERTED, MAX_CURRENT,
-        MAX_VOLTAGE, MIN_VOLTAGE, PWR_LINE_ASSERTED,
+        DISCHARGE_LINE_ASSERTED, DutPwrThread, MAX_CURRENT, MAX_VOLTAGE, MIN_VOLTAGE,
+        OutputRequest, OutputState, PWR_LINE_ASSERTED,
     };
 
     #[test]

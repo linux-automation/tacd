@@ -24,8 +24,8 @@ use embedded_graphics::{
 
 use super::widgets::*;
 use super::{
-    row_anchor, ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display,
-    InputEvent, Screen, Ui,
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
+    Ui, row_anchor,
 };
 use crate::broker::Topic;
 use crate::measurement::Measurement;

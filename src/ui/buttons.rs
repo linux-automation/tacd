@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_std::sync::Arc;
-use async_std::task::{block_on, sleep, spawn, JoinHandle};
+use async_std::task::{JoinHandle, block_on, sleep, spawn};
 use serde::{Deserialize, Serialize};
 
 use crate::broker::Topic;
@@ -162,11 +162,11 @@ pub fn handle_buttons(
 
                 if ev.value() == 0 {
                     // Button release -> send event
-                    if let Some(start) = start_time[id].take() {
-                        if let Ok(duration) = ev.timestamp().duration_since(start) {
-                            let button_event = ButtonEvent::release_from_id_duration(id, duration);
-                            topic.set(button_event);
-                        }
+                    if let Some(start) = start_time[id].take()
+                        && let Ok(duration) = ev.timestamp().duration_since(start)
+                    {
+                        let button_event = ButtonEvent::release_from_id_duration(id, duration);
+                        topic.set(button_event);
                     }
                 } else {
                     // Button press -> register start time and send event

@@ -21,7 +21,7 @@ use std::path::Path;
 use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use tide::{http::mime, Request, Response, Server};
+use tide::{Request, Response, Server, http::mime};
 
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;

@@ -118,11 +118,7 @@ impl UnitFilter {
             (None, Some(_)) => false,
         };
 
-        if should_send {
-            Some(record)
-        } else {
-            None
-        }
+        if should_send { Some(record) } else { None }
     }
 }
 

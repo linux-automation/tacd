@@ -17,7 +17,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_std::task::sleep;

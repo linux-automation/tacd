@@ -18,7 +18,7 @@ use std::convert::TryFrom;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_std::sync::{Arc, Mutex};
 use async_std::task::block_on;
 use rand::random;

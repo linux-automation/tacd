@@ -214,10 +214,8 @@ impl Systemd {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();
 
             while let Some(req) = reboot_reqs.next().await {
-                if req {
-                    if let Err(e) = manager.reboot().await {
-                        warn!("Failed to trigger reboot: {}", e);
-                    }
+                if req && let Err(e) = manager.reboot().await {
+                    warn!("Failed to trigger reboot: {}", e);
                 }
             }
 

@@ -16,7 +16,7 @@
 
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
-use std::str::{from_utf8, FromStr};
+use std::str::{FromStr, from_utf8};
 
 use sysfs_class::trait_method;
 

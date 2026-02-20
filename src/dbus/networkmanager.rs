@@ -46,7 +46,7 @@ mod optional_includes {
     pub(super) use zbus::Connection;
     pub(super) use zvariant::OwnedObjectPath;
 
-    pub(super) use super::devices::{DeviceProxy, WiredProxy, NM_DEVICE_STATE_ACTIVATED};
+    pub(super) use super::devices::{DeviceProxy, NM_DEVICE_STATE_ACTIVATED, WiredProxy};
     pub(super) use super::ipv4_config::IP4ConfigProxy;
     pub(super) use super::manager::NetworkManagerProxy;
 }

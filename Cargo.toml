@@ -2,7 +2,7 @@
 name = "tacd"
 version = "0.2.0"
 authors = ["Jan Luebbe <jlu@pengutronix.de>", "Leonard Göhrs <lgo@pengutronix.de>"]
-edition = "2018"
+edition = "2024"
 repository = "https://github.com/linux-automation/tacd.git"
 license = "GPL-2.0-only"
 

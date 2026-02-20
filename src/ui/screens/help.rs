@@ -20,8 +20,8 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use embedded_graphics::prelude::Point;
 
-use super::widgets::*;
 use super::Display;
+use super::widgets::*;
 use super::{
     ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, InputEvent, Screen, Ui,
 };

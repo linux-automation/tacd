@@ -20,7 +20,7 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use chrono::DateTime;
 use embedded_graphics::{
-    mono_font::{ascii::FONT_6X10, MonoTextStyle},
+    mono_font::{MonoTextStyle, ascii::FONT_6X10},
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
