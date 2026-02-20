@@ -1166,6 +1166,8 @@ components:
             type: boolean
           force_auto_install:
             type: boolean
+          inhibit_files:
+            type: string
           candidate_criteria:
             type: string
           install_criteria:
