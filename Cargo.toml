@@ -28,7 +28,7 @@ futures-lite = "2.6"
 futures-util = "0.3"
 gpio-cdev = "0.6"
 html-escape = "0.2"
-industrial-io = { version = "0.5", default-features = false }
+industrial-io = { version = "0.6" }
 log = { version = "0.4", features = ["release_max_level_warn"]}
 mqtt-protocol = "0.12"
 nix = { version = "0.31", features = ["feature", "mount"] }

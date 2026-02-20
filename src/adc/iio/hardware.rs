@@ -25,7 +25,7 @@ use anyhow::{Context, Result, anyhow};
 use async_std::channel::bounded;
 use async_std::sync::Arc;
 
-use industrial_io::{Buffer, Channel};
+use industrial_io::{Buffer, Channel, Direction};
 
 use log::{debug, error, warn};
 use thread_priority::*;
@@ -220,7 +220,7 @@ impl IioThread {
             .iter()
             .map(|ChannelDesc { kernel_name, .. }| {
                 let ch = adc
-                    .find_channel(kernel_name, false)
+                    .find_channel(kernel_name, Direction::Input)
                     .ok_or_else(|| anyhow!("Failed to open iio channel {}", kernel_name));
 
                 if let Ok(ch) = ch.as_ref() {
@@ -308,7 +308,7 @@ impl IioThread {
                 }
 
                 let values = channels.iter().map(|ch| {
-                    let buf_sum: u32 = buf.channel_iter::<u16>(ch).map(|v| v as u32).sum();
+                    let buf_sum: u32 = buf.channel_iter::<u16>(ch).map(|v| *v as u32).sum();
                     (buf_sum / (buf.capacity() as u32)) as u16
                 });
 
