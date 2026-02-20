@@ -790,6 +790,30 @@ paths:
         '400':
           description: The value could not be parsed as boolean
 
+  /v1/tac/update/inhibit/dut_power:
+    get:
+      summary: Whether the TAC should look for and install updates while the DUT is powered
+      tags: [Updating]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: boolean
+    put:
+      summary: Set whether polling for updates while the DUT is powered is inhibited or not
+      tags: [Updating]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: The configuration was applied
+        '400':
+          description: The value could not be parsed as boolean
+
   /v1/tac/update/operation:
     get:
       summary: Get the currently running system update operation

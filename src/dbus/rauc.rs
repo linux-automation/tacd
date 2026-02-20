@@ -144,6 +144,7 @@ pub struct ConfigTopics {
     pub reload: Arc<Topic<bool>>,
     pub enable_polling: Arc<Topic<bool>>,
     pub enable_auto_install: Arc<Topic<bool>>,
+    pub inhibit_on_dut_pwr: Arc<Topic<bool>>,
 }
 
 pub struct Rauc {
@@ -223,9 +224,11 @@ async fn channel_list_update_task(
     let (reload_stream, _) = config.reload.subscribe_unbounded();
     let (mut enable_polling_stream, _) = config.enable_polling.subscribe_unbounded();
     let (mut enable_auto_install_stream, _) = config.enable_auto_install.subscribe_unbounded();
+    let (mut inhibit_on_dut_pwr_stream, _) = config.inhibit_on_dut_pwr.subscribe_unbounded();
 
     let mut enable_polling = enable_polling_stream.next().await.unwrap_or(false);
     let mut enable_auto_install = enable_auto_install_stream.next().await.unwrap_or(false);
+    let mut inhibit_on_dut_pwr = inhibit_on_dut_pwr_stream.next().await.unwrap_or(true);
 
     'reload_loop: loop {
         futures::select! {
@@ -239,6 +242,9 @@ async fn channel_list_update_task(
             }
             enable_auto_install_new = enable_auto_install_stream.recv().fuse() => {
                 enable_auto_install = enable_auto_install_new?;
+            }
+            inhibit_on_dut_pwr_new = inhibit_on_dut_pwr_stream.recv().fuse() => {
+                inhibit_on_dut_pwr = inhibit_on_dut_pwr_new?;
             }
         };
 
@@ -255,6 +261,7 @@ async fn channel_list_update_task(
             new_channels.primary(),
             enable_polling,
             enable_auto_install,
+            inhibit_on_dut_pwr,
             inhibit_files,
         )?;
 
@@ -299,6 +306,14 @@ impl Rauc {
                 true,
                 true,
                 Some(false),
+                1,
+            ),
+            inhibit_on_dut_pwr: bb.topic(
+                "/v1/tac/update/inhibit/dut_power",
+                true,
+                true,
+                true,
+                Some(true),
                 1,
             ),
         };

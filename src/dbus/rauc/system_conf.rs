@@ -28,6 +28,7 @@ fn polling_section(
     primary_channel: Option<&Channel>,
     polling: bool,
     auto_install: bool,
+    inhibit_on_dut_pwr: bool,
     inhibit_files: &'static InhibitFiles,
 ) -> Result<Option<String>, std::fmt::Error> {
     // If no primary channel is configured or if polling is not enabled,
@@ -47,11 +48,17 @@ fn polling_section(
         writeln!(&mut section, "interval-sec={}", interval.as_secs())?;
     }
 
-    writeln!(
+    write!(
         &mut section,
         "inhibit-files={}",
         inhibit_files.setup_mode.path
     )?;
+
+    if inhibit_on_dut_pwr {
+        write!(&mut section, ";{}", inhibit_files.dut_pwr.path)?;
+    }
+
+    writeln!(&mut section)?;
 
     let candidate_criteria = primary_channel
         .candidate_criteria
@@ -82,6 +89,7 @@ pub fn update_system_conf(
     primary_channel: Option<&Channel>,
     enable_polling: bool,
     enable_auto_install: bool,
+    inhibit_on_dut_pwr: bool,
     inhibit_files: &'static InhibitFiles,
 ) -> std::io::Result<bool> {
     let dynamic_conf = {
@@ -98,7 +106,13 @@ pub fn update_system_conf(
         let polling = enable_polling || force_polling;
         let auto_install = enable_auto_install || force_auto_install;
 
-        match polling_section(primary_channel, polling, auto_install, inhibit_files) {
+        match polling_section(
+            primary_channel,
+            polling,
+            auto_install,
+            inhibit_on_dut_pwr,
+            inhibit_files,
+        ) {
             Ok(Some(ps)) => {
                 // We use the config in /usr/lib as a template ...
                 let static_conf = read_to_string(STATIC_CONF_PATH)?;

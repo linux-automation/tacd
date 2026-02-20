@@ -4,6 +4,7 @@
     "/v1/tac/display/show_help": false,
     "/v1/tac/setup_mode": false,
     "/v1/tac/update/enable_auto_install": true,
-    "/v1/tac/update/enable_polling": true
+    "/v1/tac/update/enable_polling": true,
+    "/v1/tac/update/inhibit/dut_power": true
   }
 }
