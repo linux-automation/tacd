@@ -27,10 +27,10 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22.15.0
+          node-version: "24.13.0"
       - run: npx prettier@=3.3.3 --check .
 
   license:
@@ -40,10 +40,10 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22.15.0
+          node-version: "24.13.0"
       - name: npx license-checker
         run: >
           npx license-checker --summary --excludePrivatePackages --onlyAllow
@@ -54,15 +54,15 @@ jobs:
       fail-fast: false # Run against all versions even if one fails
       matrix:
         version:
-          - "22.14.0" # Yocto walnascar
+          - "22.22.0" # Yocto whinlatter
     name: npm run build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.version }}
       - run: npm ci
@@ -75,9 +75,9 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22.15.0
+          node-version: "24.13.0"
       - run: npm ci
       - run: npm run test

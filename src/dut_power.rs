@@ -245,7 +245,7 @@ impl<const N: usize> MedianFilter<N> {
                 sorted
             };
 
-            if N % 2 == 0 {
+            if N.is_multiple_of(2) {
                 Some((sorted[N / 2 - 1] + sorted[N / 2]) / 2.0)
             } else {
                 Some(sorted[N / 2])
