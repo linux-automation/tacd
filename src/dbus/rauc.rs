@@ -201,6 +201,46 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
     }
 }
 
+#[cfg(not(feature = "demo_mode"))]
+fn flatten_slot_status(slots: Vec<(String, HashMap<String, zvariant::OwnedValue>)>) -> SlotStatus {
+    slots
+        .into_iter()
+        .map(|(slot_name, slot_info)| {
+            let mut info: HashMap<String, String> = slot_info
+                .into_iter()
+                .map(|(k, v)| {
+                    // Convert integers to strings as raw zvariant values are
+                    // unusable when json serialized and I can not be bothered
+                    // to fiddle around with an enum that wraps strings and integers
+                    // or something like that
+                    let ss = v.downcast_ref::<String>();
+                    let s32 = v.downcast_ref::<u32>().map(|i| format!("{i}"));
+                    let s64 = v.downcast_ref::<u64>().map(|i| format!("{i}"));
+
+                    // Some of the field names make defining a "RaucSlot" type
+                    // in Typescript difficult. Not matching the names defined
+                    // in RAUC's API is also not great, but the lesser evil in
+                    // this case.
+                    let k = k
+                        .replace("type", "fs_type")
+                        .replace("class", "slot_class")
+                        .replace(['.', '-'], "_");
+
+                    (k, ss.or(s32).or(s64).unwrap_or_default())
+                })
+                .collect();
+
+            // Include the (unmangled) slot name as a field in the slot
+            // dict, once again to make life in the Web Interface easier.
+            info.insert("name".to_string(), slot_name.clone());
+
+            // Remove "." from the dictionary key to make defining a typescript
+            // type easier ("rootfs.0" -> "rootfs_0").
+            (slot_name.replace('.', "_"), info)
+        })
+        .collect()
+}
+
 async fn channel_list_update_task(
     conn: Arc<Connection>,
     reload: Arc<Topic<bool>>,
@@ -389,42 +429,7 @@ impl Rauc {
                 // This is mostly relevant for "installing" -> "idle" transitions
                 // but it can't hurt to do it on any transition.
                 if let Ok(slots) = proxy.get_slot_status().await {
-                    let slots = slots
-                        .into_iter()
-                        .map(|(slot_name, slot_info)| {
-                            let mut info: HashMap<String, String> = slot_info
-                                .into_iter()
-                                .map(|(k, v)| {
-                                    // Convert integers to strings as raw zvariant values are
-                                    // unusable when json serialized and I can not be bothered
-                                    // to fiddle around with an enum that wraps strings and integers
-                                    // or something like that
-                                    let ss = v.downcast_ref::<String>();
-                                    let s32 = v.downcast_ref::<u32>().map(|i| format!("{i}"));
-                                    let s64 = v.downcast_ref::<u64>().map(|i| format!("{i}"));
-
-                                    // Some of the field names make defining a "RaucSlot" type
-                                    // in Typescript difficult. Not matching the names defined
-                                    // in RAUC's API is also not great, but the lesser evil in
-                                    // this case.
-                                    let k = k
-                                        .replace("type", "fs_type")
-                                        .replace("class", "slot_class")
-                                        .replace(['.', '-'], "_");
-
-                                    (k, ss.or(s32).or(s64).unwrap_or_default())
-                                })
-                                .collect();
-
-                            // Include the (unmangled) slot name as a field in the slot
-                            // dict, once again to make life in the Web Interface easier.
-                            info.insert("name".to_string(), slot_name.clone());
-
-                            // Remove "." from the dictionary key to make defining a typescript
-                            // type easier ("rootfs.0" -> "rootfs_0").
-                            (slot_name.replace('.', "_"), info)
-                        })
-                        .collect();
+                    let slots = flatten_slot_status(slots);
 
                     // Provide a simple yes/no "should reboot into other slot?" information
                     // based on the bundle versions in the booted slot and the other slot.
