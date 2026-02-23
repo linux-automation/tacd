@@ -125,7 +125,10 @@ impl From<UpdateRequestDe> for UpdateRequest {
     }
 }
 
-type SlotStatus = HashMap<String, HashMap<String, String>>;
+type StringStringMap = HashMap<String, String>;
+type SlotStatus = HashMap<String, StringStringMap>;
+#[cfg(not(feature = "demo_mode"))]
+type SlotAndIsPrimary<'a> = (Option<&'a StringStringMap>, bool);
 
 pub struct Rauc {
     pub operation: Arc<Topic<String>>,
@@ -143,7 +146,10 @@ pub struct Rauc {
 }
 
 #[cfg(not(feature = "demo_mode"))]
-fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String>) -> Result<bool> {
+fn booted_slot_other_slot<'a>(
+    slot_status: &'a SlotStatus,
+    primary: Option<String>,
+) -> Result<(SlotAndIsPrimary<'a>, SlotAndIsPrimary<'a>)> {
     let rootfs_0 = slot_status.get("rootfs_0");
     let rootfs_1 = slot_status.get("rootfs_1");
 
@@ -154,23 +160,24 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
     let rootfs_0_booted = rootfs_0.and_then(|r| r.get("state")).map(|s| s == "booted");
     let rootfs_1_booted = rootfs_1.and_then(|r| r.get("state")).map(|s| s == "booted");
 
+    match (rootfs_0_booted, rootfs_1_booted) {
+        (Some(true), Some(true)) => bail!("Two booted RAUC slots at the same time"),
+        (Some(true), _) => Ok((
+            (rootfs_0, rootfs_0_is_primary),
+            (rootfs_1, rootfs_1_is_primary),
+        )),
+        (_, Some(true)) => Ok((
+            (rootfs_1, rootfs_1_is_primary),
+            (rootfs_0, rootfs_0_is_primary),
+        )),
+        _ => bail!("No booted RAUC slot"),
+    }
+}
+
+#[cfg(not(feature = "demo_mode"))]
+fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String>) -> Result<bool> {
     let ((booted_slot, booted_is_primary), (other_slot, other_is_primary)) =
-        match (rootfs_0_booted, rootfs_1_booted) {
-            (Some(true), Some(true)) => {
-                bail!("Two booted RAUC slots at the same time");
-            }
-            (Some(true), _) => (
-                (rootfs_0, rootfs_0_is_primary),
-                (rootfs_1, rootfs_1_is_primary),
-            ),
-            (_, Some(true)) => (
-                (rootfs_1, rootfs_1_is_primary),
-                (rootfs_0, rootfs_0_is_primary),
-            ),
-            _ => {
-                bail!("No booted RAUC slot");
-            }
-        };
+        booted_slot_other_slot(slot_status, primary)?;
 
     let booted_good = booted_slot
         .and_then(|r| r.get("boot_status"))
