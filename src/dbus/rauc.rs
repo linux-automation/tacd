@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
 use futures_util::FutureExt;
@@ -66,12 +66,39 @@ mod imports {
             Ok(())
         }
     }
+
+    pub(super) struct InstallerProxy<'a> {
+        _dummy: &'a (),
+    }
+
+    impl InstallerProxy<'_> {
+        pub async fn new<C>(_conn: C) -> Option<Self> {
+            Some(Self { _dummy: &() })
+        }
+
+        pub async fn get_slot_status(
+            &self,
+        ) -> zbus::Result<
+            Vec<(
+                String,
+                std::collections::HashMap<String, zbus::zvariant::OwnedValue>,
+            )>,
+        > {
+            Ok(Vec::new())
+        }
+
+        pub async fn mark(
+            &self,
+            _state: &str,
+            _slot_identifier: &str,
+        ) -> zbus::Result<(String, String)> {
+            Ok(("".into(), "".into()))
+        }
+    }
 }
 
 #[cfg(not(feature = "demo_mode"))]
 mod imports {
-    pub(super) use anyhow::anyhow;
-
     pub(super) const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
 }
 
@@ -127,7 +154,6 @@ impl From<UpdateRequestDe> for UpdateRequest {
 
 type StringStringMap = HashMap<String, String>;
 type SlotStatus = HashMap<String, StringStringMap>;
-#[cfg(not(feature = "demo_mode"))]
 type SlotAndIsPrimary<'a> = (Option<&'a StringStringMap>, bool);
 
 pub struct Rauc {
@@ -145,7 +171,6 @@ pub struct Rauc {
     pub enable_auto_install: Arc<Topic<bool>>,
 }
 
-#[cfg(not(feature = "demo_mode"))]
 fn booted_slot_other_slot<'a>(
     slot_status: &'a SlotStatus,
     primary: Option<String>,
@@ -208,7 +233,15 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
     }
 }
 
-#[cfg(not(feature = "demo_mode"))]
+fn booted_slot_is_good(slot_status: &SlotStatus) -> Result<bool> {
+    let ((booted_slot, _), (_, _)) = booted_slot_other_slot(slot_status, None)?;
+
+    booted_slot
+        .and_then(|r| r.get("boot_status"))
+        .map(|s| s == "good")
+        .ok_or(anyhow!("Slot did not contain boot status"))
+}
+
 fn flatten_slot_status(slots: Vec<(String, HashMap<String, zvariant::OwnedValue>)>) -> SlotStatus {
     slots
         .into_iter()
@@ -256,6 +289,7 @@ async fn channel_list_update_task(
     channels: Arc<Topic<Channels>>,
     rauc_service: Service,
 ) -> Result<()> {
+    let installer = InstallerProxy::new(&conn).await.unwrap();
     let poller = PollerProxy::new(&conn).await.unwrap();
 
     let (reload_stream, _) = reload.subscribe_unbounded();
@@ -297,6 +331,29 @@ async fn channel_list_update_task(
         if should_reload {
             info!("New RAUC config written. Triggering daemon restart.");
 
+            // At least for now RAUC polling only runs when the booted slot was
+            // marked as good during the current service runtime.
+            // This means we have to mark the slot as good again after
+            // restarting the service, but only if it was already marked good
+            // before.
+            let mark_good_again = {
+                let slot_status: Result<_> =
+                    installer.get_slot_status().await.map_err(|e| e.into());
+                let booted_slot_is_good = slot_status
+                    .map(flatten_slot_status)
+                    .and_then(|s| booted_slot_is_good(&s));
+
+                match booted_slot_is_good {
+                    Ok(mga) => mga,
+                    Err(e) => {
+                        warn!(
+                            "Failed to determine if current slot is marked good: {e}. Assuming no."
+                        );
+                        false
+                    }
+                }
+            };
+
             let (mut status, status_subscription) =
                 rauc_service.status.clone().subscribe_unbounded();
             rauc_service.action.set(ServiceAction::Restart);
@@ -324,6 +381,15 @@ async fn channel_list_update_task(
             info!("Done");
 
             status_subscription.unsubscribe();
+
+            // Mark the booted slot as good again if it was marked as good before.
+            if mark_good_again {
+                info!("Booted slot was marked good before, so mark it good again");
+
+                if let Err(e) = installer.mark("good", "booted").await {
+                    warn!("Failed to re-mark slot as good: {e}");
+                }
+            }
         } else {
             info!("Config is up to date. Will not reload.");
         }
