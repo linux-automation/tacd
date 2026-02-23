@@ -70,7 +70,7 @@ mod imports {
 
 #[cfg(not(feature = "demo_mode"))]
 mod imports {
-    pub(super) use anyhow::bail;
+    pub(super) use anyhow::anyhow;
 
     pub(super) const CHANNELS_DIR: &str = "/usr/share/tacd/update_channels";
 }
@@ -161,7 +161,7 @@ fn booted_slot_other_slot<'a>(
     let rootfs_1_booted = rootfs_1.and_then(|r| r.get("state")).map(|s| s == "booted");
 
     match (rootfs_0_booted, rootfs_1_booted) {
-        (Some(true), Some(true)) => bail!("Two booted RAUC slots at the same time"),
+        (Some(true), Some(true)) => Err(anyhow!("Two booted RAUC slots at the same time")),
         (Some(true), _) => Ok((
             (rootfs_0, rootfs_0_is_primary),
             (rootfs_1, rootfs_1_is_primary),
@@ -170,7 +170,7 @@ fn booted_slot_other_slot<'a>(
             (rootfs_1, rootfs_1_is_primary),
             (rootfs_0, rootfs_0_is_primary),
         )),
-        _ => bail!("No booted RAUC slot"),
+        _ => Err(anyhow!("No booted RAUC slot")),
     }
 }
 
@@ -202,9 +202,9 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
         (false, true, _, _) => Ok(true),
         (true, true, true, false) => Ok(false),
         (true, true, false, true) => Ok(true),
-        (false, false, _, _) => bail!("No bootable slot present"),
-        (_, _, false, false) => bail!("No primary slot present"),
-        (true, true, true, true) => bail!("Two primary slots present"),
+        (false, false, _, _) => Err(anyhow!("No bootable slot present")),
+        (_, _, false, false) => Err(anyhow!("No primary slot present")),
+        (true, true, true, true) => Err(anyhow!("Two primary slots present")),
     }
 }
 
