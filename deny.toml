@@ -29,6 +29,7 @@ multiple-versions = "allow"
 [licenses]
 version = 2
 confidence-threshold = 0.8
+unused-allowed-license = "deny"
 
 allow = [
     "Apache-2.0",
@@ -39,7 +40,6 @@ allow = [
     "LGPL-2.1-or-later WITH GCC-exception-2.0",
     "MIT",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "Unlicense",
     "WTFPL",
     "Zlib",

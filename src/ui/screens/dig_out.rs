@@ -22,8 +22,8 @@ use embedded_graphics::{
 
 use super::widgets::*;
 use super::{
-    draw_border, row_anchor, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen,
-    Screen, Ui,
+    ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen, Screen, Ui, draw_border,
+    row_anchor,
 };
 use crate::broker::Topic;
 use crate::measurement::Measurement;

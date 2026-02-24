@@ -16,7 +16,7 @@ pub const NM_DEVICE_STATE_ACTIVATED: u32 = 100;
     interface = "org.freedesktop.NetworkManager.Device.Statistics",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait Statistics {
+pub trait Statistics {
     /// RefreshRateMs property
     #[zbus(property)]
     fn refresh_rate_ms(&self) -> zbus::Result<u32>;
@@ -36,7 +36,7 @@ trait Statistics {
     interface = "org.freedesktop.NetworkManager.Device.Bridge",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait Bridge {
+pub trait Bridge {
     /// Carrier property
     #[zbus(property)]
     fn carrier(&self) -> zbus::Result<bool>;
@@ -54,7 +54,7 @@ trait Bridge {
     interface = "org.freedesktop.NetworkManager.Device.Generic",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait Generic {
+pub trait Generic {
     /// HwAddress property
     #[zbus(property)]
     fn hw_address(&self) -> zbus::Result<String>;
@@ -68,7 +68,7 @@ trait Generic {
     interface = "org.freedesktop.NetworkManager.Device",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait Device {
+pub trait Device {
     /// Delete method
     fn delete(&self) -> zbus::Result<()>;
 
@@ -242,7 +242,7 @@ trait Device {
     interface = "org.freedesktop.NetworkManager.Device.Wired",
     default_service = "org.freedesktop.NetworkManager"
 )]
-trait Wired {
+pub trait Wired {
     /// Carrier property
     #[zbus(property)]
     fn carrier(&self) -> zbus::Result<bool>;

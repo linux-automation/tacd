@@ -41,7 +41,7 @@ mod gpio {
     pub use hardware::*;
 }
 
-pub use gpio::{find_line, LineHandle, LineRequestFlags};
+pub use gpio::{LineHandle, LineRequestFlags, find_line};
 
 pub struct DigitalIo {
     pub out_0: Arc<Topic<bool>>,

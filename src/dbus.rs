@@ -48,8 +48,9 @@ mod zb {
 
 #[cfg(not(feature = "demo_mode"))]
 mod zb {
+    pub use zbus::Connection;
     pub(super) use zbus::Result;
-    pub use zbus::{Connection, ConnectionBuilder};
+    pub use zbus::connection::Builder as ConnectionBuilder;
 }
 
 use zb::{Connection, ConnectionBuilder, Result};

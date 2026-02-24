@@ -15,15 +15,15 @@
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
-use std::fs::{read_dir, read_to_string, DirEntry};
+use std::fs::{DirEntry, read_dir, read_to_string};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
-use super::{compare_versions, InstallerProxy, SlotStatus};
+use super::{InstallerProxy, SlotStatus, compare_versions};
 
 #[cfg(feature = "demo_mode")]
 const ENABLE_DIR: &str = "demo_files/etc/rauc/certificates-enabled";
@@ -94,7 +94,7 @@ impl Channel {
 
         let mut channel_file: ChannelFile = {
             let content = read_to_string(path)?;
-            serde_yaml::from_str(&content)?
+            yaml_serde::from_str(&content)?
         };
 
         let polling_interval = match channel_file.polling_interval.take() {
@@ -105,9 +105,9 @@ impl Channel {
                     Some('d') => ONE_DAY,
                     _ => {
                         bail!(
-                        "The polling_interval in \"{}\" does not have one of m, h or d as suffix",
-                        file_name()
-                    );
+                            "The polling_interval in \"{}\" does not have one of m, h or d as suffix",
+                            file_name()
+                        );
                     }
                 };
 

@@ -22,7 +22,7 @@ use anyhow::Result;
 use async_std::channel::Receiver;
 use async_std::stream::StreamExt;
 use async_std::sync::Arc;
-use async_std::task::{sleep, spawn, JoinHandle};
+use async_std::task::{JoinHandle, sleep, spawn};
 use log::warn;
 use serde::{Deserialize, Serialize};
 
@@ -578,7 +578,7 @@ impl Rauc {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{would_reboot_into_other_slot, SlotStatus};
+    use super::{SlotStatus, would_reboot_into_other_slot};
 
     #[test]
     fn reboot_notifications() {
@@ -651,7 +651,10 @@ mod tests {
                     panic!("{:?}", e);
                 }
                 (Ok(res), Err(_)) => {
-                    panic!("Slot status {:?} with primary {:?} returned Ok({})) but should have errored", slots, primary, res);
+                    panic!(
+                        "Slot status {:?} with primary {:?} returned Ok({})) but should have errored",
+                        slots, primary, res
+                    );
                 }
             }
         }

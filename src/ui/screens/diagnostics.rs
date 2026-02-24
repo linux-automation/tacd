@@ -20,7 +20,7 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use chrono::DateTime;
 use embedded_graphics::{
-    mono_font::{ascii::FONT_6X10, MonoTextStyle},
+    mono_font::{MonoTextStyle, ascii::FONT_6X10},
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
@@ -63,13 +63,13 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
     }
 
     if let Some(hardware_generation) = ui.res.system.hardware_generation.try_get() {
-        let gen = match hardware_generation {
+        let generation = match hardware_generation {
             HardwareGeneration::Gen1 => "Gen1",
             HardwareGeneration::Gen2 => "Gen2",
             HardwareGeneration::Gen3 => "Gen3",
         };
 
-        write!(&mut text, "generation: {gen} ")?;
+        write!(&mut text, "generation: {generation} ")?;
     }
 
     if let Some(soc_temperature) = ui.res.temperatures.soc_temperature.try_get() {

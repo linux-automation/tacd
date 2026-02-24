@@ -17,20 +17,20 @@
 use std::collections::HashMap;
 use std::io::Cursor;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use async_std::channel::bounded;
 use async_std::sync::{Arc, Mutex};
 use async_std::task::spawn;
 
-use async_tungstenite::tungstenite::{
-    protocol::{
-        frame::{coding::CloseCode, CloseFrame},
-        Role,
-    },
-    Message,
-};
 use async_tungstenite::WebSocketStream;
+use async_tungstenite::tungstenite::{
+    Message,
+    protocol::{
+        Role,
+        frame::{CloseFrame, coding::CloseCode},
+    },
+};
 
 use base64::Engine;
 
@@ -38,14 +38,14 @@ use futures_lite::future::race;
 use futures_util::future::Either;
 use futures_util::{FutureExt, SinkExt, StreamExt};
 
+use mqtt::TopicFilter;
 use mqtt::control::variable_header::{ConnectReturnCode, ProtocolLevel};
 use mqtt::packet::suback::SubscribeReturnCode;
-use mqtt::TopicFilter;
-use mqtt::{packet::*, Decodable, Encodable};
+use mqtt::{Decodable, Encodable, packet::*};
 
-use sha1::{digest::Update, Digest, Sha1};
+use sha1::{Digest, Sha1, digest::Update};
 use tide::http::format_err;
-use tide::http::headers::{HeaderName, CONNECTION, UPGRADE};
+use tide::http::headers::{CONNECTION, HeaderName, UPGRADE};
 use tide::http::upgrade::Connection;
 use tide::{Request, Response, StatusCode};
 
@@ -334,11 +334,11 @@ async fn handle_connection(
                     .iter()
                     .find(|t| t.web_writable() && &t.path()[..] == pub_pkg.topic_name());
 
-                if let Some(topic) = topic {
-                    if let Err(e) = topic.set_from_bytes(pub_pkg.payload()) {
-                        res = Err(e.into());
-                        break 'connection;
-                    }
+                if let Some(topic) = topic
+                    && let Err(e) = topic.set_from_bytes(pub_pkg.payload())
+                {
+                    res = Err(e.into());
+                    break 'connection;
                 }
             }
             VariablePacket::PingreqPacket(_) => {
@@ -375,7 +375,7 @@ async fn handle_connection(
     // - Clients don't care
     // - The WebSocket may be closed by the peer and not by us
     let stream_tx = stream_tx.lock().await.take().unwrap();
-    let mut ws = stream_tx.reunite(stream_rx).unwrap();
+    let mut ws = WebSocketStream::reunite(stream_tx, stream_rx).unwrap();
 
     let code = if res.is_err() {
         CloseCode::Error
@@ -384,14 +384,11 @@ async fn handle_connection(
     };
 
     let reason = match res {
-        Err(e) => e.to_string(),
-        Ok(_) => "".to_string(),
+        Err(e) => e.to_string().into(),
+        Ok(_) => "".into(),
     };
 
-    let close_frame = CloseFrame {
-        code,
-        reason: std::borrow::Cow::from(&reason),
-    };
+    let close_frame = CloseFrame { code, reason };
 
     let _ = ws.close(Some(close_frame)).await;
 }

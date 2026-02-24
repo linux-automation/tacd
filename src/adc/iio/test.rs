@@ -17,7 +17,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_std::sync::Arc;
 
 use crate::measurement::{Measurement, Timestamp};

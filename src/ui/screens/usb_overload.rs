@@ -24,12 +24,12 @@ use embedded_graphics::{
 
 use super::widgets::*;
 use super::{
-    row_anchor, ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display,
-    InputEvent, Screen, Ui,
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
+    Ui, row_anchor,
 };
 use crate::broker::Topic;
 use crate::measurement::Measurement;
-use crate::usb_hub::{OverloadedPort, MAX_PORT_CURRENT, MAX_TOTAL_CURRENT};
+use crate::usb_hub::{MAX_PORT_CURRENT, MAX_TOTAL_CURRENT, OverloadedPort};
 use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UsbOverload;

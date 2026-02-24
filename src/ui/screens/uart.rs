@@ -20,7 +20,7 @@ use embedded_graphics::prelude::*;
 
 use super::widgets::*;
 use super::{
-    draw_border, ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen, Screen, Ui,
+    ActivatableScreen, ActiveScreen, Display, InputEvent, NormalScreen, Screen, Ui, draw_border,
 };
 use crate::broker::Topic;
 

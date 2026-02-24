@@ -16,7 +16,7 @@
 
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use async_std::task::sleep;
 
 use crate::dut_power::TickReader;
@@ -43,7 +43,7 @@ mod sd {
     pub(super) use systemd::daemon::*;
 }
 
-use sd::{notify, watchdog_enabled, STATE_READY, STATE_WATCHDOG};
+use sd::{STATE_READY, STATE_WATCHDOG, notify, watchdog_enabled};
 
 pub struct Watchdog {
     interval: Duration,

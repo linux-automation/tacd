@@ -21,8 +21,8 @@ use serde::{Deserialize, Serialize};
 use super::buttons::Source;
 use super::widgets::*;
 use super::{
-    draw_border, row_anchor, ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter,
-    Display, InputEvent, NormalScreen, Screen, Ui,
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent,
+    NormalScreen, Screen, Ui, draw_border, row_anchor,
 };
 use crate::broker::Topic;
 use crate::dbus::networkmanager::LinkInfo;

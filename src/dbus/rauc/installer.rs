@@ -9,7 +9,7 @@ use zbus::proxy;
     default_service = "de.pengutronix.rauc",
     default_path = "/"
 )]
-trait Installer {
+pub trait Installer {
     /// GetPrimary method
     fn get_primary(&self) -> zbus::Result<String>;
 

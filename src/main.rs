@@ -52,7 +52,7 @@ use regulators::Regulators;
 use setup_mode::SetupMode;
 use system::{HardwareGeneration, System};
 use temperatures::Temperatures;
-use ui::{message, setup_display, ScreenShooter, Ui, UiResources};
+use ui::{ScreenShooter, Ui, UiResources, message, setup_display};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
 use watched_tasks::WatchedTasksBuilder;

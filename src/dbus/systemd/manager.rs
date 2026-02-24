@@ -10,7 +10,7 @@ use zbus::proxy;
     default_service = "org.freedesktop.systemd1",
     default_path = "/org/freedesktop/systemd1"
 )]
-trait Manager {
+pub trait Manager {
     /// AbandonScope method
     fn abandon_scope(&self, name: &str) -> zbus::Result<()>;
 
@@ -459,7 +459,7 @@ trait Manager {
 
     /// RestartUnit method
     fn restart_unit(&self, name: &str, mode: &str)
-        -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
+    -> zbus::Result<zbus::zvariant::OwnedObjectPath>;
 
     /// RevertUnitFiles method
     fn revert_unit_files(&self, files: &[&str]) -> zbus::Result<Vec<(String, String, String)>>;
@@ -561,7 +561,7 @@ trait Manager {
     /// JobNew signal
     #[zbus(signal)]
     fn job_new(&self, id: u32, job: zbus::zvariant::ObjectPath<'_>, unit: &str)
-        -> zbus::Result<()>;
+    -> zbus::Result<()>;
 
     /// JobRemoved signal
     #[zbus(signal)]

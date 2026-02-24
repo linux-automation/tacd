@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License along
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
-use std::fs::{create_dir, rename, File};
+use std::fs::{File, create_dir, rename};
 use std::path::Path;
 
-use anyhow::{bail, Result};
-use async_std::channel::{unbounded, Receiver};
+use anyhow::{Result, bail};
+use async_std::channel::{Receiver, unbounded};
 use async_std::prelude::*;
 use async_std::sync::Arc;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
-use serde_json::{from_reader, to_writer_pretty, Map, Value};
+use serde_json::{Map, Value, from_reader, to_writer_pretty};
 
 use super::{AnyTopic, TopicName};
 
@@ -86,12 +86,12 @@ fn save(topics: &Arc<Vec<Arc<dyn AnyTopic>>>) -> Result<()> {
             let key = topic.path().to_string();
             let value = topic.try_get_json_value();
 
-            if let Some(value) = value {
-                if map.insert(key, value).is_some() {
-                    let name: &str = topic.path();
-                    error!("Duplicate persistent topic: \"{name}\"");
-                    // continue anyways
-                }
+            if let Some(value) = value
+                && map.insert(key, value).is_some()
+            {
+                let name: &str = topic.path();
+                error!("Duplicate persistent topic: \"{name}\"");
+                // continue anyways
             }
         }
 

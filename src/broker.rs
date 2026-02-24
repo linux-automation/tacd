@@ -16,7 +16,7 @@
 
 use anyhow::Result;
 use async_std::sync::Arc;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::watched_tasks::WatchedTasksBuilder;
 

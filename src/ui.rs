@@ -19,7 +19,7 @@ use std::time::Duration;
 use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
-use futures::{select, FutureExt};
+use futures::{FutureExt, select};
 use tide::{Response, Server};
 
 use crate::broker::{BrokerBuilder, Topic};
@@ -33,10 +33,10 @@ mod screens;
 mod widgets;
 
 use alerts::{AlertList, Alerter};
-use buttons::{handle_buttons, Button, ButtonEvent, Direction, PressDuration, Source};
+use buttons::{Button, ButtonEvent, Direction, PressDuration, Source, handle_buttons};
 pub use display::{Display, ScreenShooter};
 pub use screens::message;
-use screens::{splash, ActivatableScreen, AlertScreen, NormalScreen, Screen};
+use screens::{ActivatableScreen, AlertScreen, NormalScreen, Screen, splash};
 
 pub struct UiResources {
     pub adc: crate::adc::Adc,

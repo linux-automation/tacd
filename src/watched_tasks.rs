@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 use std::thread;
 
-use anyhow::{anyhow, Context as AnyhowContext, Result};
+use anyhow::{Context as AnyhowContext, Result, anyhow};
 use async_std::task;
 use log::info;
 
@@ -244,7 +244,7 @@ mod tests {
     use std::time::Duration;
 
     use anyhow::Result;
-    use async_std::channel::{unbounded, Sender};
+    use async_std::channel::{Sender, unbounded};
     use async_std::future::timeout;
     use async_std::task::block_on;
 

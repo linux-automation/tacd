@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License along
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
-use std::cmp::{max, Ordering};
+use std::cmp::{Ordering, max};
 use std::fs::read_dir;
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, SystemTime};

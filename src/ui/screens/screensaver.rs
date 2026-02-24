@@ -23,7 +23,7 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use async_trait::async_trait;
 use embedded_graphics::{
-    mono_font::{ascii::FONT_10X20, MonoFont, MonoTextStyle},
+    mono_font::{MonoFont, MonoTextStyle, ascii::FONT_10X20},
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::Rectangle,
@@ -33,8 +33,8 @@ use embedded_graphics::{
 use super::buttons::*;
 use super::widgets::*;
 use super::{
-    splash, ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent,
-    Screen, Ui,
+    ActivatableScreen, ActiveScreen, AlertList, AlertScreen, Alerter, Display, InputEvent, Screen,
+    Ui, splash,
 };
 use crate::broker::Topic;
 use crate::watched_tasks::WatchedTasksBuilder;

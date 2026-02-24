@@ -12,7 +12,7 @@ use zbus::proxy;
     interface = "org.freedesktop.systemd1.Service",
     default_service = "org.freedesktop.systemd1"
 )]
-trait Service {
+pub trait Service {
     /// AttachProcesses method
     fn attach_processes(&self, subcgroup: &str, pids: &[u32]) -> zbus::Result<()>;
 
@@ -1520,7 +1520,7 @@ trait Service {
     interface = "org.freedesktop.systemd1.Unit",
     default_service = "org.freedesktop.systemd1"
 )]
-trait Unit {
+pub trait Unit {
     /// Clean method
     fn clean(&self, mask: &[&str]) -> zbus::Result<()>;
 
