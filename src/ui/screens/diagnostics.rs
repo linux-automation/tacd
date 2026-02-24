@@ -129,7 +129,7 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
     if let Some(channels) = ui.res.rauc.channels.try_get() {
         write!(&mut text, "chs: ")?;
 
-        for ch in channels {
+        for ch in channels.into_vec() {
             let en = if ch.enabled { "[x]" } else { "[ ]" };
             let name = ch.name;
 

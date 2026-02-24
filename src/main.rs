@@ -25,6 +25,7 @@ mod dbus;
 mod digital_io;
 mod dut_power;
 mod http_server;
+mod inhibit;
 mod iobus;
 mod journal;
 mod led;
@@ -145,6 +146,10 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     ) {
         error!("failed to start motd update service with {err}");
     }
+
+    // Create files in /var/run/tacd/inhibit whenever the system should
+    // not be automatically rebooted by RAUC.
+    inhibit::run(&mut wtb, &dut_pwr, &setup_mode)?;
 
     // Set up the user interface for the hardware display on the TAC.
     // The different screens receive updates via the topics provided in

@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with this library; if not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::HashMap;
+#[cfg(not(feature = "demo_mode"))]
+use std::convert::TryFrom;
 use std::fs::{DirEntry, read_dir, read_to_string};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
@@ -22,8 +23,6 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
-
-use super::{InstallerProxy, SlotStatus, compare_versions};
 
 #[cfg(feature = "demo_mode")]
 const ENABLE_DIR: &str = "demo_files/etc/rauc/certificates-enabled";
@@ -39,6 +38,8 @@ const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
 pub struct UpstreamBundle {
     pub compatible: String,
     pub version: String,
+    pub manifest_hash: String,
+    pub effective_url: String,
     pub newer_than_installed: bool,
 }
 
@@ -50,8 +51,18 @@ pub struct Channel {
     pub url: String,
     pub polling_interval: Option<Duration>,
     pub enabled: bool,
+    pub primary: bool,
     pub bundle: Option<UpstreamBundle>,
+    pub force_polling: Option<bool>,
+    pub force_auto_install: Option<bool>,
+    pub inhibit_files: Option<String>,
+    pub candidate_criteria: Option<String>,
+    pub install_criteria: Option<String>,
+    pub reboot_criteria: Option<String>,
 }
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct Channels(Vec<Channel>);
 
 #[derive(Deserialize)]
 pub struct ChannelFile {
@@ -60,20 +71,32 @@ pub struct ChannelFile {
     pub description: String,
     pub url: String,
     pub polling_interval: Option<String>,
+    pub force_polling: Option<bool>,
+    pub force_auto_install: Option<bool>,
+    pub inhibit_files: Option<String>,
+    pub candidate_criteria: Option<String>,
+    pub install_criteria: Option<String>,
+    pub reboot_criteria: Option<String>,
 }
 
-fn zvariant_walk_nested_dicts(map: &zvariant::Dict, path: &[&str]) -> Result<String> {
-    let (&key, rem) = path
+#[cfg(not(feature = "demo_mode"))]
+fn zvariant_walk_nested_dicts<'a, T>(map: &'a zvariant::Dict, path: &'a [&'a str]) -> Result<&'a T>
+where
+    &'a T: TryFrom<&'a zvariant::Value<'a>>,
+    <&'a T as TryFrom<&'a zvariant::Value<'a>>>::Error: Into<zvariant::Error>,
+{
+    let (key, rem) = path
         .split_first()
         .ok_or_else(|| anyhow!("Got an empty path to walk"))?;
 
     let value: &zvariant::Value = map
-        .get(&key)?
+        .get(key)?
         .ok_or_else(|| anyhow!("Could not find key \"{key}\" in dict"))?;
 
     if rem.is_empty() {
         value.downcast_ref().map_err(|e| {
-            anyhow!("Failed to convert value in dictionary for key \"{key}\" to a string: {e}")
+            let type_name = std::any::type_name::<T>();
+            anyhow!("Failed to convert value in dictionary for key \"{key}\" to {type_name}: {e}")
         })
     } else {
         let value = value.downcast_ref().map_err(|e| {
@@ -131,7 +154,14 @@ impl Channel {
             url: channel_file.url.trim().to_string(),
             polling_interval,
             enabled: false,
+            primary: false,
             bundle: None,
+            force_polling: channel_file.force_polling,
+            force_auto_install: channel_file.force_auto_install,
+            inhibit_files: channel_file.inhibit_files,
+            candidate_criteria: channel_file.candidate_criteria,
+            install_criteria: channel_file.install_criteria,
+            reboot_criteria: channel_file.reboot_criteria,
         };
 
         ch.update_enabled();
@@ -139,7 +169,17 @@ impl Channel {
         Ok(ch)
     }
 
-    pub(super) fn from_directory(dir: &str) -> Result<Vec<Self>> {
+    fn update_enabled(&mut self) {
+        // Which channels are enabled is decided based on which RAUC certificates are enabled.
+        let cert_file = self.name.clone() + ".cert.pem";
+        let cert_path = Path::new(ENABLE_DIR).join(cert_file);
+
+        self.enabled = cert_path.exists();
+    }
+}
+
+impl Channels {
+    pub(super) fn from_directory(dir: &str) -> Result<Self> {
         // Find all .yaml files in CHANNELS_DIR
         let mut dir_entries: Vec<DirEntry> = read_dir(dir)?
             .filter_map(|dir_entry| dir_entry.ok())
@@ -156,85 +196,77 @@ impl Channel {
         // 05_testing.yaml.
         dir_entries.sort_by_key(|dir_entry| dir_entry.file_name());
 
-        let mut channels: Vec<Self> = Vec::new();
+        let mut channels: Vec<Channel> = Vec::new();
+
+        let mut have_primary = false;
 
         for dir_entry in dir_entries {
-            let channel = Self::from_file(&dir_entry.path())?;
+            let mut channel = Channel::from_file(&dir_entry.path())?;
 
             if channels.iter().any(|ch| ch.name == channel.name) {
                 bail!("Encountered duplicate channel name \"{}\"", channel.name);
             }
 
+            // There can only be one primary channel.
+            // If multiple channels are enabled the primary one is the one with
+            // the highest precedence.
+            channel.primary = channel.enabled && !have_primary;
+            have_primary |= channel.primary;
+
             channels.push(channel);
         }
 
-        Ok(channels)
+        Ok(Self(channels))
     }
 
-    fn update_enabled(&mut self) {
-        // Which channels are enabled is decided based on which RAUC certificates are enabled.
-        let cert_file = self.name.clone() + ".cert.pem";
-        let cert_path = Path::new(ENABLE_DIR).join(cert_file);
-
-        self.enabled = cert_path.exists();
+    pub fn into_vec(self) -> Vec<Channel> {
+        self.0
     }
 
-    /// Ask RAUC to determine the version of the bundle on the server
-    pub(super) async fn poll(
-        &mut self,
-        proxy: &InstallerProxy<'_>,
-        slot_status: Option<&SlotStatus>,
-    ) -> Result<()> {
-        self.update_enabled();
+    pub(super) fn primary(&self) -> Option<&Channel> {
+        self.0.iter().find(|ch| ch.primary)
+    }
 
-        self.bundle = None;
+    #[cfg(not(feature = "demo_mode"))]
+    fn primary_mut(&mut self) -> Option<&mut Channel> {
+        self.0.iter_mut().find(|ch| ch.primary)
+    }
 
-        if self.enabled {
-            let args = HashMap::new();
-            let bundle = proxy.inspect_bundle(&self.url, args).await?;
-            let bundle: zvariant::Dict = bundle.into();
+    #[cfg(not(feature = "demo_mode"))]
+    pub(super) fn update_from_poll_status(&mut self, poll_status: zvariant::Dict) -> Result<bool> {
+        let compatible: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["manifest", "update", "compatible"])?;
+        let version: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["manifest", "update", "version"])?;
+        let manifest_hash: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["manifest", "manifest-hash"])?;
+        let effective_url: &zvariant::Str =
+            zvariant_walk_nested_dicts(&poll_status, &["bundle", "effective-url"])?;
+        let newer_than_installed: &bool =
+            zvariant_walk_nested_dicts(&poll_status, &["update-available"])?;
 
-            let compatible =
-                zvariant_walk_nested_dicts(&bundle, &["update", "compatible"])?.to_owned();
-            let version = zvariant_walk_nested_dicts(&bundle, &["update", "version"])?.to_owned();
-
-            self.bundle = Some(UpstreamBundle::new(compatible, version, slot_status));
+        if let Some(pb) = self.0.iter().find_map(|ch| ch.bundle.as_ref())
+            && compatible == pb.compatible.as_str()
+            && version == pb.version.as_str()
+            && manifest_hash == pb.manifest_hash.as_str()
+            && effective_url == pb.effective_url.as_str()
+            && *newer_than_installed == pb.newer_than_installed
+        {
+            return Ok(false);
         }
 
-        Ok(())
-    }
-}
+        self.0.iter_mut().for_each(|ch| ch.bundle = None);
 
-impl UpstreamBundle {
-    fn new(compatible: String, version: String, slot_status: Option<&SlotStatus>) -> Self {
-        let mut ub = Self {
-            compatible,
-            version,
-            newer_than_installed: false,
-        };
-
-        if let Some(slot_status) = slot_status {
-            ub.update_install(slot_status);
+        if let Some(primary) = self.primary_mut() {
+            primary.bundle = Some(UpstreamBundle {
+                compatible: compatible.as_str().into(),
+                version: version.as_str().into(),
+                manifest_hash: manifest_hash.as_str().into(),
+                effective_url: effective_url.as_str().into(),
+                newer_than_installed: *newer_than_installed,
+            });
         }
 
-        ub
-    }
-
-    pub(super) fn update_install(&mut self, slot_status: &SlotStatus) {
-        let slot_0_is_older = slot_status
-            .get("rootfs_0")
-            .filter(|r| r.get("boot_status").is_some_and(|b| b == "good"))
-            .and_then(|r| r.get("bundle_version"))
-            .and_then(|v| compare_versions(&self.version, v).map(|c| c.is_gt()))
-            .unwrap_or(true);
-
-        let slot_1_is_older = slot_status
-            .get("rootfs_1")
-            .filter(|r| r.get("boot_status").is_some_and(|b| b == "good"))
-            .and_then(|r| r.get("bundle_version"))
-            .and_then(|v| compare_versions(&self.version, v).map(|c| c.is_gt()))
-            .unwrap_or(true);
-
-        self.newer_than_installed = slot_0_is_older && slot_1_is_older;
+        Ok(true)
     }
 }

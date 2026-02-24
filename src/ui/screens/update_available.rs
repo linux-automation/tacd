@@ -21,6 +21,7 @@ use async_trait::async_trait;
 use embedded_graphics::{
     mono_font::MonoTextStyle, pixelcolor::BinaryColor, prelude::*, text::Text,
 };
+use log::error;
 use serde::{Deserialize, Serialize};
 
 use super::widgets::*;
@@ -29,7 +30,7 @@ use super::{
     Ui, row_anchor,
 };
 use crate::broker::Topic;
-use crate::dbus::rauc::Channel;
+use crate::dbus::rauc::{Channel, Channels, UpdateRequest};
 use crate::watched_tasks::WatchedTasksBuilder;
 
 const SCREEN_TYPE: AlertScreen = AlertScreen::UpdateAvailable;
@@ -72,8 +73,9 @@ impl Selection {
         !self.channels.is_empty()
     }
 
-    fn update_channels(&self, channels: Vec<Channel>) -> Option<Self> {
+    fn update_channels(&self, channels: Channels) -> Option<Self> {
         let channels: Vec<Channel> = channels
+            .into_vec()
             .into_iter()
             .filter(|ch| {
                 ch.bundle
@@ -119,9 +121,20 @@ impl Selection {
         }
     }
 
-    fn perform(&self, alerts: &Arc<Topic<AlertList>>, install: &Arc<Topic<String>>) {
+    fn perform(&self, alerts: &Arc<Topic<AlertList>>, install: &Arc<Topic<UpdateRequest>>) {
         match self.highlight {
-            Highlight::Channel(ch) => install.set(self.channels[ch].url.clone()),
+            Highlight::Channel(ch) => {
+                if let Some(bundle) = &self.channels[ch].bundle {
+                    let req = UpdateRequest {
+                        url: Some(bundle.effective_url.clone()),
+                        manifest_hash: Some(bundle.manifest_hash.clone()),
+                    };
+
+                    install.set(req);
+                } else {
+                    error!("Update channel is missing upstream bundle information.");
+                };
+            }
             Highlight::Dismiss => alerts.deassert(SCREEN_TYPE),
         }
     }
@@ -134,7 +147,7 @@ pub struct UpdateAvailableScreen {
 struct Active {
     widgets: WidgetContainer,
     alerts: Arc<Topic<AlertList>>,
-    install: Arc<Topic<String>>,
+    install: Arc<Topic<UpdateRequest>>,
     selection: Arc<Topic<Selection>>,
 }
 
@@ -142,7 +155,7 @@ impl UpdateAvailableScreen {
     pub fn new(
         wtb: &mut WatchedTasksBuilder,
         alerts: &Arc<Topic<AlertList>>,
-        channels: &Arc<Topic<Vec<Channel>>>,
+        channels: &Arc<Topic<Channels>>,
     ) -> Result<Self> {
         let (mut channels_events, _) = channels.clone().subscribe_unbounded();
         let alerts = alerts.clone();

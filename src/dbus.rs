@@ -89,11 +89,13 @@ impl DbusSession {
 
         let conn = Arc::new(tacd.serve(conn_builder).build().await?);
 
+        let systemd = Systemd::new(bb, wtb, &conn).await?;
+
         Ok(Self {
             hostname: Hostname::new(bb, wtb, &conn)?,
             network: Network::new(bb, wtb, &conn, led_dut, led_uplink)?,
-            rauc: Rauc::new(bb, wtb, &conn)?,
-            systemd: Systemd::new(bb, wtb, &conn).await?,
+            rauc: Rauc::new(bb, wtb, &conn, systemd.rauc.clone())?,
+            systemd,
         })
     }
 }
