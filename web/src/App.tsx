@@ -100,11 +100,17 @@ function Navigation() {
             items: [
               { type: "link", text: "REST API", href: "#/docs/api" },
               { type: "link", text: "Legal Information", href: "#/docs/legal" },
+              {
+                type: "link",
+                external: true,
+                text: "LXA TAC Manual",
+                href: "https://www.linux-automation.com/lxatac-M02/index.html",
+              },
             ],
           },
           {
             type: "section",
-            text: "External Links",
+            text: "Other Services",
             items: [
               {
                 type: "link",
@@ -117,12 +123,6 @@ function Navigation() {
                 external: true,
                 text: "LXA IOBus Server",
                 href: `http://${window.location.hostname}:8080/`,
-              },
-              {
-                type: "link",
-                external: true,
-                text: "LXA TAC Manual",
-                href: "https://www.linux-automation.com/lxatac-M02/index.html",
               },
             ],
           },
