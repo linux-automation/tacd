@@ -335,18 +335,6 @@ impl<E: Serialize + DeserializeOwned + Clone + PartialEq> Topic<E> {
 
         self.modify(|prev| if prev != msg { msg } else { None });
     }
-
-    /// Wait until the topic is set to the specified value
-    pub async fn wait_for(self: &Arc<Self>, val: E) {
-        let (mut stream, sub) = self.clone().subscribe_unbounded();
-
-        // Unwrap here to keep the interface simple. The stream could only yield
-        // None if the sender side is dropped, which will not happen as we hold
-        // an Arc to self which contains the senders vec.
-        while stream.next().await.unwrap() != val {}
-
-        sub.unsubscribe()
-    }
 }
 
 impl<E: Serialize + DeserializeOwned + Clone + Not + Not<Output = E>> Topic<E> {
