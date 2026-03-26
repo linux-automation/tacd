@@ -697,6 +697,7 @@ paths:
             - network-manager
             - labgrid-exporter
             - lxa-iobus
+            - rauc
     put:
       summary: Perform an action on a systemd service
       tags: [System]
@@ -722,6 +723,7 @@ paths:
             - network-manager
             - labgrid-exporter
             - lxa-iobus
+            - rauc
     get:
       summary: Get the status of a systemd service
       tags: [System]
@@ -770,6 +772,21 @@ paths:
       responses:
         '204':
           description: Polling for OS updates was enabled/disabled
+        '400':
+          description: The value could not be parsed as boolean
+
+  /v1/tac/update/enable_auto_install:
+    put:
+      summary: Enable automatic installation of operating system updates
+      tags: [Updating]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: boolean
+      responses:
+        '204':
+          description: Automatic installation of updates was enabled/disabled
         '400':
           description: The value could not be parsed as boolean
 
@@ -825,12 +842,12 @@ paths:
         content:
           application/json:
             schema:
-              type: string
+              $ref: '#/components/schemas/UpdateRequest'
       responses:
         '204':
-          description: The value was parsed as string and will be tried
+          description: The value was parsed successfully and will be tried
         '400':
-          description: The value could not be parsed as string
+          description: The value could not be parsed
 
   /v1/tac/update/channels:
     get:
@@ -1100,6 +1117,14 @@ components:
         nesting_depth:
           type: number
 
+    UpdateRequest:
+      type: object
+      properties:
+        url:
+          type: string
+        manifest_hash:
+          type: string
+
     UpdateChannels:
       type: array
       items:
@@ -1122,6 +1147,8 @@ components:
                 type: integer
           enabled:
             type: boolean
+          primary:
+            type: boolean
           bundle:
             type: object
             properties:
@@ -1129,8 +1156,24 @@ components:
                 type: string
               version:
                 type: string,
+              manifest_hash:
+                type: string,
+              effective_url:
+                type: string,
               newer_than_installed:
                 type: boolean
+          force_polling:
+            type: boolean
+          force_auto_install:
+            type: boolean
+          inhibit_files:
+            type: string
+          candidate_criteria:
+            type: string
+          install_criteria:
+            type: string
+          reboot_criteria:
+            type: string
 
     ServiceStatus:
       type: object
