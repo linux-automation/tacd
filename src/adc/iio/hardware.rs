@@ -158,8 +158,13 @@ impl CalibratedChannel {
                 .ok_or(AdcReadError::TimeStampError)?;
             let ts = Timestamp::new(ts);
 
-            let mut values = [Measurement { ts, value: 0.0 }; N];
+            let mut values = [Measurement {
+                ts,
+                value: 0.0,
+                raw: None,
+            }; N];
             for i in 0..N {
+                values[i].raw = Some(values_raw[i] as i32);
                 values[i].value = channels[i].calibration.apply(values_raw[i] as f32);
             }
 

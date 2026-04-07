@@ -99,10 +99,15 @@ impl CalibratedChannel {
         channels: [&Self; N],
     ) -> Result<[Measurement; N]> {
         let ts = Timestamp::now();
-        let mut results = [Measurement { ts, value: 0.0 }; N];
+        let mut results = [Measurement {
+            ts,
+            value: 0.0,
+            raw: None,
+        }; N];
 
         for i in 0..N {
-            results[i].value = channels[i].get().unwrap().value;
+            results[i] = channels[i].get().unwrap();
+            results[i].ts = ts;
         }
 
         Ok(results)
@@ -146,7 +151,9 @@ impl CalibratedChannel {
 
         self.inner.value.store(value.to_bits(), Ordering::Relaxed);
 
-        Ok(Measurement { ts, value })
+        let raw = Some((value * 1024.0) as i32);
+
+        Ok(Measurement { ts, value, raw })
     }
 
     pub fn set(&self, state: bool) {
