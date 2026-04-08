@@ -319,3 +319,31 @@ export function MqttChart(props: MqttChartProps) {
     </ApiPicker>
   );
 }
+
+interface MqttHiderConvProps<T> {
+  topic: string;
+  children: React.ReactElement;
+  initial?: T;
+  should_show: (msg: T) => boolean;
+}
+
+export function MqttHiderConv<T>(props: MqttHiderConvProps<T>) {
+  const msg = useMqttSubscription<T>(props.topic, props.initial);
+  const show = msg !== undefined && props.should_show(msg);
+
+  return show ? props.children : null;
+}
+
+interface MqttHiderProps {
+  topic: string;
+  children: React.ReactElement;
+}
+
+export function MqttHider(props: MqttHiderProps) {
+  return MqttHiderConv({
+    topic: props.topic,
+    children: props.children,
+    initial: false,
+    should_show: (b: boolean) => b,
+  });
+}
