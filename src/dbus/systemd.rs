@@ -52,6 +52,8 @@ pub enum ServiceAction {
 #[derive(Clone)]
 pub struct Service {
     #[cfg_attr(feature = "demo_mode", allow(dead_code))]
+    unit_name: &'static str,
+    #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     pub action: Arc<Topic<ServiceAction>>,
     pub status: Arc<Topic<ServiceStatus>>,
 }
@@ -92,8 +94,9 @@ impl ServiceStatus {
 }
 
 impl Service {
-    fn new(bb: &mut BrokerBuilder, topic_name: &'static str) -> Self {
+    fn new(bb: &mut BrokerBuilder, unit_name: &'static str, topic_name: &'static str) -> Self {
         Self {
+            unit_name,
             action: bb.topic_wo(&format!("/v1/tac/service/{topic_name}/action"), None),
             status: bb.topic_ro(&format!("/v1/tac/service/{topic_name}/status"), None),
         }
@@ -104,7 +107,6 @@ impl Service {
         &self,
         _wtb: &mut WatchedTasksBuilder,
         _conn: Arc<Connection>,
-        _unit_name: &str,
     ) -> anyhow::Result<()> {
         self.status.set(ServiceStatus::get().await.unwrap());
 
@@ -116,8 +118,8 @@ impl Service {
         &self,
         wtb: &mut WatchedTasksBuilder,
         conn: Arc<Connection>,
-        unit_name: &'static str,
     ) -> anyhow::Result<()> {
+        let unit_name = self.unit_name;
         let unit_path = {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();
             manager.get_unit(unit_name).await.unwrap()
@@ -234,21 +236,15 @@ impl Systemd {
 
         Self::handle_reboot(wtb, reboot.clone(), conn.clone())?;
 
-        let networkmanager = Service::new(bb, "network-manager");
-        let labgrid = Service::new(bb, "labgrid-exporter");
-        let iobus = Service::new(bb, "lxa-iobus");
-        let rauc = Service::new(bb, "rauc");
+        let networkmanager = Service::new(bb, "NetworkManager.service", "network-manager");
+        let labgrid = Service::new(bb, "labgrid-exporter.service", "labgrid-exporter");
+        let iobus = Service::new(bb, "lxa-iobus.service", "lxa-iobus");
+        let rauc = Service::new(bb, "rauc.service", "rauc");
 
-        networkmanager
-            .connect(wtb, conn.clone(), "NetworkManager.service")
-            .await?;
-        labgrid
-            .connect(wtb, conn.clone(), "labgrid-exporter.service")
-            .await?;
-        iobus
-            .connect(wtb, conn.clone(), "lxa-iobus.service")
-            .await?;
-        rauc.connect(wtb, conn.clone(), "rauc.service").await?;
+        networkmanager.connect(wtb, conn.clone()).await?;
+        labgrid.connect(wtb, conn.clone()).await?;
+        iobus.connect(wtb, conn.clone()).await?;
+        rauc.connect(wtb, conn.clone()).await?;
 
         Ok(Self {
             reboot,
