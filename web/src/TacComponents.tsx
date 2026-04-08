@@ -22,6 +22,7 @@ import Cards from "@cloudscape-design/components/cards";
 import Checkbox from "@cloudscape-design/components/checkbox";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 import Container from "@cloudscape-design/components/container";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
 import Form from "@cloudscape-design/components/form";
 import Header from "@cloudscape-design/components/header";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
@@ -253,22 +254,36 @@ export function UpdateConfig() {
         </Header>
       }
     >
-      <ColumnLayout columns={3} variant="text-grid">
-        <Box>
-          <Box variant="awsui-key-label">Update Polling</Box>
-          <MqttToggle topic="/v1/tac/update/enable_polling">
-            Periodically check for updates
-          </MqttToggle>
-        </Box>
-        <MqttHider topic="/v1/tac/update/enable_polling">
+      <SpaceBetween size="m">
+        <ColumnLayout columns={3} variant="text-grid">
           <Box>
-            <Box variant="awsui-key-label">Auto Install</Box>
-            <MqttToggle topic="/v1/tac/update/enable_auto_install">
-              Automatically install and boot updates
+            <Box variant="awsui-key-label">Update Polling</Box>
+            <MqttToggle topic="/v1/tac/update/enable_polling">
+              Periodically check for updates
             </MqttToggle>
           </Box>
+          <MqttHider topic="/v1/tac/update/enable_polling">
+            <Box>
+              <Box variant="awsui-key-label">Auto Install</Box>
+              <MqttToggle topic="/v1/tac/update/enable_auto_install">
+                Automatically install and boot updates
+              </MqttToggle>
+            </Box>
+          </MqttHider>
+        </ColumnLayout>
+        <MqttHider topic="/v1/tac/update/enable_polling">
+          <ExpandableSection headerText="Advanced Settings">
+            <ColumnLayout columns={3} variant="text-grid">
+              <Box>
+                <Box variant="awsui-key-label">DUT Power Inhibit</Box>
+                <MqttToggle topic="/v1/tac/update/inhibit/dut_power">
+                  Do not update while DUT Power is on
+                </MqttToggle>
+              </Box>
+            </ColumnLayout>
+          </ExpandableSection>
         </MqttHider>
-      </ColumnLayout>
+      </SpaceBetween>
     </Container>
   );
 }
