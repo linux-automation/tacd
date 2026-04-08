@@ -127,19 +127,28 @@ impl From<UpdateRequestDe> for UpdateRequest {
 
 type SlotStatus = HashMap<String, HashMap<String, String>>;
 
-pub struct Rauc {
+pub struct StatusTopics {
     pub operation: Arc<Topic<String>>,
     pub progress: Arc<Topic<Progress>>,
     pub slot_status: Arc<Topic<Arc<SlotStatus>>>,
     #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     pub primary: Arc<Topic<String>>,
     pub last_error: Arc<Topic<String>>,
-    pub install: Arc<Topic<UpdateRequest>>,
     pub channels: Arc<Topic<Channels>>,
-    pub reload: Arc<Topic<bool>>,
     pub should_reboot: Arc<Topic<bool>>,
+}
+
+#[derive(Clone)]
+pub struct ConfigTopics {
+    pub reload: Arc<Topic<bool>>,
     pub enable_polling: Arc<Topic<bool>>,
     pub enable_auto_install: Arc<Topic<bool>>,
+}
+
+pub struct Rauc {
+    pub config: ConfigTopics,
+    pub install: Arc<Topic<UpdateRequest>>,
+    pub status: StatusTopics,
 }
 
 #[cfg(not(feature = "demo_mode"))]
@@ -203,17 +212,15 @@ fn would_reboot_into_other_slot(slot_status: &SlotStatus, primary: Option<String
 
 async fn channel_list_update_task(
     conn: Arc<Connection>,
-    reload: Arc<Topic<bool>>,
-    enable_polling: Arc<Topic<bool>>,
-    enable_auto_install: Arc<Topic<bool>>,
+    config: ConfigTopics,
     channels: Arc<Topic<Channels>>,
     rauc_service: Service,
 ) -> Result<()> {
     let poller = PollerProxy::new(&conn).await.unwrap();
 
-    let (reload_stream, _) = reload.subscribe_unbounded();
-    let (mut enable_polling_stream, _) = enable_polling.subscribe_unbounded();
-    let (mut enable_auto_install_stream, _) = enable_auto_install.subscribe_unbounded();
+    let (reload_stream, _) = config.reload.subscribe_unbounded();
+    let (mut enable_polling_stream, _) = config.enable_polling.subscribe_unbounded();
+    let (mut enable_auto_install_stream, _) = config.enable_auto_install.subscribe_unbounded();
 
     let mut enable_polling = enable_polling_stream.next().await.unwrap_or(false);
     let mut enable_auto_install = enable_auto_install_stream.next().await.unwrap_or(false);
@@ -270,16 +277,8 @@ async fn channel_list_update_task(
 
 impl Rauc {
     fn setup_topics(bb: &mut BrokerBuilder) -> Self {
-        Self {
-            operation: bb.topic_ro("/v1/tac/update/operation", None),
-            progress: bb.topic_ro("/v1/tac/update/progress", None),
-            slot_status: bb.topic_ro("/v1/tac/update/slots", None),
-            primary: bb.topic_ro("/v1/tac/update/primary", None),
-            last_error: bb.topic_ro("/v1/tac/update/last_error", None),
-            install: bb.topic_wo("/v1/tac/update/install", None),
-            channels: bb.topic_ro("/v1/tac/update/channels", None),
+        let config = ConfigTopics {
             reload: bb.topic_wo("/v1/tac/update/channels/reload", Some(true)),
-            should_reboot: bb.topic_ro("/v1/tac/update/should_reboot", Some(false)),
             enable_polling: bb.topic(
                 "/v1/tac/update/enable_polling",
                 true,
@@ -296,6 +295,24 @@ impl Rauc {
                 Some(false),
                 1,
             ),
+        };
+
+        let install = bb.topic_wo("/v1/tac/update/install", None);
+
+        let status = StatusTopics {
+            operation: bb.topic_ro("/v1/tac/update/operation", None),
+            progress: bb.topic_ro("/v1/tac/update/progress", None),
+            slot_status: bb.topic_ro("/v1/tac/update/slots", None),
+            primary: bb.topic_ro("/v1/tac/update/primary", None),
+            last_error: bb.topic_ro("/v1/tac/update/last_error", None),
+            channels: bb.topic_ro("/v1/tac/update/channels", None),
+            should_reboot: bb.topic_ro("/v1/tac/update/should_reboot", Some(false)),
+        };
+
+        Self {
+            config,
+            install,
+            status,
         }
     }
 
@@ -308,19 +325,19 @@ impl Rauc {
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
-        inst.operation.set("idle".to_string());
-        inst.slot_status.set(Arc::new(demo_mode::slot_status()));
-        inst.last_error.set("".to_string());
+        inst.status.operation.set("idle".to_string());
+        inst.status
+            .slot_status
+            .set(Arc::new(demo_mode::slot_status()));
+        inst.status.last_error.set("".to_string());
 
         // Reload the channel list on request
         wtb.spawn_task(
             "rauc-channel-list-update",
             channel_list_update_task(
                 Arc::new(Connection),
-                inst.reload.clone(),
-                inst.enable_polling.clone(),
-                inst.enable_auto_install.clone(),
-                inst.channels.clone(),
+                inst.config.clone(),
+                inst.status.channels.clone(),
                 rauc_service,
             ),
         )?;
@@ -338,10 +355,10 @@ impl Rauc {
         let inst = Self::setup_topics(bb);
 
         let conn_task = conn.clone();
-        let operation = inst.operation.clone();
-        let slot_status = inst.slot_status.clone();
-        let primary = inst.primary.clone();
-        let should_reboot = inst.should_reboot.clone();
+        let operation = inst.status.operation.clone();
+        let slot_status = inst.status.slot_status.clone();
+        let primary = inst.status.primary.clone();
+        let should_reboot = inst.status.should_reboot.clone();
 
         wtb.spawn_task("rauc-slot-status-update", async move {
             let proxy = InstallerProxy::new(&conn_task).await.unwrap();
@@ -428,7 +445,7 @@ impl Rauc {
         })?;
 
         let conn_task = conn.clone();
-        let progress = inst.progress.clone();
+        let progress = inst.status.progress.clone();
 
         // Forward the "progress" property to the broker framework
         wtb.spawn_task("rauc-progress-update", async move {
@@ -450,7 +467,7 @@ impl Rauc {
         })?;
 
         let conn_task = conn.clone();
-        let last_error = inst.last_error.clone();
+        let last_error = inst.status.last_error.clone();
 
         // Forward the "last_error" property to the broker framework
         wtb.spawn_task("rauc-forward-error", async move {
@@ -472,7 +489,7 @@ impl Rauc {
         })?;
 
         let conn_task = conn.clone();
-        let channels = inst.channels.clone();
+        let channels = inst.status.channels.clone();
 
         // Forward the "Poller::status" property to the broker framework
         wtb.spawn_task("rauc-forward-poller-status", async move {
@@ -522,7 +539,7 @@ impl Rauc {
         })?;
 
         let conn_task = conn.clone();
-        let channels = inst.channels.clone();
+        let channels = inst.status.channels.clone();
         let (mut install_stream, _) = inst.install.clone().subscribe_unbounded();
 
         // Forward the "install" topic from the broker framework to RAUC
@@ -586,10 +603,8 @@ impl Rauc {
             "rauc-channel-list-update",
             channel_list_update_task(
                 conn.clone(),
-                inst.reload.clone(),
-                inst.enable_polling.clone(),
-                inst.enable_auto_install.clone(),
-                inst.channels.clone(),
+                inst.config.clone(),
+                inst.status.channels.clone(),
                 rauc_service,
             ),
         )?;

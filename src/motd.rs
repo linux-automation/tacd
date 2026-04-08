@@ -203,8 +203,8 @@ pub fn run(
     // Spawn a task that accepts motd updates and dumps them into the file in /run.
     let (state_events, _) = dut_pwr.state.clone().subscribe_unbounded();
     let (fault_events, _) = iobus.supply_fault.clone().subscribe_unbounded();
-    let (should_reboot_events, _) = rauc.should_reboot.clone().subscribe_unbounded();
-    let (channels_events, _) = rauc.channels.clone().subscribe_unbounded();
+    let (should_reboot_events, _) = rauc.status.should_reboot.clone().subscribe_unbounded();
+    let (channels_events, _) = rauc.status.channels.clone().subscribe_unbounded();
     let (setup_mode_events, _) = setup_mode.setup_mode.clone().subscribe_unbounded();
     let (temperature_events, _) = temperatures.warning.clone().subscribe_unbounded();
     let (usb_events, _) = usb_hub.overload.clone().subscribe_unbounded();

@@ -210,11 +210,15 @@ pub(super) fn init(
         Box::new(UpdateInstallationScreen::new(
             wtb,
             alerts,
-            &res.rauc.operation,
+            &res.rauc.status.operation,
             reboot_message,
-            &res.rauc.should_reboot,
+            &res.rauc.status.should_reboot,
         )?),
-        Box::new(UpdateAvailableScreen::new(wtb, alerts, &res.rauc.channels)?),
+        Box::new(UpdateAvailableScreen::new(
+            wtb,
+            alerts,
+            &res.rauc.status.channels,
+        )?),
         Box::new(RebootConfirmScreen::new(wtb, alerts, reboot_message)?),
         Box::new(ScreenSaverScreen::new(wtb, buttons, alerts)?),
         Box::new(SetupScreen::new(wtb, alerts, &res.setup_mode.setup_mode)?),
