@@ -1,7 +1,7 @@
 /target
 /.cargo
 /demo_files/home/root/.ssh/authorized_keys
-/demo_files/var/run/tacd/motd
+/demo_files/run/
 /web/npm-shrinkwrap.json
 /web/oe-logs
 /web/oe-workdir

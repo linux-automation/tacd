@@ -31,7 +31,7 @@ use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod setup {
-    pub(super) const VAR_RUN_TACD: &str = "demo_files/var/run/tacd";
+    pub(super) const RUN_TACD: &str = "demo_files/run/tacd";
     pub(super) const ETC: &str = "demo_files/etc";
 
     /// umount stub for demo_mode that works without root permissions
@@ -58,7 +58,7 @@ mod setup {
 #[cfg(not(feature = "demo_mode"))]
 mod setup {
     pub(super) use nix::mount::{mount, umount};
-    pub(super) const VAR_RUN_TACD: &str = "/var/run/tacd";
+    pub(super) const RUN_TACD: &str = "/run/tacd";
     pub(super) const ETC: &str = "/etc";
 }
 
@@ -200,7 +200,7 @@ pub fn run(
     // Write default MOTD once on startup
     motd.update()?;
 
-    // Spawn a task that accepts motd updates and dumps them into the file in /var/run.
+    // Spawn a task that accepts motd updates and dumps them into the file in /run.
     let (state_events, _) = dut_pwr.state.clone().subscribe_unbounded();
     let (fault_events, _) = iobus.supply_fault.clone().subscribe_unbounded();
     let (should_reboot_events, _) = rauc.should_reboot.clone().subscribe_unbounded();
@@ -256,15 +256,15 @@ pub fn run(
 impl Motd {
     /// Create a motd in a tmpfs so we can write it without harming the eMMC
     fn new() -> Result<Self> {
-        // Create /var/run/tacd (or an equivalent in demo mode).
-        create_dir_all(VAR_RUN_TACD)?;
+        // Create /run/tacd (or an equivalent in demo mode).
+        create_dir_all(RUN_TACD)?;
 
-        // "/var/run/tacd/motd" or "demo_files/var/run/tacd/motd"
+        // "/run/tacd/motd" or "demo_files/run/tacd/motd"
         // "/etc/motd" or "demo_files/etc/motd"
-        let path_runtime_motd = Path::new(VAR_RUN_TACD).join("motd");
+        let path_runtime_motd = Path::new(RUN_TACD).join("motd");
         let path_etc_motd = Path::new(ETC).join("motd");
 
-        // Create the motd file in /var/run/tacd.
+        // Create the motd file in /run/tacd.
         let runtime_motd = File::create(&path_runtime_motd)?;
 
         // Try to unmount the bind mount at /etc/motd before trying to set up a new one.
@@ -274,7 +274,7 @@ impl Motd {
             _ => Err(err),
         })?;
 
-        // Bind mount /var/run/tacd/motd to /etc/motd.
+        // Bind mount /run/tacd/motd to /etc/motd.
         // The benefit over writing to /etc/motd directly is that we do not
         // hammer the eMMC as much.
         // The benefit over a symlink is that the bind-mount does not persist
