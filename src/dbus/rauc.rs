@@ -26,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use super::Connection;
 use super::systemd::Service;
 use crate::broker::{BrokerBuilder, Topic};
+use crate::inhibit::InhibitFiles;
 use crate::watched_tasks::WatchedTasksBuilder;
 
 mod update_channels;
@@ -215,6 +216,7 @@ async fn channel_list_update_task(
     config: ConfigTopics,
     channels: Arc<Topic<Channels>>,
     rauc_service: Service,
+    inhibit_files: &'static InhibitFiles,
 ) -> Result<()> {
     let poller = PollerProxy::new(&conn).await.unwrap();
 
@@ -249,8 +251,12 @@ async fn channel_list_update_task(
             }
         };
 
-        let should_reload =
-            update_system_conf(new_channels.primary(), enable_polling, enable_auto_install)?;
+        let should_reload = update_system_conf(
+            new_channels.primary(),
+            enable_polling,
+            enable_auto_install,
+            inhibit_files,
+        )?;
 
         channels.set(new_channels);
 
@@ -322,6 +328,7 @@ impl Rauc {
         wtb: &mut WatchedTasksBuilder,
         _conn: &Arc<Connection>,
         rauc_service: Service,
+        inhibit_files: &'static InhibitFiles,
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
@@ -339,6 +346,7 @@ impl Rauc {
                 inst.config.clone(),
                 inst.status.channels.clone(),
                 rauc_service,
+                inhibit_files,
             ),
         )?;
 
@@ -351,6 +359,7 @@ impl Rauc {
         wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
         rauc_service: Service,
+        inhibit_files: &'static InhibitFiles,
     ) -> Result<Self> {
         let inst = Self::setup_topics(bb);
 
@@ -606,6 +615,7 @@ impl Rauc {
                 inst.config.clone(),
                 inst.status.channels.clone(),
                 rauc_service,
+                inhibit_files,
             ),
         )?;
 

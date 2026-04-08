@@ -17,6 +17,7 @@
 use async_std::sync::Arc;
 
 use crate::broker::{BrokerBuilder, Topic};
+use crate::inhibit::InhibitFiles;
 use crate::led::BlinkPattern;
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -82,6 +83,7 @@ impl DbusSession {
         wtb: &mut WatchedTasksBuilder,
         led_dut: Arc<Topic<BlinkPattern>>,
         led_uplink: Arc<Topic<BlinkPattern>>,
+        inhibit_files: &'static InhibitFiles,
     ) -> anyhow::Result<Self> {
         let tacd = Tacd::new();
 
@@ -94,7 +96,7 @@ impl DbusSession {
         Ok(Self {
             hostname: Hostname::new(bb, wtb, &conn)?,
             network: Network::new(bb, wtb, &conn, led_dut, led_uplink)?,
-            rauc: Rauc::new(bb, wtb, &conn, systemd.rauc.clone())?,
+            rauc: Rauc::new(bb, wtb, &conn, systemd.rauc.clone(), inhibit_files)?,
             systemd,
         })
     }

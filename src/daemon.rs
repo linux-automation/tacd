@@ -89,8 +89,14 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
         adc.iobus_volt.fast.clone(),
     )?;
     let (hostname, network, rauc, systemd) = {
-        let dbus =
-            DbusSession::new(&mut bb, &mut wtb, led.eth_dut.clone(), led.eth_lab.clone()).await?;
+        let dbus = DbusSession::new(
+            &mut bb,
+            &mut wtb,
+            led.eth_dut.clone(),
+            led.eth_lab.clone(),
+            inhibit_files,
+        )
+        .await?;
 
         (dbus.hostname, dbus.network, dbus.rauc, dbus.systemd)
     };

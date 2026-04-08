@@ -4,6 +4,7 @@ use std::io::{Error, ErrorKind};
 use std::path::Path;
 
 use super::Channel;
+use crate::inhibit::InhibitFiles;
 
 use log::info;
 
@@ -27,6 +28,7 @@ fn polling_section(
     primary_channel: Option<&Channel>,
     polling: bool,
     auto_install: bool,
+    inhibit_files: &'static InhibitFiles,
 ) -> Result<Option<String>, std::fmt::Error> {
     // If no primary channel is configured or if polling is not enabled,
     // then we do not need a `[polling]` section at all.
@@ -44,6 +46,12 @@ fn polling_section(
     if let Some(interval) = primary_channel.polling_interval {
         writeln!(&mut section, "interval-sec={}", interval.as_secs())?;
     }
+
+    writeln!(
+        &mut section,
+        "inhibit-files={}",
+        inhibit_files.setup_mode.path
+    )?;
 
     let candidate_criteria = primary_channel
         .candidate_criteria
@@ -74,6 +82,7 @@ pub fn update_system_conf(
     primary_channel: Option<&Channel>,
     enable_polling: bool,
     enable_auto_install: bool,
+    inhibit_files: &'static InhibitFiles,
 ) -> std::io::Result<bool> {
     let dynamic_conf = {
         // Allow force-enabling update polling and automatic installations
@@ -89,7 +98,7 @@ pub fn update_system_conf(
         let polling = enable_polling || force_polling;
         let auto_install = enable_auto_install || force_auto_install;
 
-        match polling_section(primary_channel, polling, auto_install) {
+        match polling_section(primary_channel, polling, auto_install, inhibit_files) {
             Ok(Some(ps)) => {
                 // We use the config in /usr/lib as a template ...
                 let static_conf = read_to_string(STATIC_CONF_PATH)?;
