@@ -25,6 +25,7 @@ mod dbus;
 mod digital_io;
 mod dut_power;
 mod http_server;
+mod inhibit;
 mod iobus;
 mod journal;
 mod led;
