@@ -294,7 +294,7 @@ export function UpdateChannels(props: UpdateChannelsProps) {
       header={
         <Header
           variant="h3"
-          description="Enabled update channels are periodically checked for updates"
+          description="The primary update channels is periodically checked for updates"
         >
           Update Channels
         </Header>
