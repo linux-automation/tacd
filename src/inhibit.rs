@@ -20,6 +20,7 @@ use std::{
     path::Path,
 };
 
+use crate::dut_power::OutputState;
 use crate::watched_tasks::WatchedTasksBuilder;
 
 pub struct InhibitFile {
@@ -27,11 +28,15 @@ pub struct InhibitFile {
 }
 
 pub struct InhibitFiles {
+    pub dut_pwr: InhibitFile,
     pub setup_mode: InhibitFile,
 }
 
 #[cfg(feature = "demo_mode")]
 const FILES: InhibitFiles = InhibitFiles {
+    dut_pwr: InhibitFile {
+        path: "demo_files/run/tacd/inhibit/dut-pwr",
+    },
     setup_mode: InhibitFile {
         path: "demo_files/run/tacd/inhibit/setup-mode",
     },
@@ -39,6 +44,9 @@ const FILES: InhibitFiles = InhibitFiles {
 
 #[cfg(not(feature = "demo_mode"))]
 const FILES: InhibitFiles = InhibitFiles {
+    dut_pwr: InhibitFile {
+        path: "/run/tacd/inhibit/dut-pwr",
+    },
     setup_mode: InhibitFile {
         path: "/run/tacd/inhibit/setup-mode",
     },
@@ -69,8 +77,20 @@ impl InhibitFiles {
     pub fn keep_updated(
         &'static self,
         wtb: &mut WatchedTasksBuilder,
+        dut_pwr: &crate::dut_power::DutPwrThread,
         setup_mode: &crate::setup_mode::SetupMode,
     ) -> anyhow::Result<()> {
+        let (dut_pwr_state_events, _) = dut_pwr.state.clone().subscribe_unbounded();
+
+        wtb.spawn_task("inhibit-dut-pwr-service", async move {
+            loop {
+                match dut_pwr_state_events.recv().await? {
+                    OutputState::On => self.dut_pwr.inhibit()?,
+                    _ => self.dut_pwr.release()?,
+                }
+            }
+        })?;
+
         let (setup_mode_events, _) = setup_mode.setup_mode.clone().subscribe_unbounded();
         wtb.spawn_task("inhibit-setup-mode-service", async move {
             loop {

@@ -130,7 +130,7 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
 
     // Create files in /run/tacd/inhibit whenever the system should
     // not be automatically rebooted by RAUC.
-    inhibit_files.keep_updated(&mut wtb, &setup_mode)?;
+    inhibit_files.keep_updated(&mut wtb, &dut_pwr, &setup_mode)?;
 
     // Set up the user interface for the hardware display on the TAC.
     // The different screens receive updates via the topics provided in
