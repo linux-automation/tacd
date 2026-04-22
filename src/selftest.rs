@@ -6,11 +6,13 @@ use crate::system::HardwareGeneration;
 use crate::watched_tasks::WatchedTasksBuilder;
 
 mod adc;
+mod ui;
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Sample ADC channels and calculate statistic
     Adc(adc::AdcArgs),
+    UiTest,
 }
 
 pub async fn selftests(command: Commands) -> Result<()> {
@@ -30,5 +32,6 @@ pub async fn selftests(command: Commands) -> Result<()> {
         Commands::Adc(adc_args) => {
             adc::collect_adc_samples(bb, wtb, hardware_generation, adc_args).await
         }
+        Commands::UiTest => ui::ui_test(bb, wtb).await,
     }
 }

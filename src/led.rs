@@ -30,13 +30,13 @@ mod demo_mode;
 mod extras;
 
 #[cfg(feature = "demo_mode")]
-use demo_mode::{Brightness, Leds, SysClass};
+pub use demo_mode::{Brightness, Leds, SysClass};
 
 #[cfg(not(feature = "demo_mode"))]
-use sysfs_class::{Brightness, Leds, SysClass};
+pub use sysfs_class::{Brightness, Leds, SysClass};
 
 pub use extras::{BlinkPattern, BlinkPatternBuilder};
-use extras::{Pattern, RgbColor};
+pub use extras::{Pattern, RgbColor};
 
 pub struct Led {
     pub out_0: Arc<Topic<BlinkPattern>>,
@@ -53,7 +53,7 @@ pub struct Led {
 /// Different versions of the hardware have different amounts of on-board LEDs,
 /// so not finding an LED should not be a critical error.
 /// Just show a not and go on if an LED can not be set up.
-fn get_led_checked(hardware_name: &'static str) -> Option<Leds> {
+pub fn get_led_checked(hardware_name: &'static str) -> Option<Leds> {
     match Leds::new(hardware_name) {
         Ok(led) => Some(led),
         Err(err) if err.kind() == ErrorKind::NotFound => {

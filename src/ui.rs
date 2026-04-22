@@ -33,7 +33,7 @@ mod screens;
 mod widgets;
 
 use alerts::{AlertList, Alerter};
-use buttons::{Button, ButtonEvent, Direction, PressDuration, Source, handle_buttons};
+pub use buttons::{Button, ButtonEvent, Direction, PressDuration, Source, handle_buttons};
 pub use display::{Display, ScreenShooter};
 pub use screens::message;
 use screens::{ActivatableScreen, AlertScreen, NormalScreen, Screen, splash};
