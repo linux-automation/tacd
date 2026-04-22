@@ -16,6 +16,7 @@
 
 use anyhow::Result;
 use async_std::future::pending;
+use clap::{self, Parser};
 use log::{error, info};
 
 mod adc;
@@ -31,6 +32,7 @@ mod led;
 mod measurement;
 mod motd;
 mod regulators;
+mod selftest;
 mod setup_mode;
 mod system;
 mod temperatures;
@@ -56,6 +58,26 @@ use ui::{ScreenShooter, Ui, UiResources, message, setup_display};
 use usb_hub::UsbHub;
 use watchdog::Watchdog;
 use watched_tasks::WatchedTasksBuilder;
+
+#[derive(clap::Parser, Debug)]
+#[command(name = "tacd")]
+#[command(author, version, about)]
+#[command(propagate_version = true)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<CliCommands>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum CliCommands {
+    /// Start the tacd service
+    Daemon,
+    /// Helper to test LXATAC functions.
+    Selftest {
+        #[command(subcommand)]
+        tests: selftest::Commands,
+    },
+}
 
 async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)> {
     // The tacd spawns a couple of async tasks that should run as long as
@@ -189,10 +211,7 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     Ok((ui, wtb))
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    env_logger::init();
-
+async fn daemon() -> Result<()> {
     // Show a splash screen very early on
     let display = setup_display();
 
@@ -225,5 +244,16 @@ async fn main() -> Result<()> {
             // to give the user a chance to actually see the error message.
             pending().await
         }
+    }
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
+    env_logger::init();
+    let cli = Cli::parse();
+
+    match cli.command.unwrap_or(CliCommands::Daemon) {
+        CliCommands::Daemon => daemon().await,
+        CliCommands::Selftest { tests } => selftest::selftests(tests).await,
     }
 }

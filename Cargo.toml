@@ -48,6 +48,8 @@ yaml_serde = "0.10"
 zbus = "5.13"
 zvariant_derive = "5.9"
 zvariant = { version = "5.9", default-features = false, features = ["enumflags2"] }
+clap = { version = "4.6.0", features = ["derive"] }
+
 
 [features]
 default = ["systemd"]
