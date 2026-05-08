@@ -24,10 +24,10 @@ use futures::FutureExt;
 use nix::errno::Errno;
 use nix::mount::MsFlags;
 
-use crate::WatchedTasksBuilder;
 use crate::dut_power::OutputState;
 use crate::temperatures::Warning;
 use crate::usb_hub::OverloadedPort;
+use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
 mod setup {

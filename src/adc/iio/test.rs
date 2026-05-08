@@ -63,7 +63,11 @@ impl CalibratedChannel {
             *ts -= Duration::from_millis(500)
         }
 
-        let mut results = [Measurement { ts, value: 0.0 }; N];
+        let mut results = [Measurement {
+            ts,
+            value: 0.0,
+            raw: None,
+        }; N];
 
         for i in 0..N {
             // If a transient is scheduled (channels[i].transient != NO_TRANSIENT)

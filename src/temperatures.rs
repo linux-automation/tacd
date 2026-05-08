@@ -112,7 +112,7 @@ impl Temperatures {
                 let warning = Warning::from_temperatures(val);
                 warning_thread.set_if_changed(warning);
 
-                let meas = Measurement::now(val);
+                let meas = Measurement::now(val, None);
                 soc_temperature_thread.set(meas);
 
                 sleep(UPDATE_INTERVAL);
