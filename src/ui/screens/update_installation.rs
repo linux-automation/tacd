@@ -97,7 +97,7 @@ impl ActivatableScreen for UpdateInstallationScreen {
 
         widgets.push(|display| {
             DynamicWidget::text_center(
-                ui.res.rauc.progress.clone(),
+                ui.res.rauc.status.progress.clone(),
                 display,
                 Point::new(120, 100),
                 Box::new(|progress: &Progress| {
@@ -128,7 +128,7 @@ impl ActivatableScreen for UpdateInstallationScreen {
 
         widgets.push(|display| {
             DynamicWidget::bar(
-                ui.res.rauc.progress.clone(),
+                ui.res.rauc.status.progress.clone(),
                 display,
                 Point::new(20, 180),
                 200,

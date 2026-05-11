@@ -26,7 +26,7 @@ import Spinner from "@cloudscape-design/components/spinner";
 import Wizard from "@cloudscape-design/components/wizard";
 
 import { LabgridService, LabgridConfig } from "./SettingsLabgrid";
-import { MqttToggle } from "./MqttComponents";
+import { MqttHider, MqttToggle } from "./MqttComponents";
 import { ConfigEditor } from "./ConfigEditor";
 import { useMqttState } from "./mqtt";
 
@@ -157,13 +157,19 @@ export default function Setup() {
                     <Box variant="p">
                       When polling for updates the LXA TAC will transmit the
                       following information to our server: The IP address the
-                      request is coming from, the serial number of the device
-                      and information on the currently installed software.
+                      request is coming from, the serial number of the device,
+                      the device uptime and boot id and information on the
+                      currently installed software.
                     </Box>
                     <Box variant="p" padding="s">
                       <MqttToggle topic="/v1/tac/update/enable_polling">
                         Periodically check for updates
                       </MqttToggle>
+                      <MqttHider topic="/v1/tac/update/enable_polling">
+                        <MqttToggle topic="/v1/tac/update/enable_auto_install">
+                          Automatically install and boot updates
+                        </MqttToggle>
+                      </MqttHider>
                     </Box>
                   </Container>
                 ),

@@ -25,6 +25,7 @@ use crate::dbus::DbusSession;
 use crate::digital_io::DigitalIo;
 use crate::dut_power::DutPwrThread;
 use crate::http_server::HttpServer;
+use crate::inhibit::InhibitFiles;
 use crate::iobus::IoBus;
 use crate::led::Led;
 use crate::regulators::Regulators;
@@ -76,6 +77,8 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
         adc.usb_host3_curr.fast.clone(),
     )?;
 
+    let inhibit_files = InhibitFiles::get();
+
     // Expose other software on the TAC via the broker framework by connecting
     // to them via HTTP / DBus APIs.
     let iobus = IoBus::new(
@@ -86,8 +89,14 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
         adc.iobus_volt.fast.clone(),
     )?;
     let (hostname, network, rauc, systemd) = {
-        let dbus =
-            DbusSession::new(&mut bb, &mut wtb, led.eth_dut.clone(), led.eth_lab.clone()).await?;
+        let dbus = DbusSession::new(
+            &mut bb,
+            &mut wtb,
+            led.eth_dut.clone(),
+            led.eth_lab.clone(),
+            inhibit_files,
+        )
+        .await?;
 
         (dbus.hostname, dbus.network, dbus.rauc, dbus.systemd)
     };
@@ -124,6 +133,10 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     ) {
         error!("failed to start motd update service with {err}");
     }
+
+    // Create files in /run/tacd/inhibit whenever the system should
+    // not be automatically rebooted by RAUC.
+    inhibit_files.keep_updated(&mut wtb, &dut_pwr, &setup_mode)?;
 
     // Set up the user interface for the hardware display on the TAC.
     // The different screens receive updates via the topics provided in

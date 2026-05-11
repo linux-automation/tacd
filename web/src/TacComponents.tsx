@@ -22,6 +22,7 @@ import Cards from "@cloudscape-design/components/cards";
 import Checkbox from "@cloudscape-design/components/checkbox";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
 import Container from "@cloudscape-design/components/container";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
 import Form from "@cloudscape-design/components/form";
 import Header from "@cloudscape-design/components/header";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
@@ -29,7 +30,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import Spinner from "@cloudscape-design/components/spinner";
 import Table from "@cloudscape-design/components/table";
 
-import { MqttButton, MqttToggle } from "./MqttComponents";
+import { MqttButton, MqttHider, MqttToggle } from "./MqttComponents";
 import { useMqttSubscription } from "./mqtt";
 
 type RootfsSlot = {
@@ -114,6 +115,8 @@ type Duration = {
 type UpstreamBundle = {
   compatible: string;
   version: string;
+  manifest_hash: string;
+  effective_url: string;
   newer_than_installed: boolean;
 };
 
@@ -124,7 +127,13 @@ type Channel = {
   url: string;
   polling_interval?: Duration;
   enabled: boolean;
+  primary: boolean;
   bundle?: UpstreamBundle;
+};
+
+type UpdateRequest = {
+  manifest_hash: string;
+  url: string;
 };
 
 interface SlotStatusProps {
@@ -245,14 +254,36 @@ export function UpdateConfig() {
         </Header>
       }
     >
-      <ColumnLayout columns={3} variant="text-grid">
-        <Box>
-          <Box variant="awsui-key-label">Update Polling</Box>
-          <MqttToggle topic="/v1/tac/update/enable_polling">
-            Periodically check for updates
-          </MqttToggle>
-        </Box>
-      </ColumnLayout>
+      <SpaceBetween size="m">
+        <ColumnLayout columns={3} variant="text-grid">
+          <Box>
+            <Box variant="awsui-key-label">Update Polling</Box>
+            <MqttToggle topic="/v1/tac/update/enable_polling">
+              Periodically check for updates
+            </MqttToggle>
+          </Box>
+          <MqttHider topic="/v1/tac/update/enable_polling">
+            <Box>
+              <Box variant="awsui-key-label">Auto Install</Box>
+              <MqttToggle topic="/v1/tac/update/enable_auto_install">
+                Automatically install and boot updates
+              </MqttToggle>
+            </Box>
+          </MqttHider>
+        </ColumnLayout>
+        <MqttHider topic="/v1/tac/update/enable_polling">
+          <ExpandableSection headerText="Advanced Settings">
+            <ColumnLayout columns={3} variant="text-grid">
+              <Box>
+                <Box variant="awsui-key-label">DUT Power Inhibit</Box>
+                <MqttToggle topic="/v1/tac/update/inhibit/dut_power">
+                  Do not update while DUT Power is on
+                </MqttToggle>
+              </Box>
+            </ColumnLayout>
+          </ExpandableSection>
+        </MqttHider>
+      </SpaceBetween>
     </Container>
   );
 }
@@ -278,7 +309,7 @@ export function UpdateChannels(props: UpdateChannelsProps) {
       header={
         <Header
           variant="h3"
-          description="Enabled update channels are periodically checked for updates"
+          description="The primary update channels is periodically checked for updates"
         >
           Update Channels
         </Header>
@@ -378,6 +409,10 @@ export function UpdateChannels(props: UpdateChannelsProps) {
               return "Not enabled";
             }
 
+            if (!e.primary) {
+              return "Not primary";
+            }
+
             if (!e.bundle) {
               if (enable_polling) {
                 return <Spinner />;
@@ -390,11 +425,16 @@ export function UpdateChannels(props: UpdateChannelsProps) {
               return "Up to date";
             }
 
+            const request: UpdateRequest = {
+              manifest_hash: e.bundle.manifest_hash,
+              url: e.bundle.effective_url,
+            };
+
             return (
               <MqttButton
                 iconName="download"
                 topic="/v1/tac/update/install"
-                send={e.url}
+                send={request}
               >
                 Upgrade
               </MqttButton>
@@ -527,7 +567,16 @@ export function UpdateNotification() {
   if (channels !== undefined) {
     for (let ch of channels) {
       if (ch.enabled && ch.bundle && ch.bundle.newer_than_installed) {
-        updates.push(ch);
+        const request: UpdateRequest = {
+          manifest_hash: ch.bundle.manifest_hash,
+          url: ch.bundle.effective_url,
+        };
+
+        updates.push({
+          name: ch.name,
+          display_name: ch.display_name,
+          request: request,
+        });
       }
     }
   }
@@ -537,7 +586,7 @@ export function UpdateNotification() {
       key={u.name}
       iconName="download"
       topic="/v1/tac/update/install"
-      send={u.url}
+      send={u.request}
     >
       Install new {u.display_name} bundle
     </MqttButton>

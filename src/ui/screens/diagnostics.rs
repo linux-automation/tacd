@@ -126,10 +126,10 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
 
     writeln!(&mut text)?;
 
-    if let Some(channels) = ui.res.rauc.channels.try_get() {
+    if let Some(channels) = ui.res.rauc.status.channels.try_get() {
         write!(&mut text, "chs: ")?;
 
-        for ch in channels {
+        for ch in channels.into_vec() {
             let en = if ch.enabled { "[x]" } else { "[ ]" };
             let name = ch.name;
 
@@ -139,8 +139,8 @@ fn diagnostic_text(ui: &Ui) -> Result<String, std::fmt::Error> {
         writeln!(&mut text)?;
     }
 
-    if let Some(slot_status) = ui.res.rauc.slot_status.try_get() {
-        let primary = ui.res.rauc.primary.try_get();
+    if let Some(slot_status) = ui.res.rauc.status.slot_status.try_get() {
+        let primary = ui.res.rauc.status.primary.try_get();
 
         for fs in ["rootfs_0", "rootfs_1"] {
             let rootfs = slot_status.get(fs);

@@ -51,6 +51,7 @@ pub enum ServiceAction {
 
 #[derive(Clone)]
 pub struct Service {
+    unit_name: &'static str,
     #[cfg_attr(feature = "demo_mode", allow(dead_code))]
     pub action: Arc<Topic<ServiceAction>>,
     pub status: Arc<Topic<ServiceStatus>>,
@@ -65,6 +66,7 @@ pub struct Systemd {
     pub labgrid: Service,
     #[allow(dead_code)]
     pub iobus: Service,
+    pub rauc: Service,
 }
 
 impl ServiceStatus {
@@ -89,9 +91,51 @@ impl ServiceStatus {
     }
 }
 
+pub enum ReloadError {
+    Canceled,
+    Timeout,
+    Failed,
+    Dependency,
+    Skipped,
+    DBus(zbus::Error),
+}
+
+impl From<&str> for ReloadError {
+    fn from(value: &str) -> Self {
+        match value {
+            "canceled" => Self::Canceled,
+            "timeout" => Self::Timeout,
+            "failed" => Self::Failed,
+            "dependency" => Self::Dependency,
+            "skipped" => Self::Skipped,
+            _ => Self::DBus(zbus::Error::Failure(format!("Unknown job result: {value}"))),
+        }
+    }
+}
+
+impl From<zbus::Error> for ReloadError {
+    fn from(value: zbus::Error) -> Self {
+        Self::DBus(value)
+    }
+}
+
+impl std::fmt::Display for ReloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Canceled => write!(f, "The reload job was canceled"),
+            Self::Timeout => write!(f, "The reload job timed out"),
+            Self::Failed => write!(f, "The reload job failed"),
+            Self::Dependency => write!(f, "The reload job failed due to a dependency"),
+            Self::Skipped => write!(f, "The reload job was skipped"),
+            Self::DBus(e) => write!(f, "A DBus error occurred: {e}"),
+        }
+    }
+}
+
 impl Service {
-    fn new(bb: &mut BrokerBuilder, topic_name: &'static str) -> Self {
+    fn new(bb: &mut BrokerBuilder, unit_name: &'static str, topic_name: &'static str) -> Self {
         Self {
+            unit_name,
             action: bb.topic_wo(&format!("/v1/tac/service/{topic_name}/action"), None),
             status: bb.topic_ro(&format!("/v1/tac/service/{topic_name}/status"), None),
         }
@@ -102,7 +146,6 @@ impl Service {
         &self,
         _wtb: &mut WatchedTasksBuilder,
         _conn: Arc<Connection>,
-        _unit_name: &str,
     ) -> anyhow::Result<()> {
         self.status.set(ServiceStatus::get().await.unwrap());
 
@@ -114,8 +157,8 @@ impl Service {
         &self,
         wtb: &mut WatchedTasksBuilder,
         conn: Arc<Connection>,
-        unit_name: &'static str,
     ) -> anyhow::Result<()> {
+        let unit_name = self.unit_name;
         let unit_path = {
             let manager = manager::ManagerProxy::new(&conn).await.unwrap();
             manager.get_unit(unit_name).await.unwrap()
@@ -180,6 +223,52 @@ impl Service {
 
         Ok(())
     }
+
+    #[cfg(feature = "demo_mode")]
+    pub async fn reload(&self, _conn: &Connection) -> std::result::Result<(), ReloadError> {
+        log::info!("Reloaded {}", self.unit_name);
+        Ok(())
+    }
+
+    #[cfg(not(feature = "demo_mode"))]
+    pub async fn reload(&self, conn: &Connection) -> std::result::Result<(), ReloadError> {
+        let manager = manager::ManagerProxy::new(conn).await?;
+
+        // According to the systemd dbus interface documentation the race-free
+        // way to receive results for a Job (like restarting a service) is to
+        // subscribe to JobRemoved signals before triggering the job and then
+        // waiting for a removed job with the correct object path.
+
+        // Subscribe to JobRemoved signals
+        let mut job_removed_stream = manager.receive_job_removed().await?;
+
+        // Trigger the reload and receive an object path as result
+        let reload_job = manager
+            .reload_or_restart_unit(self.unit_name, "replace")
+            .await?;
+
+        loop {
+            // .next() returning None would mean the signal stream from systemd
+            // ending, which should be an extremely unlikely scenario.
+            let removed = job_removed_stream
+                .next()
+                .await
+                .ok_or(zbus::Error::InvalidReply)?;
+
+            let args = removed.args()?;
+
+            if args.job == *reload_job {
+                // This is the job we are looking for
+
+                // The result is a string with values like "done", "failed", etc.
+                // Convert that to a Result and exit.
+                break match args.result {
+                    "done" => Ok(()),
+                    res => Err(res.into()),
+                };
+            }
+        }
+    }
 }
 
 impl Systemd {
@@ -232,25 +321,22 @@ impl Systemd {
 
         Self::handle_reboot(wtb, reboot.clone(), conn.clone())?;
 
-        let networkmanager = Service::new(bb, "network-manager");
-        let labgrid = Service::new(bb, "labgrid-exporter");
-        let iobus = Service::new(bb, "lxa-iobus");
+        let networkmanager = Service::new(bb, "NetworkManager.service", "network-manager");
+        let labgrid = Service::new(bb, "labgrid-exporter.service", "labgrid-exporter");
+        let iobus = Service::new(bb, "lxa-iobus.service", "lxa-iobus");
+        let rauc = Service::new(bb, "rauc.service", "rauc");
 
-        networkmanager
-            .connect(wtb, conn.clone(), "NetworkManager.service")
-            .await?;
-        labgrid
-            .connect(wtb, conn.clone(), "labgrid-exporter.service")
-            .await?;
-        iobus
-            .connect(wtb, conn.clone(), "lxa-iobus.service")
-            .await?;
+        networkmanager.connect(wtb, conn.clone()).await?;
+        labgrid.connect(wtb, conn.clone()).await?;
+        iobus.connect(wtb, conn.clone()).await?;
+        rauc.connect(wtb, conn.clone()).await?;
 
         Ok(Self {
             reboot,
             networkmanager,
             labgrid,
             iobus,
+            rauc,
         })
     }
 }
