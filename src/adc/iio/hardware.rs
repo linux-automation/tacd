@@ -210,7 +210,7 @@ impl IioThread {
 
         debug!("IIO devices:");
         for dev in ctx.devices() {
-            debug!("  * {}", &dev.name().unwrap_or_default());
+            debug!("  * {}", dev.name().unwrap_or_default());
         }
 
         let adc = ctx
