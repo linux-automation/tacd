@@ -24,6 +24,7 @@ use async_std::task::sleep;
 use serde::{Deserialize, Serialize};
 
 use crate::adc::CalibratedChannel;
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -204,9 +205,21 @@ fn handle_port(
     base: &'static str,
 ) -> Result<UsbPort> {
     let port = UsbPort {
-        request: bb.topic_wo(format!("/v1/usb/host/{name}/powered").as_str(), None),
-        status: bb.topic_ro(format!("/v1/usb/host/{name}/powered").as_str(), None),
-        device: bb.topic_ro(format!("/v1/usb/host/{name}/device").as_str(), Some(None)),
+        request: bb.topic_wo(
+            format!("/v1/usb/host/{name}/powered").as_str(),
+            Capability::Usb,
+            None,
+        ),
+        status: bb.topic_ro(
+            format!("/v1/usb/host/{name}/powered").as_str(),
+            Capability::Usb,
+            None,
+        ),
+        device: bb.topic_ro(
+            format!("/v1/usb/host/{name}/device").as_str(),
+            Capability::Usb,
+            Some(None),
+        ),
     };
 
     let request = port.request.clone();
@@ -292,7 +305,7 @@ fn handle_overloads(
     port2: CalibratedChannel,
     port3: CalibratedChannel,
 ) -> Result<Arc<Topic<Option<OverloadedPort>>>> {
-    let overload = bb.topic_ro("/v1/usb/host/overload", None);
+    let overload = bb.topic_ro("/v1/usb/host/overload", Capability::Usb, None);
 
     let overload_task = overload.clone();
 

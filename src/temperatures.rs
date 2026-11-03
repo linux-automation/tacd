@@ -22,6 +22,7 @@ use anyhow::Result;
 use async_std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::Measurement;
 use crate::watched_tasks::WatchedTasksBuilder;
@@ -93,8 +94,8 @@ pub struct Temperatures {
 impl Temperatures {
     pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
         let run = Arc::new(AtomicBool::new(true));
-        let soc_temperature = bb.topic_ro("/v1/tac/temperatures/soc", None);
-        let warning = bb.topic_ro("/v1/tac/temperatures/warning", None);
+        let soc_temperature = bb.topic_ro("/v1/tac/temperatures/soc", Capability::TacSystem, None);
+        let warning = bb.topic_ro("/v1/tac/temperatures/warning", Capability::TacSystem, None);
 
         let run_thread = run.clone();
         let soc_temperature_thread = soc_temperature.clone();

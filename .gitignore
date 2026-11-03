@@ -2,6 +2,7 @@
 /.cargo
 /demo_files/home/root/.ssh/authorized_keys
 /demo_files/run/
+/demo_files/srv/tacd/token_store.key
 /web/npm-shrinkwrap.json
 /web/oe-logs
 /web/oe-workdir

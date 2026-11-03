@@ -23,7 +23,9 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use tide::{Request, Response, Server, http::mime};
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
+use crate::http_server::auth_middleware::{AuthMiddleware, Direction};
 use crate::watched_tasks::WatchedTasksBuilder;
 
 #[cfg(feature = "demo_mode")]
@@ -45,65 +47,71 @@ impl SetupMode {
         web_path: &str,
     ) {
         let setup_mode_task = self.setup_mode.clone();
-        server.at(web_path).put(move |mut req: Request<()>| {
-            let setup_mode = setup_mode_task.clone();
+        server
+            .at(web_path)
+            .with(AuthMiddleware::new(Capability::TacSystem, Direction::Write))
+            .put(move |mut req: Request<()>| {
+                let setup_mode = setup_mode_task.clone();
 
-            async move {
-                let res = if setup_mode.get().await {
-                    let fs_path = Path::new(fs_path);
-                    let parent = fs_path.parent().unwrap();
+                async move {
+                    let res = if setup_mode.get().await {
+                        let fs_path = Path::new(fs_path);
+                        let parent = fs_path.parent().unwrap();
 
-                    if !parent.exists() {
-                        create_dir_all(parent)?;
-                    }
+                        if !parent.exists() {
+                            create_dir_all(parent)?;
+                        }
 
-                    let content = req.body_bytes().await?;
-                    write(fs_path, content)?;
+                        let content = req.body_bytes().await?;
+                        write(fs_path, content)?;
 
-                    Response::new(204)
-                } else {
-                    Response::builder(403)
-                        .body("This file may only be written in setup mode")
-                        .content_type(mime::PLAIN)
-                        .build()
-                };
+                        Response::new(204)
+                    } else {
+                        Response::builder(403)
+                            .body("This file may only be written in setup mode")
+                            .content_type(mime::PLAIN)
+                            .build()
+                    };
 
-                Ok(res)
-            }
-        });
+                    Ok(res)
+                }
+            });
 
         let setup_mode_task = self.setup_mode.clone();
-        server.at(web_path).get(move |_| {
-            let setup_mode = setup_mode_task.clone();
+        server
+            .at(web_path)
+            .with(AuthMiddleware::new(Capability::TacSystem, Direction::Read))
+            .get(move |_| {
+                let setup_mode = setup_mode_task.clone();
 
-            async move {
-                let res = if setup_mode.get().await {
-                    match read(fs_path) {
-                        Ok(content) => Response::builder(200)
-                            .body(content)
-                            .content_type(mime::PLAIN)
-                            .build(),
-                        Err(e) => {
-                            let status = match e.kind() {
-                                ErrorKind::NotFound => 404,
-                                _ => 500,
-                            };
-                            Response::builder(status)
-                                .body("Failed to read file")
+                async move {
+                    let res = if setup_mode.get().await {
+                        match read(fs_path) {
+                            Ok(content) => Response::builder(200)
+                                .body(content)
                                 .content_type(mime::PLAIN)
-                                .build()
+                                .build(),
+                            Err(e) => {
+                                let status = match e.kind() {
+                                    ErrorKind::NotFound => 404,
+                                    _ => 500,
+                                };
+                                Response::builder(status)
+                                    .body("Failed to read file")
+                                    .content_type(mime::PLAIN)
+                                    .build()
+                            }
                         }
-                    }
-                } else {
-                    Response::builder(403)
-                        .body("This file may only be read in setup mode")
-                        .content_type(mime::PLAIN)
-                        .build()
-                };
+                    } else {
+                        Response::builder(403)
+                            .body("This file may only be read in setup mode")
+                            .content_type(mime::PLAIN)
+                            .build()
+                    };
 
-                Ok(res)
-            }
-        });
+                    Ok(res)
+                }
+            });
     }
 
     fn handle_leave_requests(
@@ -116,7 +124,7 @@ impl SetupMode {
         // We must make sure that a client from the web can only ever trigger _leaving_
         // the setup mode, as they would otherwise be able to take over the TAC.
         let (mut leave_requests, _) = bb
-            .topic_wo::<bool>("/v1/tac/setup_mode", None)
+            .topic_wo::<bool>("/v1/tac/setup_mode", Capability::TacSystem, None)
             .subscribe_unbounded();
         let setup_mode = self.setup_mode.clone();
 
@@ -138,11 +146,20 @@ impl SetupMode {
         server: &mut Server<()>,
     ) -> Result<Self> {
         let this = Self {
-            setup_mode: bb.topic("/v1/tac/setup_mode", true, false, true, Some(true), 1),
+            setup_mode: bb.topic(
+                "/v1/tac/setup_mode",
+                true,
+                false,
+                Capability::TacSystem,
+                true,
+                Some(true),
+                1,
+            ),
             show_help: bb.topic(
                 "/v1/tac/display/show_help",
                 true,
                 false,
+                Capability::TacSystem,
                 true,
                 Some(true),
                 1,

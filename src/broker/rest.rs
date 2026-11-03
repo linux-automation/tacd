@@ -19,6 +19,7 @@ use async_std::sync::Arc;
 use tide::{Request, Response};
 
 use super::AnyTopic;
+use crate::http_server::auth_middleware::{AuthMiddleware, Direction};
 
 async fn get_handler(topic: Arc<dyn AnyTopic>, mut _req: Request<()>) -> tide::Result {
     topic
@@ -44,14 +45,20 @@ async fn put_handler(topic: Arc<dyn AnyTopic>, mut req: Request<()>) -> tide::Re
 
 pub(super) fn register(server: &mut tide::Server<()>, topics: Arc<Vec<Arc<dyn AnyTopic>>>) {
     for topic in topics.iter() {
-        let mut route = server.at(topic.path());
+        let required_capability = topic.required_capability();
 
         if topic.web_readable() {
+            let mut route = server.at(topic.path());
+            route.with(AuthMiddleware::new(required_capability, Direction::Read));
+
             let topic_clone = topic.clone();
             route.get(move |req| get_handler(topic_clone.clone(), req));
         }
 
         if topic.web_writable() {
+            let mut route = server.at(topic.path());
+            route.with(AuthMiddleware::new(required_capability, Direction::Write));
+
             let topic_clone = topic.clone();
             route.put(move |req| put_handler(topic_clone.clone(), req));
 

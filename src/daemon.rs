@@ -19,6 +19,7 @@ use async_std::future::pending;
 use log::{error, info};
 
 use crate::adc::Adc;
+use crate::auth::TokenStore;
 use crate::backlight::Backlight;
 use crate::broker::BrokerBuilder;
 use crate::dbus::DbusSession;
@@ -110,9 +111,15 @@ async fn init(screenshooter: ScreenShooter) -> Result<(Ui, WatchedTasksBuilder)>
     // (if requested on start).
     let watchdog = Watchdog::new(dut_pwr.tick());
 
+    // Use tokens to grant and deny access to resources on the HTTP server
+    let token_store = TokenStore::open()?;
+
     // Set up a http server and provide some static files like the web
     // interface and config files that may be edited inside the web ui.
-    let mut http_server = HttpServer::new();
+    let mut http_server = HttpServer::new(token_store);
+
+    // Let the client query information about the token they are using.
+    crate::auth::api::serve(&mut http_server.server);
 
     // Allow editing some aspects of the TAC configuration when in "setup mode".
     let setup_mode = SetupMode::new(&mut bb, &mut wtb, &mut http_server.server)?;

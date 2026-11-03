@@ -21,6 +21,7 @@ use async_std::sync::Arc;
 use nix::sys::utsname::uname;
 use serde::{Deserialize, Serialize};
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 
 #[cfg(feature = "demo_mode")]
@@ -123,7 +124,7 @@ pub struct Uname {
 }
 
 impl Uname {
-    fn get() -> Result<Self> {
+    pub fn get() -> Result<Self> {
         let uts = uname()?;
 
         fn to_string(val: &OsStr, name: &str) -> Result<String> {
@@ -240,11 +241,24 @@ impl System {
         let barebox = Barebox::get()?;
 
         Ok(Self {
-            uname: bb.topic_ro("/v1/tac/info/uname", Some(Arc::new(uname))),
-            barebox: bb.topic_ro("/v1/tac/info/bootloader", Some(Arc::new(barebox))),
-            tacd_version: bb.topic_ro("/v1/tac/info/tacd/version", Some(version)),
+            uname: bb.topic_ro(
+                "/v1/tac/info/uname",
+                Capability::TacSystem,
+                Some(Arc::new(uname)),
+            ),
+            barebox: bb.topic_ro(
+                "/v1/tac/info/bootloader",
+                Capability::TacSystem,
+                Some(Arc::new(barebox)),
+            ),
+            tacd_version: bb.topic_ro(
+                "/v1/tac/info/tacd/version",
+                Capability::TacSystem,
+                Some(version),
+            ),
             hardware_generation: bb.topic_ro(
                 "/v1/tac/info/hardware_generation",
+                Capability::TacSystem,
                 Some(hardware_generation),
             ),
         })

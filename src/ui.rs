@@ -22,6 +22,7 @@ use async_std::sync::Arc;
 use futures::{FutureExt, select};
 use tide::{Response, Server};
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
 use crate::watched_tasks::WatchedTasksBuilder;
@@ -129,10 +130,30 @@ impl Ui {
         wtb: &mut WatchedTasksBuilder,
         res: UiResources,
     ) -> Result<Self> {
-        let screen = bb.topic_rw("/v1/tac/display/screen", Some(NormalScreen::first()));
-        let locator = bb.topic_rw("/v1/tac/display/locator", Some(false));
-        let buttons = bb.topic("/v1/tac/display/buttons", true, true, false, None, 0);
-        let alerts = bb.topic_ro("/v1/tac/display/alerts", Some(AlertList::new()));
+        let screen = bb.topic_rw(
+            "/v1/tac/display/screen",
+            Capability::TacSystem,
+            Some(NormalScreen::first()),
+        );
+        let locator = bb.topic_rw(
+            "/v1/tac/display/locator",
+            Capability::TacSystem,
+            Some(false),
+        );
+        let buttons = bb.topic(
+            "/v1/tac/display/buttons",
+            true,
+            true,
+            Capability::TacSystem,
+            false,
+            None,
+            0,
+        );
+        let alerts = bb.topic_ro(
+            "/v1/tac/display/alerts",
+            Capability::TacSystem,
+            Some(AlertList::new()),
+        );
         let reboot_message = Topic::anonymous(None);
 
         alerts.assert(AlertScreen::ScreenSaver);

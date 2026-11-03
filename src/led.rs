@@ -21,6 +21,7 @@ use async_std::prelude::*;
 use async_std::sync::Arc;
 use log::{error, info, warn};
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -73,7 +74,11 @@ fn handle_pattern(
     hardware_name: &'static str,
     topic_name: &'static str,
 ) -> Result<Arc<Topic<BlinkPattern>>> {
-    let topic = bb.topic_ro(&format!("/v1/tac/led/{topic_name}/pattern"), None);
+    let topic = bb.topic_ro(
+        &format!("/v1/tac/led/{topic_name}/pattern"),
+        Capability::TacSystem,
+        None,
+    );
 
     if let Some(led) = get_led_checked(hardware_name) {
         let (mut rx, _) = topic.clone().subscribe_unbounded();
@@ -98,7 +103,11 @@ fn handle_color(
     hardware_name: &'static str,
     topic_name: &'static str,
 ) -> Result<Arc<Topic<(f32, f32, f32)>>> {
-    let topic = bb.topic_ro(&format!("/v1/tac/led/{topic_name}/color"), None);
+    let topic = bb.topic_ro(
+        &format!("/v1/tac/led/{topic_name}/color"),
+        Capability::TacSystem,
+        None,
+    );
 
     if let Some(led) = get_led_checked(hardware_name) {
         let (mut rx, _) = topic.clone().subscribe_unbounded();

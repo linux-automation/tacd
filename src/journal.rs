@@ -24,6 +24,9 @@ use serde_json::to_string;
 use tide::http::Body;
 use tide::{Request, Response, Server};
 
+use crate::auth::Capability;
+use crate::http_server::auth_middleware::{AuthMiddleware, Direction};
+
 #[cfg(any(test, feature = "demo_mode"))]
 mod sd {
     use std::collections::btree_map::BTreeMap;
@@ -153,6 +156,7 @@ fn open_journal(mut history_len: u64, filter: &UnitFilter) -> Result<Journal> {
 pub fn serve(server: &mut Server<()>) {
     server
         .at("/v1/tac/journal")
+        .with(AuthMiddleware::new(Capability::TacSystem, Direction::Read))
         .get(|req: Request<()>| async move {
             let (response_tx, mut response_rx) = bounded::<Response>(1);
 

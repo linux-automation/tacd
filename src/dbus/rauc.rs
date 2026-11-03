@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Connection;
 use super::systemd::Service;
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::inhibit::InhibitFiles;
 use crate::watched_tasks::WatchedTasksBuilder;
@@ -404,11 +405,16 @@ async fn channel_list_update_task(
 impl Rauc {
     fn setup_topics(bb: &mut BrokerBuilder) -> Self {
         let config = ConfigTopics {
-            reload: bb.topic_wo("/v1/tac/update/channels/reload", Some(true)),
+            reload: bb.topic_wo(
+                "/v1/tac/update/channels/reload",
+                Capability::TacSystem,
+                Some(true),
+            ),
             enable_polling: bb.topic(
                 "/v1/tac/update/enable_polling",
                 true,
                 true,
+                Capability::TacSystem,
                 true,
                 Some(false),
                 1,
@@ -417,6 +423,7 @@ impl Rauc {
                 "/v1/tac/update/enable_auto_install",
                 true,
                 true,
+                Capability::TacSystem,
                 true,
                 Some(false),
                 1,
@@ -425,22 +432,27 @@ impl Rauc {
                 "/v1/tac/update/inhibit/dut_power",
                 true,
                 true,
+                Capability::TacSystem,
                 true,
                 Some(true),
                 1,
             ),
         };
 
-        let install = bb.topic_wo("/v1/tac/update/install", None);
+        let install = bb.topic_wo("/v1/tac/update/install", Capability::TacSystem, None);
 
         let status = StatusTopics {
-            operation: bb.topic_ro("/v1/tac/update/operation", None),
-            progress: bb.topic_ro("/v1/tac/update/progress", None),
-            slot_status: bb.topic_ro("/v1/tac/update/slots", None),
-            primary: bb.topic_ro("/v1/tac/update/primary", None),
-            last_error: bb.topic_ro("/v1/tac/update/last_error", None),
-            channels: bb.topic_ro("/v1/tac/update/channels", None),
-            should_reboot: bb.topic_ro("/v1/tac/update/should_reboot", Some(false)),
+            operation: bb.topic_ro("/v1/tac/update/operation", Capability::TacSystem, None),
+            progress: bb.topic_ro("/v1/tac/update/progress", Capability::TacSystem, None),
+            slot_status: bb.topic_ro("/v1/tac/update/slots", Capability::TacSystem, None),
+            primary: bb.topic_ro("/v1/tac/update/primary", Capability::TacSystem, None),
+            last_error: bb.topic_ro("/v1/tac/update/last_error", Capability::TacSystem, None),
+            channels: bb.topic_ro("/v1/tac/update/channels", Capability::TacSystem, None),
+            should_reboot: bb.topic_ro(
+                "/v1/tac/update/should_reboot",
+                Capability::TacSystem,
+                Some(false),
+            ),
         };
 
         Self {

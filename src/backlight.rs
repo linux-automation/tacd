@@ -28,6 +28,7 @@ use demo_mode::{Backlight as SysBacklight, Brightness, SysClass};
 #[cfg(not(feature = "demo_mode"))]
 use sysfs_class::{Backlight as SysBacklight, Brightness, SysClass};
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -37,7 +38,11 @@ pub struct Backlight {
 
 impl Backlight {
     pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
-        let brightness = bb.topic_rw("/v1/tac/display/backlight/brightness", Some(1.0));
+        let brightness = bb.topic_rw(
+            "/v1/tac/display/backlight/brightness",
+            Capability::TacSystem,
+            Some(1.0),
+        );
 
         let (mut rx, _) = brightness.clone().subscribe_unbounded();
 

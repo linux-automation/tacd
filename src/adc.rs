@@ -20,6 +20,7 @@ use anyhow::Result;
 use async_std::sync::Arc;
 use async_std::task::sleep;
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::measurement::{Measurement, Timestamp};
 use crate::system::HardwareGeneration;
@@ -93,6 +94,7 @@ impl Adc {
                     "/v1/usb/host/total/feedback/current",
                     true,
                     false,
+                    Capability::Usb,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -104,6 +106,7 @@ impl Adc {
                     "/v1/usb/host/port1/feedback/current",
                     true,
                     false,
+                    Capability::Usb,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -115,6 +118,7 @@ impl Adc {
                     "/v1/usb/host/port2/feedback/current",
                     true,
                     false,
+                    Capability::Usb,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -126,6 +130,7 @@ impl Adc {
                     "/v1/usb/host/port3/feedback/current",
                     true,
                     false,
+                    Capability::Usb,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -137,6 +142,7 @@ impl Adc {
                     "/v1/output/out_0/feedback/voltage",
                     true,
                     false,
+                    Capability::Outputs,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -148,6 +154,7 @@ impl Adc {
                     "/v1/output/out_1/feedback/voltage",
                     true,
                     false,
+                    Capability::Outputs,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -159,6 +166,7 @@ impl Adc {
                     "/v1/iobus/feedback/current",
                     true,
                     false,
+                    Capability::IoBus,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -170,6 +178,7 @@ impl Adc {
                     "/v1/iobus/feedback/voltage",
                     true,
                     false,
+                    Capability::IoBus,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -181,6 +190,7 @@ impl Adc {
                     "/v1/dut/feedback/voltage",
                     true,
                     false,
+                    Capability::DutPower,
                     false,
                     None,
                     HISTORY_LENGTH,
@@ -192,12 +202,13 @@ impl Adc {
                     "/v1/dut/feedback/current",
                     true,
                     false,
+                    Capability::DutPower,
                     false,
                     None,
                     HISTORY_LENGTH,
                 ),
             },
-            time: bb.topic_ro("/v1/tac/time/now", None),
+            time: bb.topic_ro("/v1/tac/time/now", Capability::TacSystem, None),
         };
 
         let channels = [

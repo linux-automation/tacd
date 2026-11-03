@@ -18,6 +18,7 @@ use anyhow::Result;
 use async_std::sync::Arc;
 use serde::{Serialize, de::DeserializeOwned};
 
+use crate::auth::Capability;
 use crate::watched_tasks::WatchedTasksBuilder;
 
 mod mqtt_conn;
@@ -62,11 +63,13 @@ impl BrokerBuilder {
     ///   It can also be a larger value to store up some history that should
     ///   be pushed out to new (outside) subscribers as soon as they subscribe,
     ///   to e.g. pre-populate a graph in the web interface.
+    #[allow(clippy::too_many_arguments)]
     pub fn topic<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
         web_readable: bool,
         web_writable: bool,
+        required_capability: Capability,
         persistent: bool,
         initial: Option<E>,
         retained_length: usize,
@@ -75,6 +78,7 @@ impl BrokerBuilder {
             path,
             web_readable,
             web_writable,
+            required_capability,
             persistent,
             initial,
             retained_length,
@@ -89,27 +93,30 @@ impl BrokerBuilder {
     pub fn topic_ro<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
+        required_capability: Capability,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, true, false, false, initial, 1)
+        self.topic(path, true, false, required_capability, false, initial, 1)
     }
 
     /// Register a new topic that is both readable and writable from the outside
     pub fn topic_rw<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
+        required_capability: Capability,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, true, true, false, initial, 1)
+        self.topic(path, true, true, required_capability, false, initial, 1)
     }
 
     /// Register a new topic that is only writable from the outside
     pub fn topic_wo<E: Serialize + DeserializeOwned + Sync + Send + Clone + 'static>(
         &mut self,
         path: &str,
+        required_capability: Capability,
         initial: Option<E>,
     ) -> Arc<Topic<E>> {
-        self.topic(path, false, true, false, initial, 1)
+        self.topic(path, false, true, required_capability, false, initial, 1)
     }
 
     /// Finish building the broker

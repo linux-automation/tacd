@@ -6,6 +6,17 @@ info:
   version: 0.1.0
 
 paths:
+  /v1/auth/token/current:
+    get:
+      summary: Show information about the currently used access token
+      tags: [Authentication]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenInfo'
+
   /v1/tac/display/screen:
     get:
       summary: Get the name of the screen currently shown on the display
@@ -1216,7 +1227,39 @@ components:
         - Stop
         - Restart
 
+    TokenCapabilities:
+      type: array
+      items:
+        type: object
+        properties:
+          tac_system:
+            type: boolean
+          dut_power:
+            type: boolean
+          outputs:
+            type: boolean
+          uart:
+            type: boolean
+          usb:
+            type: boolean
+          iobus:
+            type: boolean
+
+    TokenInfo:
+      type: object
+      properties:
+        generated:
+          type: number
+        expires:
+          type: number
+        capabilities_read:
+          $ref: '#/components/schemas/TokenCapabilities'
+        capabilities_write:
+          $ref: '#/components/schemas/TokenCapabilities'
+
 tags:
+  - name: Authentication
+    description: API tokens and session permissions
   - name: User Interface
     description: Everything concerning the user interface
   - name: DUT Power

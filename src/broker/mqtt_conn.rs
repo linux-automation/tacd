@@ -52,6 +52,7 @@ use tide::{Request, Response, StatusCode};
 pub use mqtt::TopicName;
 
 use super::{AnySubscriptionHandle, AnyTopic};
+use crate::auth::Token;
 
 /// Limit the number of elements in the queue leading to the websocket
 /// connection. This assumes that the websocket connection will provide
@@ -102,6 +103,7 @@ impl<E> EncodableExt for E where E: Encodable {}
 async fn handle_connection(
     topics: Arc<Vec<Arc<dyn AnyTopic>>>,
     mut stream: WebSocketStream<Connection>,
+    token: Token,
 ) {
     // The MQTT connection starts with a CONNECT packet.
     // Since we are only targeting the one MQTT (over WebSockets)
@@ -277,10 +279,16 @@ async fn handle_connection(
                     // Go through all registered topics and check if the
                     // subscribe request matches. This should make sure that
                     // wildcard subscriptions work.
+                    // We will silently ignore subscription requests for topics
+                    // that the supplied token does not have read capabilities for.
                     let matcher = filter.get_matcher();
                     let new_subscribes: Vec<_> = topics
                         .iter()
-                        .filter(|topic| topic.web_readable() && matcher.is_match(topic.path()))
+                        .filter(|topic| {
+                            topic.web_readable()
+                                && token.capabilities_read.is_set(topic.required_capability())
+                                && matcher.is_match(topic.path())
+                        })
                         .map(|topic| topic.clone().subscribe_as_bytes(to_websocket.clone(), true))
                         .collect();
 
@@ -330,9 +338,13 @@ async fn handle_connection(
                     break 'connection;
                 }
 
-                let topic = topics
-                    .iter()
-                    .find(|t| t.web_writable() && &t.path()[..] == pub_pkg.topic_name());
+                // This will silently ignore topics that the supplied token does
+                // not have write capabilities for.
+                let topic = topics.iter().find(|t| {
+                    t.web_writable()
+                        && token.capabilities_write.is_set(t.required_capability())
+                        && &t.path()[..] == pub_pkg.topic_name()
+                });
 
                 if let Some(topic) = topic
                     && let Err(e) = topic.set_from_bytes(pub_pkg.payload())
@@ -406,6 +418,7 @@ fn header_contains_ignore_case(req: &Request<()>, header_name: HeaderName, value
 pub(super) fn register(server: &mut tide::Server<()>, topics: Arc<Vec<Arc<dyn AnyTopic>>>) {
     server.at("/v1/mqtt").get(move |req: Request<()>| {
         let topics = topics.clone();
+        let token = req.ext::<Token>().unwrap().clone();
 
         async move {
             // These are the good parts from tide-websockets without the bad
@@ -451,7 +464,7 @@ pub(super) fn register(server: &mut tide::Server<()>, topics: Arc<Vec<Arc<dyn An
             spawn(async move {
                 if let Some(stream) = upgrade_receiver.await {
                     let ws = WebSocketStream::from_raw_socket(stream, Role::Server, None).await;
-                    handle_connection(topics, ws).await;
+                    handle_connection(topics, ws, token).await;
                 }
             });
 

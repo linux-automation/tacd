@@ -27,6 +27,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use unique_token::Unique;
 
 use super::TopicName;
+use crate::auth::Capability;
 
 pub(super) struct RetainedValue<E> {
     native: E,
@@ -89,6 +90,7 @@ pub struct Topic<E> {
     path: TopicName,
     web_readable: bool,
     web_writable: bool,
+    required_capability: Capability,
     persistent: bool,
     retained_length: usize,
     inner: Mutex<TopicInner<E>>,
@@ -152,6 +154,7 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
         path: &str,
         web_readable: bool,
         web_writable: bool,
+        required_capability: Capability,
         persistent: bool,
         initial: Option<E>,
         retained_length: usize,
@@ -164,6 +167,7 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
             path,
             web_readable,
             web_writable,
+            required_capability,
             persistent,
             retained_length,
             inner,
@@ -171,7 +175,15 @@ impl<E: Serialize + DeserializeOwned + Clone> Topic<E> {
     }
 
     pub fn anonymous(initial: Option<E>) -> Arc<Self> {
-        Arc::new(Self::new("/hidden", false, false, false, initial, 1))
+        Arc::new(Self::new(
+            "/hidden",
+            false,
+            false,
+            Capability::TacSystem,
+            false,
+            initial,
+            1,
+        ))
     }
 
     /// Set a new value for the topic and notify subscribers with the inner
@@ -352,6 +364,7 @@ pub trait AnyTopic: Sync + Send {
     fn path(&self) -> &TopicName;
     fn web_readable(&self) -> bool;
     fn web_writable(&self) -> bool;
+    fn required_capability(&self) -> Capability;
     fn persistent(&self) -> bool;
     fn set_from_bytes(&self, msg: &[u8]) -> serde_json::Result<()>;
     fn set_from_json_value(&self, msg: serde_json::Value) -> serde_json::Result<()>;
@@ -375,6 +388,10 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
 
     fn web_writable(&self) -> bool {
         self.web_writable
+    }
+
+    fn required_capability(&self) -> Capability {
+        self.required_capability
     }
 
     fn persistent(&self) -> bool {
@@ -479,7 +496,7 @@ impl<E: Serialize + DeserializeOwned + Send + Sync + Clone + 'static> AnyTopic f
 
 #[cfg(test)]
 mod tests {
-    use super::{AnyTopic, RetainedValue, Topic, TopicName};
+    use super::{AnyTopic, Capability, RetainedValue, Topic, TopicName};
     use async_std::channel::{Receiver, unbounded};
     use async_std::sync::Arc;
     use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -492,7 +509,15 @@ mod tests {
     }
 
     fn new_topic<E: Serialize + DeserializeOwned + Clone>() -> Arc<Topic<E>> {
-        Arc::new(Topic::new("/", true, true, true, None, 1))
+        Arc::new(Topic::new(
+            "/",
+            true,
+            true,
+            Capability::TacSystem,
+            true,
+            None,
+            1,
+        ))
     }
 
     fn collect_native<E: Clone>(recv: Receiver<E>) -> Vec<E> {

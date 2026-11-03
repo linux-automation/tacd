@@ -20,10 +20,16 @@ use std::net::TcpListener;
 use anyhow::Result;
 use tide::{Body, Response, Server};
 
+use crate::auth::{Capability, TokenStore};
 use crate::watched_tasks::WatchedTasksBuilder;
 
+pub mod auth_middleware;
 mod serve_dir;
+mod token_middleware;
+
+use auth_middleware::{AuthMiddleware, Direction};
 use serve_dir::serve_dir;
+use token_middleware::TokenMiddleware;
 
 #[cfg(feature = "demo_mode")]
 mod consts {
@@ -51,13 +57,22 @@ use consts::{EXTRA_DIR, FALLBACK_PORT, FS_PREFIX, LICENSE_DIR, LICENSE_MANIFEST,
 const OPENAPI_JSON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/openapi.json"));
 
 // Files that should be read-/writeable from the webinterface
-const EXPOSED_FILES_RW: &[(&str, &str)] = &[
+const EXPOSED_FILES_RW: &[(&str, &str, Capability)] = &[
     (
         "/etc/labgrid/configuration.yaml",
         "/v1/labgrid/configuration",
+        Capability::TacSystem,
     ),
-    ("/etc/labgrid/environment", "/v1/labgrid/environment"),
-    ("/etc/labgrid/userconfig.yaml", "/v1/labgrid/userconfig"),
+    (
+        "/etc/labgrid/environment",
+        "/v1/labgrid/environment",
+        Capability::TacSystem,
+    ),
+    (
+        "/etc/labgrid/userconfig.yaml",
+        "/v1/labgrid/userconfig",
+        Capability::TacSystem,
+    ),
 ];
 
 pub struct HttpServer {
@@ -66,11 +81,13 @@ pub struct HttpServer {
 }
 
 impl HttpServer {
-    pub fn new() -> Self {
+    pub fn new(token_store: TokenStore) -> Self {
         let mut this = Self {
             listeners: Vec::new(),
             server: tide::new(),
         };
+
+        this.server.with(TokenMiddleware::new(token_store));
 
         // Open [::]:80 / [::]:8080. This, somewhat confusingly also listens on
         // 0.0.0.0 and not only on IPv6.
@@ -90,9 +107,9 @@ impl HttpServer {
             .serve_file(LICENSE_MANIFEST)
             .unwrap();
 
-        for (fs_path, web_path) in EXPOSED_FILES_RW {
+        for (fs_path, web_path, required_capability) in EXPOSED_FILES_RW {
             let fs_path = FS_PREFIX.to_owned() + *fs_path;
-            this.expose_file_rw(fs_path, web_path);
+            this.expose_file_rw(fs_path, web_path, *required_capability);
         }
 
         this
@@ -127,11 +144,16 @@ impl HttpServer {
     }
 
     /// Serve a file from disk for reading and writing
-    fn expose_file_rw(&mut self, fs_path: String, web_path: &str) {
-        self.server.at(web_path).serve_file(&fs_path).unwrap();
+    fn expose_file_rw(&mut self, fs_path: String, web_path: &str, required_capability: Capability) {
+        self.server
+            .at(web_path)
+            .with(AuthMiddleware::new(required_capability, Direction::Read))
+            .serve_file(&fs_path)
+            .unwrap();
 
         self.server
             .at(web_path)
+            .with(AuthMiddleware::new(required_capability, Direction::Write))
             .put(move |mut req: tide::Request<()>| {
                 let fs_path = fs_path.clone();
 

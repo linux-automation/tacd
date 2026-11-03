@@ -23,6 +23,7 @@ use async_std::stream::StreamExt;
 #[cfg(not(feature = "demo_mode"))]
 use zbus::Connection;
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -40,7 +41,11 @@ impl Hostname {
         _conn: C,
     ) -> Result<Self> {
         Ok(Self {
-            hostname: bb.topic_ro("/v1/tac/network/hostname", Some("lxatac".into())),
+            hostname: bb.topic_ro(
+                "/v1/tac/network/hostname",
+                Capability::TacSystem,
+                Some("lxatac".into()),
+            ),
         })
     }
 
@@ -50,7 +55,7 @@ impl Hostname {
         wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
     ) -> Result<Self> {
-        let hostname = bb.topic_ro("/v1/tac/network/hostname", None);
+        let hostname = bb.topic_ro("/v1/tac/network/hostname", Capability::TacSystem, None);
 
         let conn = conn.clone();
         let hostname_topic = hostname.clone();

@@ -18,6 +18,7 @@ use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -75,9 +76,10 @@ fn handle_regulator(
     wtb: &mut WatchedTasksBuilder,
     path: &str,
     regulator_name: &'static str,
+    required_capability: Capability,
     initial: bool,
 ) -> Result<Arc<Topic<bool>>> {
-    let topic = bb.topic_rw(path, Some(initial));
+    let topic = bb.topic_rw(path, required_capability, Some(initial));
     let (mut src, _) = topic.clone().subscribe_unbounded();
 
     wtb.spawn_task(format!("regulator-{regulator_name}-action"), async move {
@@ -94,8 +96,22 @@ fn handle_regulator(
 impl Regulators {
     pub fn new(bb: &mut BrokerBuilder, wtb: &mut WatchedTasksBuilder) -> Result<Self> {
         Ok(Self {
-            iobus_pwr_en: handle_regulator(bb, wtb, "/v1/iobus/powered", "output-iobus-12v", true)?,
-            uart_pwr_en: handle_regulator(bb, wtb, "/v1/uart/powered", "output-vuart", true)?,
+            iobus_pwr_en: handle_regulator(
+                bb,
+                wtb,
+                "/v1/iobus/powered",
+                "output-iobus-12v",
+                Capability::IoBus,
+                true,
+            )?,
+            uart_pwr_en: handle_regulator(
+                bb,
+                wtb,
+                "/v1/uart/powered",
+                "output-vuart",
+                Capability::Uart,
+                true,
+            )?,
         })
     }
 }

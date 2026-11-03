@@ -26,6 +26,7 @@ use async_std::task;
 use serde::{Deserialize, Serialize};
 
 use crate::adc::AdcChannel;
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::digital_io::{LineHandle, LineRequestFlags, find_line};
 use crate::led::{BlinkPattern, BlinkPatternBuilder};
@@ -281,8 +282,8 @@ fn setup_labgrid_compat(
     request: Arc<Topic<OutputRequest>>,
     state: Arc<Topic<OutputState>>,
 ) -> Result<()> {
-    let compat_request = bb.topic_wo::<u8>("/v1/dut/powered/compat", None);
-    let compat_response = bb.topic_ro::<u8>("/v1/dut/powered/compat", None);
+    let compat_request = bb.topic_wo::<u8>("/v1/dut/powered/compat", Capability::DutPower, None);
+    let compat_response = bb.topic_ro::<u8>("/v1/dut/powered/compat", Capability::DutPower, None);
 
     let (mut state_stream, _) = state.subscribe_unbounded();
     let (mut compat_request_stream, _) = compat_request.subscribe_unbounded();
@@ -526,8 +527,9 @@ impl DutPwrThread {
         // actually on once a corresponding publish is received from the broker,
         // as it has done the full round trip through the realtime power thread
         // and is not just a copy of the received command.
-        let request_topic = bb.topic_wo::<OutputRequest>("/v1/dut/powered", None);
-        let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", None);
+        let request_topic =
+            bb.topic_wo::<OutputRequest>("/v1/dut/powered", Capability::DutPower, None);
+        let state_topic = bb.topic_ro::<OutputState>("/v1/dut/powered", Capability::DutPower, None);
 
         setup_labgrid_compat(bb, wtb, request_topic.clone(), state_topic.clone())?;
 

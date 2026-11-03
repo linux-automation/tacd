@@ -25,6 +25,7 @@ use futures_lite::future::race;
 pub use log::warn;
 
 use super::{Connection, Result};
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -136,8 +137,16 @@ impl Service {
     fn new(bb: &mut BrokerBuilder, unit_name: &'static str, topic_name: &'static str) -> Self {
         Self {
             unit_name,
-            action: bb.topic_wo(&format!("/v1/tac/service/{topic_name}/action"), None),
-            status: bb.topic_ro(&format!("/v1/tac/service/{topic_name}/status"), None),
+            action: bb.topic_wo(
+                &format!("/v1/tac/service/{topic_name}/action"),
+                Capability::TacSystem,
+                None,
+            ),
+            status: bb.topic_ro(
+                &format!("/v1/tac/service/{topic_name}/status"),
+                Capability::TacSystem,
+                None,
+            ),
         }
     }
 
@@ -317,7 +326,7 @@ impl Systemd {
         wtb: &mut WatchedTasksBuilder,
         conn: &Arc<Connection>,
     ) -> anyhow::Result<Self> {
-        let reboot = bb.topic_rw("/v1/tac/reboot", Some(false));
+        let reboot = bb.topic_rw("/v1/tac/reboot", Capability::TacSystem, Some(false));
 
         Self::handle_reboot(wtb, reboot.clone(), conn.clone())?;
 

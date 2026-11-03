@@ -23,6 +23,7 @@ use async_std::task::sleep;
 use serde::{Deserialize, Serialize};
 
 use crate::adc::CalibratedChannel;
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::watched_tasks::WatchedTasksBuilder;
 
@@ -115,9 +116,9 @@ impl IoBus {
         iobus_curr: CalibratedChannel,
         iobus_volt: CalibratedChannel,
     ) -> Result<Self> {
-        let supply_fault = bb.topic_ro("/v1/iobus/feedback/fault", None);
-        let server_info = bb.topic_ro("/v1/iobus/server/info", None);
-        let nodes = bb.topic_ro("/v1/iobus/server/nodes", None);
+        let supply_fault = bb.topic_ro("/v1/iobus/feedback/fault", Capability::IoBus, None);
+        let server_info = bb.topic_ro("/v1/iobus/server/info", Capability::IoBus, None);
+        let nodes = bb.topic_ro("/v1/iobus/server/nodes", Capability::IoBus, None);
 
         let supply_fault_task = supply_fault.clone();
         let server_info_task = server_info.clone();

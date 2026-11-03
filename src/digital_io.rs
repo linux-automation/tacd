@@ -18,6 +18,7 @@ use anyhow::Result;
 use async_std::prelude::*;
 use async_std::sync::Arc;
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
 use crate::watched_tasks::WatchedTasksBuilder;
@@ -52,16 +53,18 @@ pub struct DigitalIo {
 
 /// Handle a GPIO line whose state is completely defined by the broker framework
 /// writing to it. (e.g. whatever it is set to _is_ the line status).
+#[allow(clippy::too_many_arguments)]
 fn handle_line_wo(
     bb: &mut BrokerBuilder,
     wtb: &mut WatchedTasksBuilder,
     path: &str,
     line_name: &str,
+    required_capability: Capability,
     initial: bool,
     inverted: bool,
     led_topic: Option<Arc<Topic<BlinkPattern>>>,
 ) -> Result<Arc<Topic<bool>>> {
-    let topic = bb.topic_rw(path, Some(initial));
+    let topic = bb.topic_rw(path, required_capability, Some(initial));
     let line = find_line(line_name).unwrap();
     let dst = line
         .request(LineRequestFlags::OUTPUT, (initial ^ inverted) as _, "tacd")
@@ -97,6 +100,7 @@ impl DigitalIo {
             wtb,
             "/v1/output/out_0/asserted",
             "OUT_0",
+            Capability::Outputs,
             false,
             false,
             Some(led_0),
@@ -107,6 +111,7 @@ impl DigitalIo {
             wtb,
             "/v1/output/out_1/asserted",
             "OUT_1",
+            Capability::Outputs,
             false,
             false,
             Some(led_1),
@@ -117,6 +122,7 @@ impl DigitalIo {
             wtb,
             "/v1/uart/rx/enabled",
             "UART_RX_EN",
+            Capability::Uart,
             true,
             true,
             None,
@@ -127,6 +133,7 @@ impl DigitalIo {
             wtb,
             "/v1/uart/tx/enabled",
             "UART_TX_EN",
+            Capability::Uart,
             true,
             true,
             None,

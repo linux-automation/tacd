@@ -18,6 +18,7 @@ use anyhow::Result;
 use async_std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
+use crate::auth::Capability;
 use crate::broker::{BrokerBuilder, Topic};
 use crate::led::BlinkPattern;
 use crate::watched_tasks::WatchedTasksBuilder;
@@ -234,9 +235,21 @@ pub struct Network {
 impl Network {
     fn setup_topics(bb: &mut BrokerBuilder) -> Self {
         Self {
-            bridge_interface: bb.topic_ro("/v1/tac/network/interface/tac-bridge", Some(Vec::new())),
-            dut_interface: bb.topic_ro("/v1/tac/network/interface/dut", None),
-            uplink_interface: bb.topic_ro("/v1/tac/network/interface/uplink", None),
+            bridge_interface: bb.topic_ro(
+                "/v1/tac/network/interface/tac-bridge",
+                Capability::TacSystem,
+                Some(Vec::new()),
+            ),
+            dut_interface: bb.topic_ro(
+                "/v1/tac/network/interface/dut",
+                Capability::TacSystem,
+                None,
+            ),
+            uplink_interface: bb.topic_ro(
+                "/v1/tac/network/interface/uplink",
+                Capability::TacSystem,
+                None,
+            ),
         }
     }
 
