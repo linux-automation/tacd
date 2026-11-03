@@ -22,7 +22,10 @@ use tide::{Body, Response, Server};
 
 use crate::watched_tasks::WatchedTasksBuilder;
 
+mod csrf_middleware;
 mod serve_dir;
+
+use csrf_middleware::CsrfMiddleware;
 use serve_dir::serve_dir;
 
 #[cfg(feature = "demo_mode")]
@@ -71,6 +74,10 @@ impl HttpServer {
             listeners: Vec::new(),
             server: tide::new(),
         };
+
+        // Block all cross-origin requests sent by browsers before they make it
+        // to the request handlers.
+        this.server.with(CsrfMiddleware::new());
 
         // Open [::]:80 / [::]:8080. This, somewhat confusingly also listens on
         // 0.0.0.0 and not only on IPv6.
